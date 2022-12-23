@@ -1,0 +1,222 @@
+# -*- coding: UTF-8 -*-
+# 파이썬 데이터베이스 연결: SQLite3 활용
+
+import os
+import getpass
+import datetime
+import sqlite3
+import pandas as pd
+import copy
+
+#print('sqlite3.version:', sqlite3.version)      # sqlite version?
+#print('sqlite3.sqlite_version:: ', sqlite3.sqlite_version) # sqlite 기계엔진 version?
+
+os.getcwd()
+#os.chdir('../')  # 상위 경로로 가기
+#os.chdir('./폴더 또는 파일명')   # 현재 경로내에서 하위경로로 이동
+
+# Termial[cmd] 에서 sqlite3 사용하기  -------------------------------------------------------------
+[cmd] sqlite3 db.sqlite3				# Database안에 내용이 잘 만들어 졌는지 확인하는 명령어에
+	sqlite> .tables						# Datablase내 들어있는 Table 확인
+	sqlite> .schema Django_UserTable1	# 테이블/인덱스 스키마생성 스크립트를 생성하는 명령어
+	sqlite>	.q							#sqlite 종료 명령어
+#---------------------------------------------------------------------------------------------
+
+username = getpass.getuser()    # 사용자명 얻기
+Desktop_adr =  'C:\\Users' + '\\'+ username + '\Desktop'    # 바탕화면 경로위치 변수화
+DB_adr = Desktop_adr + '\SQLite_DB\Test_DB'     # DB 생성 및 접근할 파일위치 변수화
+DB_name ='TestDB'       # 생성 및 접근할 DB명
+
+
+
+    # DB 생성, 접근 및 Commit    ------------------------------------------------------------------
+# conn =  sqlite3.connect( 'DB 만들경로 + DB이름.db' )  # DB생성
+# conn.commit()   # DB반영
+    # DB 생성 및 Auto Commit : isolation_level = None  ( = conn.commit() )
+    # conn =  sqlite3.connect( 'DB 만들경로 + DB이름.db' , isolation_level = None)  # DB생성
+# conn.rollback()  # DB내 반영된 내용 Rollback  * Autocommit Option인 경우에는  Rollback불가
+# conn = sqlite3.connect(":memory:")        # DB생성(메모리)
+
+# DB생성 및 접근시작 & Autocommit        # commit : 영구반영,   Autocommit : 자동 영구반영,      Rollback : 되돌림
+conn = sqlite3.connect( DB_adr + '\\' + DB_name + '.db' , isolation_level = None)
+c = conn.cursor()  # Cursor 가져오기 (접근)
+    # conn.close()        # DB Connection Close
+
+
+
+
+# 테이블 생성(Datatype : TEXT / NUMERIC / INTEGER / REAL / BLOB) ---------------------------------
+    # connect개체.exectue : 읽기,쓰기,수정,삭제 접근 명령어
+    # SQL) CREATE TABLE IF NOT EXISTS 테이블명(column명 DataType) : 테이블이 없으면 만들겟다.       # CREATE 생성
+    # 테이블명 : Table_Name
+#c.execute("CREATE TABLE IF NOT EXISTS Table_Name(\      # SQL명령어 + Table명
+#id INTEGER PRIMARY KEY, username text, email text,\     # Column명 DataType, PRMARY KEY : Index를 위한 Primary Key 지정
+#\phone text, website text, regdate text)")              # AUTOINCREMENT,    \ : 줄바꿈 허용
+
+conn.execute("CREATE TABLE IF NOT EXISTS Test_TB(\
+id INTEGER PRIMARY KEY, username text, email text,\
+phone text, website text, regdate text)" )
+
+
+
+
+# Table 정보 조회 ---------------------------------------------------------------------------
+list( c.execute("SELECT sql FROM sqlite_master WHERE name='Test_TB'") )
+list( c.execute("SELECT name FROM sqlite_master WHERE type='table'") )     # DB안의 Table목록
+list( c.execute("SELECT name FROM sqlite_master where type='table' and name='Test_TB'") )
+list( c.execute( 'PRAGMA table_info(Test_TB)') )    # 테이블내 필드  Type 알아보기
+[ col[1] for col in c.execute( 'PRAGMA table_info(Test_TB)') ]      # Table내 Column Name 조회
+[ col[2] for col in c.execute( 'PRAGMA table_info(Test_TB)') ]      # Table내 Column별 Data-Type조회
+
+#  type text,  name text,  tbl_name text,  rootpage integer,  sql text
+
+
+
+
+# 테이블내 데이터 삽입 ---------------------------------------------------------------------
+nowDatetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') # 현재 날짜, 시각을 보기편한 포맷으로
+    # SQL) INSERT INTO 테이블명(Column : 생략가능) VALUES(항목)
+
+# 데이터 삽입 방법 : execute
+c.execute("INSERT INTO Test_TB VALUES (1 ,'Kim','Kim@naver.com', '010-0000-0000', 'Kim.com', ?)", (nowDatetime,)) #직접입력
+c.execute("INSERT INTO Test_TB(id, username, email, phone, website, regdate) VALUES (?, ?, ?, ?, ?, ?)",
+          (2, 'Park', 'Park@naver.com', '010-1111-1111', 'Park.com', nowDatetime))  # 간접입력( ? 활용)
+
+data3 = (3, 'Lee', 'Lee@naver.com', '010-2222-2222', 'Lee.com', nowDatetime)
+c.execute("INSERT INTO Test_TB(id, username, email, phone, website, regdate) VALUES (?, ?, ?, ?, ?, ?)",
+          data3)  # 간접입력( 튜플 활용)
+
+    # 다중 항목 동시 입력 (튜플활용) : executemany
+userList = (     (4, 'Cho', 'Cho@naver.com', '010-3333-3333', 'Cho.com', nowDatetime),
+			(5, 'Yoo', 'Yoo@naver.com', '010-4444-4444', 'Yoo.com', nowDatetime)  )
+c.executemany("INSERT INTO Test_TB(id, username, email, phone, website, regdate) VALUES (?, ?, ?, ?, ?, ?)", userList)
+
+
+
+# 테이블내 데이터 조회 ---------------------------------------------------------------------
+    # SQL) SELECT 항목 FROM 테이블명
+c.execute("SELECT * FROM Test_TB")      # 조회명령어
+    Ori_list = list( c.execute("SELECT * FROM Test_TB") )      # list 형식으로 조회
+    Ori_df = pd.DataFrame( c.execute("SELECT * FROM Test_TB") )      # Pandas 형식으로 조회
+    Ori_df.values.tolist()      # pd. Data_Frame → list   (Row단위 변환)
+    Ori_df.values.T.tolist()      # pd. Data_Frame → list   (Column단위 변환)  * Transpose
+
+c.fetchone()    # 한줄씩 조회
+c.fetchmany( size=3 )   # 여러줄 지정 수만큼 row 조회
+c.fetchall()    # 전체조회
+
+
+
+# WHERE Retriveve ----------------------------------------------------------------
+    # 튜플형태 변수 활용
+param1 = (1, )       # [1]  or [1, ]  : 리스트형태 변수도 활용가능
+list( c.execute('SELECT * FROM Test_TB WHERE id=?', param1) )        # id가 param1 인것만 추출
+
+    # row 번호의 숫자변수 활용
+param2 = 1
+list( c.execute("SELECT * FROM Test_TB WHERE id='%s'" % param2) )     # %s %d %f 포멧팅활용: id가 param2 인것만 추출
+
+    # 딕셔너리 형태를 활용하여 추출
+prarma3 = {"Id": 1 }
+list( c.execute("SELECT * FROM Test_TB WHERE id= :Id", prarma3) )     # 딕셔너리내 항목과 항목값 활용
+
+	# 튜플형태 변수 활용하여 여러개의 데이터 추출 (IN)
+param4 = (1, 4)     # [1, 4]  : 리스트형태 변수도 활용가능
+list( c.execute('SELECT * FROM Test_TB WHERE id IN(?,?)', param4) )     # 튜플형태 변수 활용 복수데이터 조건 적용
+
+	# 포멧팅을 활용한 복수데이터 추출
+list( c.execute("SELECT * FROM Test_TB WHERE id In('%d','%d')" % (1, 4)) )     # %s %d %f 포멧팅 활용 복수데이터 조건 적용
+print('param5', c.fetchall())
+
+	# 딕셔너리를 활용한 복수데이터추출
+param6 = {"id1": 1, "id2": 4}
+list( c.execute("SELECT * FROM Test_TB WHERE id= :id1 OR id= :id2", param6) )   # 딕셔너리 변수 활용 복수데이터 조건 적용
+
+
+
+# 테이블내 데이터 수정 ---------------------------------------------------------------------
+    # SQL) UPDATE 테이블명 SET 변경할Column명 = WHERE 변경할Row검색조건
+c.execute("UPDATE Test_TB SET username = ? WHERE id = ?", ('niceman', 1))        # ?를 활용한 데이터 수정
+c.execute("UPDATE Test_TB SET username = :name WHERE id = :id", {"name": 'niceman', 'id': 3})   # 딕셔너리를 활용한 데이터 수정
+c.execute("UPDATE Test_TB SET username = '%s' WHERE id = '%s'" % ('badboy', 5))     # 데이터포맷팅을 활용한 데이터 수정
+
+    # 기존 입력한 데이터로 재조정 (기존 Data를 List형식의 변수에 백업(저장) 해둬야 가능)
+print("Table내 삭제된 행의 갯수: ", conn.execute("DELETE FROM Test_TB").rowcount ) # rowcount 삭제한 행의갯수 Print문 출력
+c.executemany("INSERT INTO Test_TB VALUES (?, ?, ?, ?, ?, ?)", Ori_list )       # 기존 백업한 데이터 재입력
+pd.DataFrame( c.execute("SELECT * FROM Test_TB") )      # Pandas DataFrame형식으로 조회
+
+
+
+# 테이블내 데이터 삭제 ---------------------------------------------------------------------
+    # 전체삭제
+    # SQL) DELETE FROM 테이블명
+conn.execute("DELETE FROM Test_TB").rowcount  # rowcount 삭제한 행의갯수
+print("Table내 삭제된 행의 갯수: ", conn.execute("DELETE FROM Test_TB").rowcount ) # rowcount 삭제한 행의갯수 Print문 출력
+
+    # 일부 삭제 : WHERE조건 적용
+    # SQL) DELETE FROM 테이블명 WHERE 삭제할row검색조건
+c.execute("DELETE FROM Test_TB WHERE id = ?", (1,))        # ?를 활용한 데이터 제거
+c.execute("DELETE FROM Test_TB WHERE id = :id", {'id': 3})   # 딕셔너리를 활용한 데이터 삭제
+c.execute("DELETE FROM Test_TB WHERE id = '%s'" % 4)       # 데이터포맷팅을 활용한 데이터 수정
+
+pd.DataFrame( c.execute("SELECT * FROM Test_TB") )      # Pandas DataFrame형식으로 조회
+
+conn.close()        # DB Connection Close
+
+
+# Dump 출력    (데이터베이스 백업)  ----------------------------------------------------------------
+DumpSQL_Name = 'Test_DB_Dump'
+with conn:
+    with open(DB_adr + '\\' + DumpSQL_Name + '.sql', 'w') as f :        # Dump SQL 생성경로지정 및 쓰기모드('w' 실행)
+        for line in conn.iterdump():
+            f.write('%s\n' % line)
+        print("'Dump SQL File' Print Complete!")
+
+
+
+#------ pandas sqllite3 연동 -------------------------------------------------------------------
+import os
+import getpass
+import datetime
+import sqlite3
+import pandas as pd
+import copy
+
+#print('sqlite3.version:', sqlite3.version)      # sqlite version?
+#print('sqlite3.sqlite_version:: ', sqlite3.sqlite_version) # sqlite 기계엔진 version?
+
+# os.getcwd()
+
+#os.chdir('../')  # 상위 경로로 가기
+#os.chdir('./폴더 또는 파일명')   # 현재 경로내에서 하위경로로 이동
+
+DB_AdrName = os.getcwd()+'\\database' + '\\' + 'PythonTest011' + '.db';   # DB Address + DB Name
+DB_AdrName
+
+conn =  sqlite3.connect( DB_AdrName, isolation_level=None )  # DB생성 또는 접근
+cursor = conn.cursor()  # Cursor 가져오기 (접근)
+list( cursor.execute("SELECT name FROM sqlite_master WHERE type='table'") )     # DB안의 Table목록
+
+tableName = 'test';
+InputData = pd.read_clipboard();
+InputData
+exist_action = 'append'
+InputData.to_sql(name=tableName, con=conn, if_exists=exist_action, index=False);  # 'test'라는 이름으로 InputData DataFrame 객체를 SQL에 저장
+# if_exists='append' 옵션이 있으면, 기존 테이블에 데이터를 추가로 넣음
+# if_exists='fail' 옵션이 있으면, 기존 테이블이 있을 경우, 아무일도 하지 않음
+# if_exists='replace' 옵션이 있으면, 기존 테이블이 있을 경우, 기존 테이블을 삭제하고, 다시 테이블을 만들어서, 새로 데이터를 넣음
+
+
+# sqlCondition = "*"
+df = pd.read_sql("SELECT * FROM " + tableName, con=conn);   # 테이블 내용 조회
+df
+
+conn.execute("DELETE FROM " + tableName)    # 데이터 전체삭제
+conn.execute("DROP TABLE " + tableName)    # 테이블 삭제
+
+
+conn.close()  # DB Connection Close
+
+
+
+

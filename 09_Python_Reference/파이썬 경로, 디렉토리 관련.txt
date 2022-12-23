@@ -1,0 +1,100 @@
+#-*- coding: UTF-8 -*-
+# 경로/파일 관련 : Directory -------------------------------------------------------------------------------
+# 상대 경로('../' 상위경로 , './' 현재경로), 절대 경로('C:\...')
+import os
+import getpass
+
+os.getcwd()		#현재경로 확인
+os.chdir('../')  # 상위 경로로 가기
+os.chdir('./폴더 또는 파일명')   # 현재 경로내에서 하위경로로 이동
+f_list = os.listdir('.')     # 현재디렉토리 파일 목록
+os.chdir('D:\Python')	#경로 변경
+
+os.path.exists('파이썬 기본문법2.txt') #해당파일이 있는지 확인
+os.path.exists('Module_P001.py') #해당파일이 있는지 확인
+#os.mkdir('폴더 또는 파일명')		# 폴더 또는 파일 생성
+
+username = getpass.getuser()    # 사용자명 얻기
+
+origin_adr = os.getcwd() #'D:\\Python\\Python_Pjt001'
+
+# Directory 변경
+working_adr =  'C:\\Users' + '\\'+ username + '\Desktop'
+os.chdir(working_adr)
+
+folder_name = 'pypi'
+file_name = 'python'
+
+#dir_folder = 'C:\\Users' + '\\'+ username + '\Desktop' + '\\' + folder_name
+#dir_file = 'C:\\Users' + '\\'+ username + '\Desktop' + '\\' + folder_name + '\\' + file_name
+os.path.isdir(dir_folder)       # 해당경로에 파일/폴더가 있는지 확인
+os.path.isdir(dir_file)       # 해당경로에 파일/폴더가 있는지 확인
+
+if not os.path.isdir(folder_name):
+    os.mkdir(folder_name)  # 폴더 만들기
+
+os.chdir( '.\\'+ folder_name)       # 새로만든 폴더 안으로 경로변경
+os.chdir(origin_adr)
+
+# 해당폴더안에 원하는 파일명이 들어가있는지
+f_list = os.listdir('.')     # 현재디렉토리 파일 목록
+f_list
+f_list.index("Practice_P001.py")        # List 내 원소의 위치(주소)
+f_list.count("Practice_P001.py")        # List 내 원소의 갯수
+
+name1 = 'Practice'
+name2 = '001'
+
+f_count0 = [f for f in f_list if f.count(name1) * f.count(name2) > 0]   # name1, name2 를 모두 포함하고 있는 파일명
+len(f_count0)
+
+f_count1 = ''
+for f in f_list :
+    if (f.count(name1) * f.count(name2) > 0) :
+        f_count1 = 1
+        break
+    else : f_count1 = 0
+
+name0 = 'ice_P001'
+f_loc = [f_list.index(f) for f in f_list if f.count(name0)]    # name0를 포함하는 파일의 List내 위치
+f_list[f_loc[0]]    # name0를 포함하는 파일의 명칭
+
+#--- 디렉토리 관련 ------------------------------------------------------------------------------
+# 1. 파일 목록 얻기 
+(1) glob.glob(wildcard) - 유닉스 경로명 패턴 스타일로 파일 목록을 얻을 수 있다.
+(2) os.listdir(path) - 지정된 디렉토리의 전체 파일 목록을 얻을 수 있다.
+(3) dircache.listdir(path) - os.listdir(path)와 동일한 파일 목록을 전달한다.
+path가 변경되지 않았을 때, dircache.listdir()은 다시 디렉토리 구조를 읽지 않고 이미 읽은 정보를 활용
+dircache.annotate(head, list) - 일반 파일명과 디렉토리명을 구분해주는 함수
+
+# 2. 디렉토리 다루기 
+os.chdir(path) - 작업하고 있는 디렉토리 변경
+os.getcwd() - 현재 프로세스의 작업 디렉토리 얻기
+os.remove( filename or path ) - 파일이나 디렉토리 지우기
+os.mkdir( path ) - 디렉토리 만들기
+os.makedirs( path ) - 디렉토리 만들기와 동일하지만 /tmp/include/gl/temp 처럼 긴 경로를 한번에 만들어 준다.
+os.path.abspath(filename) - 파일의 상대 경로를 절대 경로로 바꾸는 함수
+os.path.exists(filename) - 주어진 경로의 파일이 있는지 확인하는 함수
+os.curdir() - 현재 디렉토리 얻기
+os.pardir() - 부모 디렉토리 얻기
+os.sep() - 디렉토리 분리 문자 얻기. windows는 \ linux는 / 를 반환한다.
+os.path.join('D', 'python') # 경로를 만들어줌
+
+
+# 4. 경로명 분리하기 
+os.path.basename(filename) - 파일명만 추출
+os.path.dirname(filename) - 디렉토리 경로 추출
+os.path.split(filename) - 경로와 파일명을 분리
+os.path.splitdrive(filename) - 드라이브명과 나머지 분리 (MS Windows의 경우)
+os.path.splitext(filename) - 확장자와 나머지 분리
+#------------------------------------------------------------------------------------------
+
+
+
+# ------ 실행파일 만들기 ------------------------------------------------------------------------------------
+import pyinstaller
+os.getcwd()
+os.listdir('.')     # 현재디렉토리 파일 목록
+
+# pyinstaller Practice_P004.py
+# pyinstaller --noconsole --onefile Practice_P004

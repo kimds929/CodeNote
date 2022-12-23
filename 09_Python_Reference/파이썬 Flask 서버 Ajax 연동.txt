@@ -1,0 +1,105 @@
+# python serverside ----------------------------------------
+import os;
+from flask import Flask, render_template, request, jsonify;
+from flask_sqlalchemy import SQLAlchemy;
+
+app = Flask(__name__);
+
+@app.route('/add')
+def add_numbers():
+    a = request.args.get('a', 0, type=int);
+    b = request.args.get('b', 0, type=int);
+    print(a);
+    print(b);
+    return jsonify(result = a + b), 201;
+
+@app.route('/add_page', methods=['GET', 'POST'])
+def add_numbers2():
+    if request.method == 'POST':
+        data = request.get_json();
+        c = data.get('c');
+        d = data.get('d');
+        print(c);
+        print(d);
+        return jsonify(result2 = c + d);
+
+@app.route("/")
+def hello():
+    return render_template('Flask001_home.html')
+
+
+if __name__ == '__main__':
+    app.run(host='127.0.0.1', port=5000,  debug=True);
+	
+	
+<!-- html code -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+    <script src="{{url_for('static', filename='./js/jquery/jquery-3.4.1.min.js')}}"></script>
+    <script src="{{url_for('static', filename='./js/ajax/ajax_popper_v1.14.7.min.js')}}"></script>
+    <script src="{{url_for('static', filename='./js/Flask001.js')}}"></script>
+    
+    <title>Document</title>
+</head>
+<body>
+    <h1>jQuery Example</h1>
+    <p>
+        <input type="text" size=5 name='a'> + 
+        <input type="text" size=5 name='b'> =
+        <span id=result>?</span>
+    </p>
+    <a href="#" id='calculate'>calculate servser side</a>
+    <br/>
+    <br/>
+    <h1>Ajax Example</h1>
+    <p>
+        <input type="text" size=5 name='c'> + 
+        <input type="text" size=5 name='d'> =
+        <span id=result2>?</span>
+    </p>
+    <a href="#" id='calc2'>calculate servser side</a>
+
+	<script>
+		// $(document).ready(function(){ });  == $(function(){ })
+		// document 시작시
+
+		$(function(){
+			$('a#calculate').bind('click', function(){
+				$.getJSON('/add',{
+					a: $('input[name="a"]').val(),
+					b: $('input[name="b"]').val()
+				}, function(data){
+					$('#result').text(data.result);
+				});
+				return false;
+			})
+		})
+		$(function(){
+			$('a#calc2').bind('click',function (){
+				$.ajax({
+					url: '/add_page',
+					contentType: 'application/json',
+					method: 'POST',
+					data: JSON.stringify({
+						c: $('input[name="c"]').val(),
+						d: $('input[name="d"]').val()
+					})
+					// success : data => {
+					//     $('#result2').text(data.result2); 
+					// }
+				})
+				.done(function (data){
+					$('#result2').text(data.result2);
+				})
+			})
+		})
+	
+	</script>
+    
+</body>
+</html>

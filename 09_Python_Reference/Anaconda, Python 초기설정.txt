@@ -1,0 +1,85 @@
+
+ 
+【 아나콘다 가상환경설정 】
+방화벽제거 : conda config --set ssl_verify no
+		conda config --set ssl_verify False
+설치된 아나콘다 버전확인 : conda --version
+아나콘다 버전업데이트 : conda upgrade
+                conda update -n 가상환경명 conda
+
+가상환경 List : conda info --envs
+가상환경 생성 : conda create -n 가상환경명 python=3.6
+가상환경 삭제 : conda remove -n 가상환경명 --all
+가상환경 접근 : activate 가상환경명
+가상환경 나가기 : conda deactivate
+
+가상환경 패키지 업데이트 : conda update --all
+설치된 패키지 list : conda list
+
+패키지 설치 : conda install 패키지명
+	conda install tensorflow
+	conda install theano
+	conda install -c conda-forge keras
+	conda install -c glemaitre imbalanced-learn
+	conda install -c anaconda graphviz
+	conda install lxml
+	conda install -c anaconda beautifulsoup4=4.5.1
+패키지 삭제 : conda remove 패키지명
+패키지 모두삭제 : conda clean
+
+【 virtualenv 가상환경 】
+virtualenv '가상환경명'	# 가상환경 만들기
+가상환경명\Scripts\activate	# 가상환경 접근
+rm -rf PATH/ENV	# 가상환경 삭제
+
+【 파이썬 가상환경설정 】
+python -m venv 가상환경명
+Script\activate.bat
+Script\deactivate.bat
+pip 명령어 : search , install, uninstall, list, freeze, show
+pip install search simplejson , simple*
+pip install install simplejson
+pip install install simplejson==버전
+pip install --upgrade simplejson
+pip show simplejson
+pip show -f simplejson
+pip freeze > packages.txt
+pip freeze --all > packages.txt
+pip install -r packages.txt
+
+python -m venv /path/to/venv : 윈도우, 맥, 리눅스 동일
+
+윈도우 : Script
+맥 : bin
+
+윈도우 
+
+activate.bat : 가상환경 진입
+deactivate.bat : 가상환경 해제
+
+맥
+source ./activate : 가상환경 진입
+source ./deactivate : 가상환경 해제
+
+command : code 실행
+
+
+○ pip 인증해지 방법
+pip install --trusted-hostpypi.org--trusted-hostfiles.pythonhosted.org <package-name>
+pip install seaborn --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org
+pip install lxml --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org
+ 
+pip install pyinstaller --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org
+
+【 Jupyter Notebook 】
+conda install jupyter
+pip install ipykernel
+
+【 설치된 패키지 List 】
+pydoc modules
+pip list
+conda list
+
+【 jupyter Notebook file → python file Convert 】
+jupyter nbconvert --to script [YOUR_NOTEBOOK].ipynb
+

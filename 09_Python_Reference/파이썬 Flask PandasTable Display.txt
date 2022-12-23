@@ -1,0 +1,104 @@
+from flask import Flask, render_template, redirect, request, session
+from flask_subfile import read_clipboard;
+
+from pandas import Series, DataFrame
+import pandas as pd
+
+app = Flask(__name__)
+
+@app.route('/', methods=['GET','POST'])
+def clipboard():
+    if request.method == 'POST':
+        InputData = read_clipboard();
+        # InputData = 1;      # 1
+        # InputData = [1,2,3];    # [1,2,3]
+        # InputData = {'a':1, 'b':2};    # print(data['a'])    # 1
+        # InputData = pd.Series([1,2,3]).to_dict()
+        # InputData = pd.DataFrame([{'a':11, 'b':52},{'a':23, 'b':64}]);
+        print(InputData)
+
+        if type(InputData) == DataFrame:
+            data = InputData.to_dict('records')
+        elif type(InputData) == Series:
+            data = list(InputData)
+        else:
+            data  = InputData
+        return render_template("flask_HTML002.html", data = data)
+    return render_template("flask_HTML002.html")
+
+if __name__ == '__main__':
+  app.run(host='127.0.0.1', debug=True)
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+
+    <style>
+        table{
+            /* width:50%; */
+            border-collapse:collapse;
+        }
+        th{
+            background-color: lightgray;
+        }
+        th, td{
+            padding: 5px 10px;
+            border : 1px solid black;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <form method='POST'>
+        <button type="submit">데이터 불러오기</button>
+    </form>
+    <!-- {% if data %}
+        <br/>
+        <div>
+            {{data}}
+        </div>
+        <div>
+            {{data|length}}
+        </div>
+        <div>
+            {% for datum  in data %}
+                <div>datum : {{datum}} </div>
+                    {% for d in datum %}
+                        {{d}}
+                        {{datum[d] }}
+                    {% endfor %}
+            {% endfor %}
+        </div>
+    {% endif %} -->
+
+    <br/>
+    {% if data and data[0] %}
+        <table>
+            <thead>
+                <tr>
+                    {% for col in data[0] %}
+                    <th>{{col}}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row  in data %}
+                    <tr>
+                    {% for d in row %}
+                        <td>{{row[d] }}</td>
+                    {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+   
+</body>
+</html>

@@ -1,0 +1,96 @@
+# -*- coding: UTF-8 -*-
+
+from pandas import Series, DataFrame
+import pandas as pd
+import numpy as np
+from numpy import nan as NA
+import copy
+import re
+
+ #import win32clipboard
+ import pyperclip        #Clipboard 관련 Package
+
+         #---- XML 처리
+import requests
+import xml.etree.ElementTree as et
+import bs4
+from bs4 import BeautifulSoup as bs
+import lxml
+import urllib.parse as par
+import urllib.request as req
+import urllib.request as ur
+
+ # ------ 가공 함수 --------
+def remove_all(x,y):        # list에서 항목을 모두 지우는 함수
+    x = list( filter(lambda a: a!= y, x) )
+     return x
+
+ def xml_depth(soup):            # XML문서의 Max Depth를 알려주는 함수
+    if hasattr(soup, "contents") and soup.contents:
+         return max([xml_depth(child) for child in soup.contents ])+1
+     else:
+         return 0
+
+# 마지막 node인 beautifulsoup list 파일을 DataFrame으로 바꿔주는 함수
+def soup_pd(soupdtl, tag_list) :        # soupdt = 마지막 node인 beautifulsoup list,  tag_list =  tag값
+    l1 = []
+    l2 = []
+    for i in range(0, len(soupdtl)):
+        l2 = []
+        for j in range(0, len(tag_list)):
+            k = soupdtl[i].find_all(tag_list[j])[0]
+            l2.append(k.text)
+        l1.append(l2)
+    df = pd.DataFrame(l1)
+    df.columns = tag_list
+    return df
+
+api_url = "http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev?"
+service_key = "gFVUrdX%2BXcRNAkjYQHRsIHga5203Yx6VbfoMdzIZLLHlO5N0UHy40l0HwqDCM%2F%2BTQXBSz7nMRofqDyG0dYKiDQ%3D%3D"
+
+#--- 전체
+locCode = ["11110","11140","11170","11200","11215","11230","11260","11290","11305","11320",
+            "11350","11380","11410","11440","11470","11500","11530","11545","11560","11590",
+            "11620","11650","11680","11710","11740"]
+locCode_nm =["종로구","중구","용산구","성동구","광진구","동대문구","중랑구","성북구","강북구","도봉구",
+               "노원구","은평구","서대문구","마포구","양천구","강서구","구로구","금천구","영등포구","동작구",
+               "관악구","서초구","강남구","송파구","강동구"]
+datelist = ["201808","201809","201810","201811"]
+
+#---  임시
+locCode = ["11710","11740"]
+locCode_nm =["송파구","강동구"]
+datelist = ["201901","201902","201903"]
+
+apt_sales00 = pd.DataFrame( )
+
+# URL Data Address List
+urllist = list()
+for i in locCode :
+    for j in datelist :
+        urllist.append( api_url + "LAWD_CD=" + i + "&DEAL_YMD=" + j + "&numOfRows=10000" + "&serviceKey=" + service_key )
+
+for URL in urllist:
+    # HTML 문서 불러오기
+    request =ur.urlopen(URL)
+    xml = request.read()
+    xml_utf = xml.decode('utf-8')
+
+    # BeautifulSoup 활용하여 Parsing
+    soup = bs(xml_utf, "lxml-xml")
+    soup_item = soup.find_all('item')
+
+    # 불러올 항목 List
+    column_list = ['도로명시군구코드','법정동','법정동읍면동코드','법정동본번코드','법정동부번코드','도로명','도로명건물본번호코드','도로명건물부번호코드',
+                   '아파트','건축년도','전용면적','층','년','월','일','거래금액']
+    apt_HTML = soup_pd(soup_item, column_list)   # BeautifulSoup HTML 문서 → DataFrame
+
+    # column내 공백 제거 및 쉼표 제거
+    for column in column_list :
+        apt_HTML[column] = apt_HTML[column].str.replace(" ","").str.replace(",","")
+    apt_sales00 = pd.concat([apt_sales00, apt_HTML])
+
+apt_sales00
+
+apt_sales00.to_clipboard()        #Clipboard로 내보내기
+

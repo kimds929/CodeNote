@@ -1,0 +1,127 @@
+#가상환경 만들기
+> virtualenv '가상환경명'	# 가상환경 만들기
+> activate '가상환경명'	# 가상환경 접근
+> 가상환경명\Scripts\activate
+
+# flask의 Model부분을 도와주는 library
+pip install flask
+pip install sqlalchemy
+pip install flask-sqlalchemy	# db 관리를 해주는 패키지
+pip install flask-WTF		# 폼 관리를 해주는 패키지
+pip install flask-JWT		# cookie 인증 관리를 해주는 패키지
+
+
+# Flask 기본코드 --------------------------------------------------------------------------------------------------------------
+import os;
+from flask import Flask, render_template;
+from flask_sqlalchemy import SQLAlchemy;
+
+basedir = os.path.abspath(os.path.dirname(__file__));    # 현재파일의 디렉토리를 기본경로로 설정
+dbfile = os.path.join(basedir, 'db.sqlite');
+
+app = Flask(__name__);
+
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + dbfile;       # DATABASE 사용을 위한 경로 설정
+app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True;     # Teardown : 사용자 요청의 끝, commit : 데이터 베이스에 반영을 할때 History 동작들을 최종적으로 반영을 하는 것
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False;
+
+db = SQLAlchemy(app);  # 관련된 class나 변수 사용시 db라는 변수를 통해서 데이터를 만들도 db에도 접근
+
+# [Table 생성]
+# class Test(db.Model):
+#     __tablename__ = 'test_table';
+#     id = db.Column(db.Integer, primary_key=True);
+#     name = db.Column(db.String(32), unique=True);
+
+# db.create_all()     # db생성
+
+@app.route("/")
+def hello():
+    return "hello flask"
+
+@app.route("/hello/")
+def hello_template():
+    return render_template('hello.html')
+
+if __name__ == '__main__':
+    app.run(host='127.0.0.1', port=5000,  debug=True);
+	
+	
+	
+	
+# [View.py]	 --------------------------------------------------------------------------------------------------------------
+import os;
+from flask import Flask, render_template;
+from flask_sqlalchemy import SQLAlchemy;
+from Flask002_Model('Model 파일명') import db;
+
+app = Flask(__name__);
+
+
+@app.route("/")
+def hello():
+    return "hello flask"
+
+@app.route("/hello/")
+def hello_template():
+    return render_template('hello.html')
+
+
+if __name__ == '__main__':
+    basedir = os.path.abspath(os.path.dirname(__file__));    # 현재파일의 디렉토리를 기본경로로 설정
+    dbfile = os.path.join(basedir, 'db.sqlite');
+
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + dbfile;       # DATABASE 사용을 위한 경로 설정
+    app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True;     # Teardown : 사용자 요청의 끝, commit : 데이터 베이스에 반영을 할때 History 동작들을 최종적으로 반영을 하는 것
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False;
+
+    db.init_app(app);   # 앱을 초기화
+    db.app = app;
+    #db.create_all();
+
+    app.run(host='127.0.0.1', port=5000, debug=True);
+
+# [Model.py] --------------------------------------------------------------------------------------------------------------
+from flask_sqlalchemy import SQLAlchemy;
+
+db = SQLAlchemy();  # 관련된 class나 변수 사용시 db라는 변수를 통해서 데이터를 만들도 db에도 접근
+
+# class Test(db.Model):
+#     __tablename__ = 'test_table';
+#     id = db.Column(db.Integer, primary_key=True);
+#     name = db.Column(db.String(32), unique=True);
+
+
+
+
+# [ API based flask ] ----------------------------------------------------------------------------
+# api_v1 > __init__.py
+from flask import Blueprint;
+
+api = Blueprint('api', __name__);
+
+from . import flask001_user;
+
+
+# api_v1 > api_file1.py
+from flask import jsonify;
+from . import api;
+
+@api.route('/users', methods=['GET','POST'])
+def user():
+    return jsonify()
+
+
+# app.py (실행 본파일)
+from api_v1 import api as api_v1
+
+app = Flask(__name__);
+app.register_blueprint(api_v1, url_prefix='/api/v1')
+
+
+
+
+
+
+
+

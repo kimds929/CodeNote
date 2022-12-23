@@ -1,0 +1,58 @@
+# 설치 프로그램
+VS Code (Visual Studio Code) : 
+  ㄴ 메뉴바 > view > Extensions > 설치: Python
+  		#(설치보류) ㄴ 메뉴바 > view > Extensions > 설치: Python Extension Pack
+  ㄴ 메뉴바 > view > commend palette > python select interpreter: iterpreter 선택
+  ㄴ 메뉴바 > file > preference > Keyboard Shortcuts 
+     > Python: run selection line in python interactive window 단축키를 Ctrl + Enter로 설정
+  ㄴ # Task Runner 설정
+       ㄴ 메뉴바 > view > commend palette > Task`s Configure Task > Others > 폴더내 새로생성된 tasks.json 파일에 아래 'Task Code' 입력
+
+  ☞ 실행시: Ctrl + Shift + B
+
+
+
+#--- Task Code  ---#
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Project Label",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "${file}"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "options": {
+                "env": {
+                    "PYTHONIOENCODING": "UTF-8"
+                }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
+
+
+# --------- 기존내용 ------------- #
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "echo",
+            "type": "shell",
+            "command": "echo Hello"
+        }
+    ]
+}

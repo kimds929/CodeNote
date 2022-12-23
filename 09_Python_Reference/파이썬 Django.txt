@@ -1,0 +1,306 @@
+# 가상환경 만들기(아나콘다 가상환경설정) ---------------------------------------------------------
+방화벽제거 : conda config --set ssl_verify no
+가상환경 List : conda info --envs
+가상환경 생성 : conda create -n 가상환경명 python=3.7
+          virtualenv 가상환경명			# 해당폴더에 가상환경 폴더 생성
+가상환경 삭제 : conda remove -n 가상환경명 --all
+가상환경 접근 : activate 가상환경명
+		> 가상환경명\Scripts\activate
+가상환경 나가기 : conda deactivate
+
+
+# 장고 및 기타 사용 Package 설치 ---------------------------------------------------------
+pip install django
+#pip install os
+pip install getpass
+
+pip install pandas
+pip install numpy
+pip install datetimeD
+
+pip install request
+pip install bs4
+pip install lxml
+
+#
+
+# autopep8 설치
+conda install --name DjangoTest001 autopep8
+
+# 장고 시작하기 ---------------------------------------------------------
+# 프로젝트 생성 (코드의 구조 생성)
+[cmd] django-admin startproject 'Project명'
+[cmd] move 'proejct명' 'main폴더명'		# 폴더명 변경
+[cmd] cd 'Project명'  #(프로젝트 안으로 접근)
+
+# App 생성 (해당 App명의 폴더가 새로 생성)
+[cmd] django-admin startapp 'App명'
+ templates 폴더 생성
+
+# App을 Project에 등록
+[Dir] Project폴더 > 'Project명'으로된 폴더 > settings.py 파일 선택
+> INSTALLED_APPS 변수에 새로 생성한 'App명'을 추가
+
+ #ex)
+	 #INSTALLED_APPS = [
+	 #   'django.contrib.admin',
+	 #   'django.contrib.auth',
+	 #   'django.contrib.contenttypes',
+	 #   'django.contrib.sessions',
+	 #   'django.contrib.messages',
+	 #   'django.contrib.staticfiles',
+	 #	 'board', 'Testuser' # 새로생성한 App 		# 'App명'.apps.'App명'Config
+	 #]
+
+# 가상환경 및 프로젝트 파일 접근
+ activate DjangoTest001
+ cd Django_Test001
+
+
+# 장고의 MVC (MTV; Model, Templates, View) 만들기 ----------------------------------------------------------------------------------------------
+[Dir] 작업할 App 폴더 > models.py 파일 선택		# DataBase 정의
+
+# User-table App 만들기 (MTV : M만들기)  -------------------------------------------------------------------------------------------------------
+	class Testuser(models.Model):   #반드시 장고에서 만든 models.Model을 상속 받아야 함
+		username = models.CharField(max_length=64,      # CharField : 문자형 필드; 길이가 정해진 필드를 정의
+									verbose_name = "사용자명") # 관리자페이지에서 필드에 대한 명령을 한글로 보여주기 위함
+		password = models.CharField(max_length=64,
+									verbose_name = "비밀번호")
+		registered_dttm = models.DateTimeField(auto_now_add = True,      # DateTimeField : 날짜형 필드 / auto_now_add = True : 객체 생성시점에 시간이 바로 들어감
+											verbose_name = "등록시간")
+		
+		# Display되는 Class명을 별도 지정하기 위한 항목
+		def __str__(self):          # __str__ : Class가 문자열로 변환할떄 어떻게 변환할지를 정해주는 내부함수
+			return self.username
+		
+		class Meta:
+			db_table = 'Django_UserTable1'     # 생성할 Table명 지정
+			verbose_name = 'TestSite 사용자'            # 개체명을 별도 지정
+			verbose_name_plural = 'TestSite 사용자'     # 복수 개체명을 별도 지정
+
+
+	# MTV : 데이터베이스 관리 ------------------------------------------------------------
+[cmd] python manage.py makemigrations    # 모델생성 및 변경이 필요한 사항 추출
+  # ☞ 모델생성(Create model Testuser): migrations 폴더내에 '__ini__.cpython-37.pyc'  파일과 '0001.initial.py' 파일이 생성
+  # '0001.initial.py' 파일내에 만든 Model내 Class내용에 따라 Database를 생성할 수 있음
+
+[cmd] python manage.py migrate	# Database생성 및 변경사항 반영   * 'Project명'으로된 폴더 > settings.py 내의 명령어에 따라 파일 생성함
+	# ./Project명 폴더/settings.py
+	#DATABASES = {
+	#	'default': {
+	#		'ENGINE': 'django.db.backends.sqlite3',			# sqlite3 엔진을 사용하겟다
+	#		'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),	# 설치위치 : 현재폴더
+	#	}
+	#}
+
+[cmd] sqlite3 db.sqlite3				# Database안에 내용이 잘 만들어 졌는지 확인하는 명령어에
+	sqlite> .tables						# Datablase내 들어있는 Table 확인
+	sqlite> .schema Django_UserTable1	# 테이블/인덱스 스키마생성 스크립트를 생성하는 명령어
+	sqlite>	.q							#sqlite 종료 명령어
+
+
+# class내에서 Table정보가 변경시 : 'makemigrations' > 'migrate' 명령어를 순차적으로 시행하면 변경내용이 적용됨
+	[cmd] python manage.py makemigrations    # 모델생성 및 변경이 필요한 사항 추출
+	[cmd] python manage.py migrate			# Database생성 및 변경사항 반영
+
+
+	# 장고 Admin ------------------------------------------------------------
+# 장고 사이트 실행 종료
+[cmd] python manage.py runserver   >  웹브라우저에 해당 ip로 검색	# 실행
+ctrl + c	# 종료
+
+# 관리자계정(Super-User)생성
+[cmd] python manage.py createsuperuser
+  > Username (leave blank to use 'user') : 		#ID :
+  > Email address: 								#E-mail :
+  > password :
+  > password(again): 
+  > Bypass password validation and create user anyway? [y/N]: y/N  #계정생성
+
+
+# User-table App을 Admin 계정 Page안에 추가 (Table을 새로 만들때 model.py에 등록한 내용을 Page에 표시하기위해 admin.py 에 등록이 필요)
+[Dir] user관련 폴더 선택 > admin.py
+	from django.contrib import admin
+	from .models import Testuser		# model.py안의 Testuser Class를 호출
+
+	# Register your models here.
+	class TestuserAdmin(admin.ModelAdmin):
+		pass
+
+	admin.site.register(Testuser, TestuserAdmin)		# admin Page에 App등록
+	
+
+
+
+# 회원가입 만들기 (MTV : T만들기; Templete >> HTML문서) --------------------------------------------------------------------------------------------
+
+#① 페이지 생성
+	# Bootstrap 활용
+[Dir] (1) 작업할 App 폴더 > template폴더 > register.html 파일 생성
+ ※ register.html 파일내 회원가입 Fomat을 작성 (Bootstrap 코드 활용)
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+
+    <!--CSS-->
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+      integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T"
+      crossorigin="anonymous"
+    />
+
+    <!--Javascript-->
+    <script
+      src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+      integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
+      integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
+      integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+      crossorigin="anonymous"
+    ></script>
+
+    <title>Register_User</title>
+  </head>
+  <body>
+    <div class="container">
+      <!-- 회원가입  Head -------------------->
+      <div class="row mt-5">
+        <div class="col-12 text-center">
+          <h1>회원가입</h1>
+        </div>
+      </div>
+	  
+	  <div class="row mt-5">
+        <div class="col-12">
+          {{ error }}
+        </div>
+      </div>
+
+      <!-- 회원가입  Contents ---------------->
+      <div class="row mt-5">
+        <div class="col-12">
+          <form method="POST" action=".">
+            {% csrf_token %}
+            <!-- 사용자명 -->
+            <div class="form-group">
+              <label for="username">사용자 이름</label>
+              <input
+                type="text"
+                class="form-control"
+                id="username"
+                placeholder="사용자명 입력"
+                name="username"
+              />
+            </div>
+            <!-- 비밀번호 -->
+            <div class="form-group">
+              <label for="password">비밀번호</label>
+              <input
+                type="password"
+                class="form-control"
+                id="password"
+                placeholder="비밀번호 입력"
+                name="password"
+              />
+            </div>
+            <!-- 비밀번호 확인용 재입력-->
+            <div class="form-group">
+              <label for="re-password">비밀번호 확인</label>
+              <input
+                type="password"
+                class="form-control"
+                id="re-password"
+                placeholder="비밀번호 확인"
+                name="re-password"
+              />
+            </div>
+            <!-- 제출버튼 -->
+            <button type="submit" class="btn btn-primary">등록</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+
+
+# 만든 페이지를 Django 페이지와 연결을 위한 코드 작성
+[Dir] (2) 작업할 App 폴더 > view.py 파일 선택
+	from django.shortcuts import render
+	from django.http import HttpResponse
+	from django.contrib.auth.hashers import make_password
+	from .models import Testuser
+
+	# Create your views here.
+	def register(request):		# url 정보가 'request' 변수를 통해 연결됨
+		if request.method == 'GET':
+			return render(request, './register.html')
+		elif request.method == 'POST':      # 입력받은 정보값을 데이터베이스에 저장하기 위한 알고리즘
+			username = request.POST['username']
+			password = request.POST['password']
+			re_password = request.POST['re-password']
+
+			res_data = {}
+			if password != re_password:     # 비밀번호와 재확인비밀번호가 다른경우
+				res_data['error'] = '입력하신 비밀번호가 확인비밀번호와 다릅니다.'
+			else:
+				testuser = Testuser(username=username, password=make_password(password))    #비밀번호 암호화
+				testuser.save()
+
+			return render(request, './register.html', res_data)
+			# 입력 : request 입력 받는값, 출력 : 'register.html'   
+			# 기본 adress는 templates폴더임
+
+	
+	
+# URL 설정
+[Dir] (3) 'Project명'으로된 폴더 > urls.py 파일 선택
+	from django.urls import path, include
+
+	urlpatterns = [
+		path('admin/', admin.site.urls),
+		path('Testuser/', include('Testuser.urls'))		# Testuser로 접근하는 것들은 'Testuser.urls'로 관리하겟다라는 명령어
+	]
+
+[Dir] (4) 업할 App 폴더 > urls.py 파일 선택		# Testuser로 접근하는 것들은 'Testuser.urls'로 관리하겟다라는 명령어
+	from django.urls import path
+	from . import views
+
+	urlpatterns = [
+		path('register/', views.register),		# register/로 접근시 view.py파일의 register함수로 출력하겟다.
+	]
+
+# 주소 : http://127.0.0.1:8000/Testuser/register  접속시 일어나는 상황정리
+	# url 요청시 (3)에의해 '/Testuser'로 접근시 'Testuser 폴더 > urls.py(4)'파일로 토스
+	# (4)에의해 '/register'로 접근시 같은폴더내 views.py(2) 파일의 register함수를 호출
+	# view.py파일에서 register함수는 요청(request)을 받아 'register.html'을 호출
+	# (1)에서 작성된 register.html 파일내용을 Display
+
+
+
+
+
+
+
+
+
+
+
+
+

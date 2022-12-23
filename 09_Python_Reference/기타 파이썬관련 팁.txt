@@ -1,0 +1,20 @@
+Python GUI Application 개발 : PyQT
+
+# 데이터 수집을 하루에 1,000개만 가능하기 때문에 하루에 한번씩 호출을 해줘야 하는데요. 
+# schedule 의 파이썬 패키지를 사용해서 다음과 같이 진행했습니다. 하루에 한번씩 19:00시에 스크랩을 진행하게 됩니다. 
+# 이렇게 수집을 하면 대략 1주일 정도면 4~5년 정도의 실거래 매매가 데이터를 수집이 가능합니다. 추가적으로 중간중간 스크랩된 내용에 대해서 
+# 리포트 #메시지 를 전달하는 방법에 대해서는 이후에 한번 설명을 드릴께요
+
+
+import schedule
+
+schedule.every().day.at("19:00").do(scrap)
+while True: 
+    schedule.run_pending()
+    time.sleep(1)
+
+
+     # Module
+ import Module_P001 as md
+ md.my_funciton()
+ %run Module_P001.py     # 직접실행
