@@ -12,7 +12,9 @@
 # $ conda install statsmodels
 
 # $ conda install -c conda-forge missingno
-# $ conda uninstall -c conda-forge pandas-profiling
+# $ conda install -c conda-forge pandas-profiling
+
+# $ conda install six
 
 # -----------------------------------------------------------------------------------------------------
 
@@ -29,9 +31,43 @@
 # import scipy
 # import statsmodels.api as sm
 
-# from DataAnalysis_Module import Cpk, cpk_line, fun_Decimalpoint, distboxplot, sm_LinearRegression
-# from DataAnalysis_Module import *
+# from six.moves import cPickle
+
+
 # -----------------------------------------------------------------------------------------------------
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+# Example Data
+test_dict = {'y': [10, 13, 20, 7, 15],
+            'x1': [2, 4, 5, 2, 4],
+            'x2': ['a', 'a', 'b', 'b', 'b'],
+            'x3': [10, 8, 5, 12, 7],
+            'x4': ['g1', 'g2', 'g1', 'g2', 'g3']}
+
+test_df = pd.DataFrame(test_dict)
+test_df
+
+steel_dict = {'생산공장': ['1공장', '2공장', '2공장', '1공장', '2공장', '2공장', '1공장', '1공장'],
+ '재료번호': ['ABC0001',  'ABC0002',  'ABC0003',  'ABC0004',  'ABC0005',
+          'ABC0006',  'ABC0007',  'ABC0008'],
+ '두께': [0.7, 1.8, 0.7, 1.8, 1.8, 0.7, 0.7, 1.8],
+ 'YP': [211, 174, 185, 161, 158, 203, 175, 153],
+ '온도': [828, 834, 832, 842, 839, 817, 809, 847]}
+steel_df = pd.DataFrame(steel_dict)
+
+steel_df
+
+ex_df = pd.read_csv('example_df01.csv', encoding='utf-8-sig')
+ex_df
+
+
+df = test_df.copy()
+# df = steel_df.copy()
+# df = steel_df.copy()
+
 
 
 # 【 Python Basic 】 ==========================================================================
@@ -60,8 +96,19 @@ print(w)
 p = 'Python'
 
 print(w + p)
-
 # a + w   # error
+
+
+# f-string : 변수들로 이루어진 문자를 사용자가 쉽게 표현하기 위한 방법  ★★★★★
+# (여러 포매팅 방법 중 f-string이 가장 쉽고 강력함)
+print(w + ' ' + p)
+print(f'{w} {p}')
+
+# print(a + ' ' + w)
+print(f'{a} {w}')
+
+
+
 
 
 # operation (사칙연산) --------------------------------------------------------------------------------
@@ -80,12 +127,26 @@ a % b       # 나머지
 a ** 2      # 제곱
 a ** b
 
+# ========================================================================================
+# (list, dictionary 기초 응용 및 실습  *pandas, matplotlib 연계) ==========================
+test_df
+
+test_df['x1'] + test_df['x3']
+
+test_df['x1'] % test_df['x3']
+test_df['x1'] // test_df['x3']
+
+test_df['x1'] ** 2
+
+# =========================================================================================
+
+
 
 # data-structure --------------------------------------------------------------------------------
 # numeric: 숫자형 / string: 문자형  (object: 문자형 집합체)
 #   numeric → int: 정수, float: 소수
 
-# string → string
+# numeric → string
 
 a1 = 10
 type(a1)
@@ -110,18 +171,38 @@ l2
 print(l2)
 
 # list 원소(데이터) 접근 방법 (일반적으로 프로그래밍은 0부터 시작)
-l1[0]
+l1[0] 
 l1[1]
 l1[2]
 l1[0:2]
 
 
-# 원소추가
+# 원소추가                # ★★★★★
 l2 = [3,4,5]
 l2
 
 l2.append(6)
 l2
+
+# List 이어 붙이기                # ★★
+l1 + l2
+
+
+# tuple : 값수정이 불가능한 list
+l3 = [1,7,4]
+l3[0] = 3
+l3
+
+t1 = (1,7,4)
+t1[0] = 3
+t1
+
+# tuple 원소(데이터) 접근 방법
+t1[0]
+t1[0:2]
+
+
+
 
 
 
@@ -143,13 +224,52 @@ d2
 d2['a']
 d2['b']
 
-# 원소추가
+# 원소추가                # ★★★★★
 d2['c'] = [9,8,7]
 d2
 
+# Key / Value                # ★★★★
+d2.keys()
+d2.values()
+d2.items()
 
 
-# 제어문 --------------------------------------------------------------------------------
+
+# ========================================================================================
+# (list, dictionary 기초 응용 및 실습  *pandas, matplotlib 연계) ==========================
+
+# list → Pandas Data
+l1
+pd.Series( l1 )
+
+plt.hist(l1)        # histogram
+
+
+
+[l1, l3]
+pd.DataFrame( [l1, l3] )
+
+plt.scatter(l1, l3)     # scatterplot
+
+
+# dictionary → Pandas Data
+d1
+pd.Series(d1)
+
+d2
+pd.DataFrame(d2)
+
+plt.scatter(d2['a'], d2['c'])     # scatterplot
+plt.xticks(d2['a'], d2['b'])    # x축 label변경
+
+# =========================================================================================
+
+
+
+
+
+
+# 제어문 # ★★★★★--------------------------------------------------------------------------------
 abc = 10
 if abc >= 20:
     print('abc: 20 이상')
@@ -159,7 +279,7 @@ else:
     print('abc: 10미만')
 
 
-# 루프문 --------------------------------------------------------------------------------
+# 루프문 # ★★★★★--------------------------------------------------------------------------------
 for i in [10, 15, 20]:
     print(i)
 
@@ -172,17 +292,332 @@ for i in [10, 15, 20]:
         print(i)
 
 
-# 함수 --------------------------------------------------------------------------------
-def function_add(x, y):
-    add = x + y
-    return add
+# 함수 # ★★★★★ --------------------------------------------------------------------------------
+def add_f(x, y):
+    return x + y
 
-function_add(10, 20)
+add_f(10, 20)
 
 def hello_printing():
     print('Hello')
 
 hello_printing()
+
+
+#초기값설정
+def add_f2(x, y=10):
+    return x+y
+
+add_f2(10, 20)
+add_f2(10)
+
+
+
+# Cpk 함수 만들기
+# (상하한이 모두 있을경우) Cpk = min(usl - mean, mean - lsl) / (3 * std)
+def cpk(mean, std, lsl, usl):
+    cpk_value = min(usl - mean, mean - lsl) / (3 * std)
+    return cpk_value
+
+# 함수실행
+cpk(mean = 15, std=3.5, lsl=10, usl=18)
+cpk(mean = 15, std=3.5, lsl=12, usl=19)
+
+
+
+# if문 응용 실습
+# (상한만 있을경우)      cpk_value = (usl - mean) / (3 * std) 
+# (하한만 있을경우)      cpk_value = (mean - lsl) / (3 * std)
+# (상하한 둘다 있을경우) cpk_value = min(usl - mean,  mean - lsl) / (3 * std)
+def cpk(mean, std, lsl=None, usl=None):
+    if lsl is None:
+        cpk_value = (usl - mean) / (3 * std) 
+    elif usl is None:
+        cpk_value = (mean - lsl) / (3 * std)
+    else:
+        cpk_value = min(usl - mean,  mean - lsl) / (3 * std)
+
+    return cpk_value
+
+
+# 초기값 지정
+def cpk(mean, std, lsl=-np.inf, usl=np.inf):
+    return min(usl - mean, mean - lsl) / (3 * std)
+
+
+# 함수실행
+cpk(mean = 15, std=3.5, lsl=10, usl=18)
+cpk(mean = 15, std=3.5, lsl=11)
+cpk(mean = 15, std=3.5, usl=21)
+
+
+
+
+# ==============================================================================================
+# (if, for, function 응용 및 실습  *pandas, matplotlib 연계) =====================================
+# function 실습 ***
+# 어떤 series(s)가 주어졌을때, 해당 series의 평균을 구하는 함수를 만들자 (함수명: series_mean)
+def series_mean(s):
+    return s.mean()
+
+# 어떤 series(s)가 주어졌을때, 해당 series의 3sigma Range를 구하는 함수를 만들자 (함수명: series_sigma)
+def series_sigma(s):
+    s_mean = s.mean()
+    s_std = s.std()
+    
+    simga_plus3 = round(s_mean + 3 * s_std,1)
+    simga_minus3 = round(s_mean - 3 * s_std,1)
+    return f"{simga_minus3} ~ {simga_plus3}"
+
+# 위에서 구한 함수를 가지고 steel_df 데이터의 YP값의 평균을 구해보자
+series_mean(steel_df['YP'])
+
+# 위에서 구한 함수를 가지고 steel_df 데이터의 생산공장별 YP값의 평균을 구해보자
+steel_df.groupby('생산공장')['YP'].mean()
+steel_df.groupby('생산공장')['YP'].agg('mean')
+steel_df.groupby('생산공장')['YP'].agg(series_mean)
+
+# 위에서 구한 함수를 가지고 steel_df 데이터의 생산공장별 YP값의 평균,편차, 3sigma을 구해보자
+steel_df.groupby('생산공장')['YP'].agg(['mean','std', series_sigma])
+
+
+
+
+# function / if문 실습 ***
+# 어떤값(x)가 주어졌을때, 
+#    . 그값이 10보다 크거나 같으면: True
+#    . 그값이 10보다 작으면: False
+# 를 리턴(return)하는 함수를 만들어보자 (함수명 is_over_10)
+
+def is_over_10(x):
+    if x >= 10:
+        return True
+    else:
+        return False
+
+
+# for문 실습 ***
+# itterrows 함수를 사용하여 test_df의 x3열의 각 행마다 값이 
+# 10보다 크거나 같은수인지(True, False)를 저장하는 ①list, ②dictionary(key: index, value:x3값)를 생성해라
+
+for row in test_df.iterrows():
+    print(row)
+    # break
+row
+row[0]  # index
+row[1]  # row_series_data
+
+
+result_list = []     # 결과 저장용 빈 list
+result_dict = {}     # 결과 저장용 빈 dictionary
+for row in test_df.iterrows():
+    row_index = row[0]
+    row_data = row[1]
+    # print(row_data['x3'])
+    
+    # print(is_over_10( row_data['x3'] ))
+    result_10 = is_over_10( row_data['x3'] )
+    
+    result_list.append(result_10)
+    result_dict[row_index] = result_10
+
+
+result_list
+result_dict
+# pd.Series(result_dict)
+# test_df['x3'] > 10
+
+
+# apply함수 + lambda식  # ★★★★★
+test_df['x3']
+test_df['x3'].apply(lambda x: is_over_10(x) )
+
+
+
+# Cpk 함수 만들기 ---------------------
+# 어떤 Sereis 를 입력받아서 공정능력지수(cpk)를 리턴하는 함수를 만들어라 (기존 cpk 함수 활용가능)
+# test_df의 x3열에 대한 cpk를 구해보자 (lsl, usl 마음대로 대입)
+
+def cpk_series(x, lsl=-np.inf, usl=np.inf):
+    x_mean = x.mean()
+    x_std = x.std()
+    
+    return cpk(mean=x_mean, std=x_std, lsl=lsl, usl=usl)
+
+cpk_series(test_df['x3'], lsl=5)
+cpk_series(test_df['x3'], usl=13)
+cpk_series(test_df['x3'], lsl=5, usl=13)
+cpk_series(test_df['x3'], lsl=5, usl=11)
+
+
+# Cpk_series함수 응용
+# steel_df의 생산공장별 YP공정능력(하한: 140, 상한: 210)을 구해서 Series형태로 구해보자
+result_dict = {}
+for fac in ['1공장', '2공장']:
+    df_fac = steel_df[steel_df['생산공장'] == fac]
+    cpk_fac = cpk_series(df_fac['YP'], lsl=140, usl=210)
+    
+    result_dict[fac] = cpk_fac
+pd.Series(result_dict)
+
+steel_df.groupby(['생산공장'])['YP'].apply(lambda x: cpk_series(x, lsl=140, usl=210))
+# =========================================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+# Class ★★★ --------------------------------------------------------------------------------
+class MakeCar():
+    def __init__(self, oil):
+        self.tank = oil
+       
+    def go(self, distance):
+        self.tank = self.tank - distance
+
+c1 = MakeCar(100)
+c1.tank
+c1.go(60)
+c1.tank
+
+c2 = MakeCar(100)
+c2.tank
+
+
+c1.go(60)
+c1.tank
+c2.tank
+
+
+
+class MakeCar():
+    def __init__(self, oil):
+        self.tank = oil
+       
+    def go(self, distance):
+        if self.tank - distance < 0:
+            print('기름이 없어 앞으로 갈 수 없습니다. 기름을 충전해주세요. 남은기름량:',self.tank)
+        else:
+            self.tank = self.tank - distance
+    
+    def charge(self, oil):
+        if self.tank + oil > 100:
+            print('100을 초과하여 충전할 수 없습니다. 충전량은 100으로 고정됩니다.')
+            self.tank = 100
+        else:
+            self.tank = self.tank + oil
+
+c1 = MakeCar(100)
+c1.tank
+c1.go(60)
+c1.tank
+c1.go(60)
+c1.tank
+
+c1.charge(60)
+c1.tank
+c1.charge(60)
+c1.tank
+
+
+
+# Cpk Class만들기
+class CPK():
+    def __init__(self, lsl=None, usl=None):
+        self.lsl = lsl
+        self.usl = usl
+    
+    def calculate(self, mean, std):
+        if self.lsl is None:
+            cpk_result = (self.usl - mean) / (3 * std) 
+        elif self.usl is None:
+            cpk_result = (mean - self.lsl) / (3 * std)
+        else:
+            cpk_result = min(self.usl - mean, mean - self.lsl) / (3 * std)
+        
+        self.result = cpk_result
+        return self.result
+
+
+cpk1 = Cpk(lsl=10, usl=18)
+cpk1.calculate(mean=15, std=3.5)
+cpk1.result
+
+cpk2 = Cpk(lsl=11)
+cpk2.calculate(mean=15, std=3.5)
+cpk2.result
+
+cpk3 = Cpk(usl=21)
+cpk3.calculate(mean=15, std=3.5)
+cpk3.result
+
+
+# function?
+# dir()
+
+# ========================================================================================
+# (class) 응용 및 실습  *pandas, matplotlib 연계) =========================================
+# CpkSeries 클래스 만들기
+#  ① CpkSeries 클래스를 활용해 steel_df의 YP값의 cpk를 구하자 (lsl = 140, usl=210)
+#  ① CpkSeries 클래스를 활용해 steel_df의 생산공장별 YP값의 cpk를 구하자 (lsl = 140, usl=210)
+class CPK_Analysis:
+    def __init__(self, lsl=-np.inf, usl=np.inf):
+       pass
+    
+    def cpk(self, x):
+        pass
+        # return cpk_value
+    
+    def plot(self, x):
+        pass
+        # return cpk_plot
+        
+
+class CPK_Analysis:
+    def __init__(self, lsl=-np.inf, usl=np.inf):
+       self.lsl = lsl
+       self.usl = usl
+    
+    def cpk(self, x):
+        self.x_mean = x.mean()
+        self.x_std = x.std()
+        cpk_result = min(self.usl - self.x_mean, self.x_mean - self.lsl) / (3 * self.x_std)
+        
+        return cpk_result
+
+    def plot(self, x):
+        line_df = cpk_line(x)
+        
+        cpk_plot = plt.figure()
+        plt.hist(x)
+        plt.plot(line_df.iloc[:,0], line_df.iloc[:,1], color='blue')
+        
+        for l in [self.lsl, self.usl]:
+            plt.axvline(l, color='red', ls='--', alpha=0.5)
+        plt.close()
+
+        return cpk_plot
+    
+cs = CPK_Analysis(lsl = 140, usl=210)
+cs.cpk(steel_df['YP'])
+cs.plot(steel_df['YP'])
+
+
+steel_df.groupby(['생산공장'])['YP'].apply(lambda x: cs.cpk(x))
+steel_df.groupby(['생산공장'])['YP'].agg(cs.cpk)
+steel_df.groupby(['생산공장'])['YP'].agg(cs.plot)
+# ===============================================================================================
+
+
+
+
 
 
 
@@ -244,17 +679,83 @@ log10(1/10)
 import pandas as pd
 
 
-# Example Data
-test_dict = {'y': [10, 13, 20, 7, 15],
-            'x1': [2, 4, 5, 2, 4],
-            'x2': ['a', 'a', 'b', 'b', 'b'],
-            'x3': [10, 8, 5, 12, 7],
-            'x4': ['g1', 'g2', 'g1', 'g2', 'g3']}
+# ● Series 생성
+# Series 생성 - List로부터 생성하기
+l1 = ['a', 'b','c']
+l2 = [1, 2, 3]
+t1 = (2,3,4)
 
-test_df = pd.DataFrame(test_dict)
-test_df
 
-df = test_df.copy()
+pd.Series(l1)        # index 자동부여
+pd.Series(l1)        # index 자동부여
+
+s1 = pd.Series(l1, name='ABC')
+s1
+s1[0]
+
+s2 = pd.Series(l1, name='ABC', index=l2)
+s2
+s2[0]
+s2[1]
+
+s3 = pd.Series(t1, name='ABC', index=l2)
+s3
+
+# Series 생성 - Dictionary로부터 생성하기
+di1 = {'a': 8, 'b':9, 'c': 0}
+di1
+s4 = pd.Series(di1)       # key: index, value:value
+s4
+
+di2 = {1: 'e', 2:'f', 3: 'g'}
+s5 = pd.Series(di2)
+s5
+
+
+
+# ● DataFrame 생성
+# DataFrame - List로부터 생성하기
+l3 = [[1,2,3],[4,5,6]]
+pd.DataFrame(l3)
+pd.DataFrame(l3, columns=['A1','A2','A3'])
+pd.DataFrame(l3, columns=['A1','A2','A3'], index=['a','b'])
+
+# DataFrame - Dictionary로부터 생성하기
+di2 = {'A1':[1,2,3], 'A2':[4,5,6]}
+pd.DataFrame(di2)
+
+di3 = {'A1':{'a':1, 'b':2}, 'A2':{'a':3, 'b':4}}
+pd.DataFrame(di3)
+
+
+
+
+
+
+# Data Save/Load from file ---------------------------------------------
+# csv
+df = pd.read_csv('test_df.csv')
+# path = r'D:\Python\★★Python_POSTECH_AI\파이썬_정리자료★★\00_DataAnalysis_Basic'
+# df = pd.read_csv(path + '/test_df.csv')
+df.to_csv(path + '/test_df2.csv', index=False)
+
+
+
+# ※ Excel
+# df.to_excel("output.xlsx")
+# df.to_excel("output.xlsx", sheet_name='Sheet_name_1')  
+
+# pd.read_excel('tmp.xlsx', sheet_name='Sheet1', header=None, index_col=0)  
+# pd.read_excel(open('tmp.xlsx', 'rb'), sheet_name='Sheet3')
+
+# https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_excel.html
+
+
+df_wine = pd.read_csv(path + '/wine_aroma.csv')
+# df_wine = pd.read_clipboard()
+
+df_titanic = pd.read_csv(path + '/titanic.csv')
+# df_titanic = pd.read_clipboard()
 
 
 
@@ -315,6 +816,16 @@ c2 = df[['x1', 'x3']]
 c2
 
 
+# index만 추출하기
+df.index
+
+# column명만 추출하기
+df.columns
+
+
+
+
+# ※ Pandas 이해하기 ----------------------------------
 # Series ?
 pd.Series([1,2,3,4,5], name='abc')
 series = pd.Series([1,2,3,4,5], name='abc')
@@ -337,6 +848,12 @@ s1
 s1.to_frame()
 
 
+# Series Selection
+s1[0]
+s1[3]
+s1[0:3]
+
+
 
 # Calculation (Operation) ------------------------------------------------------------
 df
@@ -353,38 +870,32 @@ df2
 
 # Operation
 df['x1']
+df['x1'].count()
 df['x1'].sum()
 df['x1'].mean()
 df['x1'].std()
 
 df['x1'].median()
 
+df['x1'].agg('mean')
+df['x1'].agg(['count', 'mean', 'std'])
+
 sum(df['x1'])
 
 
+# apply함수
+df['x2']
+df['x2'].apply(lambda x: x=='a')
+
+test_df.apply(lambda x: x['x2'],axis=1)
+test_df.apply(lambda x: x['x1']+ x['x3'],axis=1)
 
 
 
-from DataAnalysis_Module import Cpk
-# Cpk (Cumstomizing Function)
-cpk_calc = Cpk()
-
-cpk_calc.usl = 10
-cpk_calc.decimal = 2
-# cpk_calc.lean = True
-cpk_calc.reset()
-cpk_calc
-
-cpk_calc(df['x1'], lsl=5, usl=10)
-cpk_calc.decimal
-cpk_calc
 
 
-# index만 추출하기
-df.index
 
-# column명만 추출하기
-df.columns
+
 
 
 
@@ -431,6 +942,11 @@ df[df['x4'].str.contains('1')]
 df[~df['x4'].str.contains('1')]
 
 
+# query filter
+df.query("x4 == 'g1'")
+df.query("x1 > 2 & x4== 'g1'")
+
+
 
 
 # Sort -----------------------------------------------------------------
@@ -445,6 +961,18 @@ df.sort_values(['x4', 'x3'], ascending=[True, False])
 
 # index
 df.sort_index(ascending=False) 
+
+
+
+
+# reset_index
+df_y = df.set_index('y')
+df_y.reset_index()
+df_y.reset_index(drop=True)
+
+# set_index
+df.set_index('y')
+
 
 
 
@@ -494,22 +1022,39 @@ df_group.agg(['mean', 'std']).to_clipboard()
 df_group.agg({'x1':'mean', 'x3':'std', 'y':['min','max']})
 
 
-from DataAnalysis_Module import Cpk
-# Cpk (Cumstomizing Function)
 
-cpk_calc = Cpk()
-cpk_calc.lsl = 10
-cpk_calc.usl = 20
-cpk_calc.decimal = 4
-cpk_calc.lean = True
-cpk_calc
-
-df_group['y'].agg(cpk_calc)
-df_group['y'].agg(['mean', 'std', cpk_calc])
-df_group['y'].agg(lambda x: cpk_calc(x, lsl=12, usl=18))
-df_group['y'].describe()
+# unstack, stack
+df.groupby(['x2', 'x4'])['X1'].count()
+df.groupby(['x2', 'x4'])['X1'].count().unstack('x2')
 
 
+# groupby + for문  ***
+q_dict = {}
+for gi, gv in df.groupby(['x2']):
+    q_dict[gi] = gv['x1'].quantile(0.5)
+q_dict
+pd.Series(q_dict)
+
+
+q_dict = {}
+for gi, gv in df.groupby(['x2']):
+    q10 =  gv['x1'].quantile(0.1)
+    q50 =  gv['x1'].quantile(0.5)
+    q90 =  gv['x1'].quantile(0.9)
+    
+    q_dict[gi] = [q10, q50, q90]
+q_dict
+pd.DataFrame(q_dict, index=['q10','q50','q90'])
+    
+
+q_dict = {}
+for gi, gv in df.groupby(['x2']):
+    q_dict[gi] = []
+    for q in [0.1, 0.5, 0.9]:
+        q_ =  gv['x1'].quantile(q)
+        q_dict[gi].append(q_)
+q_dict
+pd.DataFrame(q_dict, index=['q10','q50','q90'])
 
 
 
@@ -598,41 +1143,27 @@ msno.bar(df)
 
 
 
-
-
-
 # Dataset Summary Library ------------------------------------------------------------
 # pandas_profiling library
-import pandas_profiling as pd_report
+# import pandas_profiling as pd_report
 # pandas_profiling : pandas 기반 DataFrame Summary를 시각적으로 제공해주는 Library
-
-pd_report.ProfileReport(df)
-
+# pd_report.ProfileReport(df)
 
 
-# Dataset Summary Library ------------------------------------------------------------
-# 【 Cumstomizing Module 】
-from DataAnalysis_Module import SummaryPlot, DF_Summary
 
-# SummaryPlot
-sm_plt = SummaryPlot(df)
+# 데이터 저장 로드 (pkl 확장자) -----------------------------------
+# conda install six
+# 아래에서 사용된 cPickle 은 Python 자료형으로 데이터를 저장하고 불러오는 패키지이다.
 
-sm_plt.summary_plot(on=['x1'])
-sm_plt.summary_plot(on=['x1', 'x2'])
-sm_plt.summary_plot(on=df.columns)
-sm_plt.summary_plot(on=df.columns, dtypes='numeric')
-sm_plt.summary_plot(on=df.columns, dtypes='object')
+from six.moves import cPickle
 
+# path = r'D:\작업방\업무 - 자동차 ★★★\Worksapce_Python\Model'
+# cPickle.dump(변수명, open('경로/저장할_파일명.pkl', 'wb'))
+cPickle.dump(df, open(path + '/test_data.pkl', 'wb'))
 
-# DF_Summary
-sm_df = DF_Summary(df)
-sm_df.summary
-sm_df.summary.to_clipboard()
+# Loading = cPickle.load(open('경로/로드할_파일명.pkl', 'rb'))
+df_load = cPickle.load(open(path + '/test_data.pkl', 'rb'))
 
-sm_df.summary_plot()        # Summary Plot in DF_Summary
-sm_df.summary_plot(on=['x3', 'x4'])
-sm_df.summary_plot(dtypes='numeric')
-sm_df.summary_plot(dtypes='object')
 
 
 
@@ -666,34 +1197,100 @@ df = test_df.copy()
 
 import matplotlib.pyplot as plt
 # matplotlib: python에서 Graph를 쉽게 그려주는 Python의 대표적인 시각화 Library
+# < 사용법 >
+# plt.figure()              # 캔버스 생성
+# plt.~~~                   # Graph 드로잉
+# plt.~~~                   # 추가옵션 (label, axis, limit ...)
+# plt.show() / plt.close    # 종료조건
+
+# matplotlib 한글폰트사용
+from matplotlib import font_manager, rc
+font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/malgun.ttf").get_name()
+rc('font', family=font_name)
+
+
 
 # line ----------------------------------------------------------
-df['x1'].plot()
-df['x1'].plot(marker='o')
-
-plt.plot('x1', 'x3', data=df)
-plt.plot('x1', 'x3', data=df.sort_values('x1'))
-plt.plot('x1', 'x3', data=df.sort_values('x1'), marker='o')
+plt.plot(df['x1'])
 plt.show()
+
+plt.plot(df['x1'], df['y'])
+plt.show()
+
+
+x2_a = df[df['x2'] =='a']
+x2_b = df[df['x2'] =='b']
+
+# group별
+plt.plot(x2_a['x1'])
+plt.plot(x2_b['x1'])
+plt.show()
+
+
+
+# group별 + marker
+plt.plot(x2_a['x1'], marker='o')
+plt.plot(x2_b['x1'], marker='o')
+plt.show()
+
+# group별 + marker + ls
+plt.plot(x2_a['x1'], marker='o', ls='')
+plt.plot(x2_b['x1'], marker='o', ls='')
+plt.show()
+
+
+# group별 + marker + ls + x,y값 지정
+plt.plot(x2_a['x1'], x2_a['y'], marker='o', ls='')
+plt.plot(x2_b['x1'], x2_b['y'], marker='o', ls='')
+plt.show()
+
+
 
 # scatter-plot ----------------------------------------------------------
-plt.scatter('x1', 'x3', data=df)
-plt.plot('x1', 'x3', data=df.sort_values('x1'))
+plt.scatter(df['x1'], df['y'])
 plt.show()
-# plt.plot('x1', 'x3', data=df.sort_values('x1'), marker='o')
 
 
+plt.scatter(x2_a['x1'], x2_a['y'], label='a')
+plt.scatter(x2_b['x1'], x2_b['y'], label='b')
+plt.legend()
+plt.show()
+
+
+# 데코레이션 ----------------------------------------
+    # linestyle
+        # -	solid line style
+        # --	dashed line style
+        # -.	dash-dot line style
+        # :	dotted line style
+
+    # style
+        # color(c)	선 색깔
+        # linewidth(lw)	선 굵기
+        # linestyle(ls)	선 스타일
+        # marker		마커 종류
+        # markersize(ms)	마커 크기
+        # markeredgecolor(mec)	마커 선 색깔
+        # markeredgewidth(mew)	마커 선 굵기
+        # markerfacecolor(mfc)	마커 내부 색깔
 
 
 # barplot ----------------------------------------------------------
 df['x2'].value_counts()
-# df['x2'].value_counts().plot.bar()
+df['x2'].value_counts().plot.bar()
 # df['x2'].value_counts().plot.barh()
-df['x2'].value_counts().plot(kind='bar')
-# df['x2'].value_counts().plot(kind='barh')
+df['x2'].value_counts().plot.bar(color='skyblue', edgecolor='grey')
 
-df['x2'].value_counts().plot(kind='bar', color='skyblue', edgecolor='grey')
-plt.xticks(rotation=0)
+
+bar_data = df['x2'].value_counts()
+bar_data
+
+# bar plot
+plt.bar(x=bar_data.index, height=bar_data.values)
+plt.show()
+
+# barh plot
+plt.barh(y=bar_data.index, width=bar_data.values)
 plt.show()
 
 
@@ -703,24 +1300,19 @@ plt.show()
 
 
 
-# histogram kde ----------------------------------------------------------
-from DataAnalysis_Module import cpk_line
-
-df['x1'].hist()
-# plt.hist('x1', data=df, edgecolor='grey')
-plt.plot('x1', 'cpk', data=cpk_line(df['x1']), color='red')
-plt.grid(alpha=0.1)
-plt.show()
-
-
-
 
 # boxplot ----------------------------------------------------------
-df.boxplot(column='x1', by='x2')
-# df.boxplot(column='x1', by='x2')
-# plt.grid(alpha=0.3)
-# plt.show()
+plt.boxplot(df['x1'])
+plt.show()
 
+box1 = df[df['x2']=='a']['x1']
+box2 = df[df['x2']=='b']['x1']
+plt.boxplot([box1, box2], labels=['a', 'b'])
+
+df.plot.box()
+
+# df.boxplot(column='x1', by='x2')
+# plt.show()
 
 
 
@@ -728,22 +1320,23 @@ df.boxplot(column='x1', by='x2')
 # Sub-line ----------------------------------------------------------
 # vertical-line
 plt.hist(df['x1'])
-plt.axvline(3, color='red')
+plt.axvline(3, color='red')     # 보조선(세로)
 plt.show()
 
 
 # horizontal-line
 plt.hist(df['x1'])
-plt.axhline(1.5, color='red')
+plt.axhline(1.5, color='red')     # 보조선(가로)
 plt.show()
 
 
 # Title / Axis_Name ----------------------------------------------------------
 plt.hist(df['x1'])
-plt.title('Histogram')
-plt.ylabel('y_Value')
-plt.xlabel('x_Value')
+plt.title('Histogram')       # title
+plt.ylabel('y_Value')       # label
+plt.xlabel('x_Value')       # label
 plt.show()
+
 
 # Axis Scale ----------------------------------------------------------
 plt.hist(df['x1'])
@@ -784,6 +1377,7 @@ plt.show()
 sns.distplot(df['x1'], kde=False)
 plt.show()
 
+# Gaussian Line Drawing
 import scipy as sp
 sns.distplot(df['x1'], kde=False, fit=sp.stats.norm)
 plt.show()
@@ -813,18 +1407,7 @@ plt.show()
 
 
 
-# 【 Cumstomizing Module 】
-from DataAnalysis_Module import distboxplot
 
-distboxplot(data=df, on='x1')
-distboxplot(data=df, on='x1', group='x2')
-distboxplot(data=df, on='x1', group='x2', mean_line=True)
-
-
-# matplotlib 한글화 문제 해결
-from matplotlib import font_manager, rc
-font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/malgun.ttf").get_name()
-rc('font', family=font_name)
 
 
 
@@ -870,6 +1453,8 @@ test_dict = {'y': [10, 13, 20, 7, 15],
 test_df = pd.DataFrame(test_dict)
 df = test_df.copy()
 
+
+
 # 【 scipy 】 ================================================================
 import scipy as sp
 
@@ -905,6 +1490,7 @@ t1_data.mean()
 t2_data.mean()
 
 
+
 # ANOVA ---------------------------------------------------------------
 sp.stats.f_oneway(t1_data, t2_data) 
 
@@ -917,14 +1503,8 @@ sp.stats.f_oneway(a1_data, a2_data, a3_data)
 
 # visualization
 sns.boxplot(data=df, x='x4', y='x1')
-plt.plot([a1_data.mean(), a2_data.mean(), a3_data.mean()], 'o-', color='red')
+plt.plot([a1_data.mean(), a2_data.mean(), a3_data.mean()], marker='o', ls='-', color='red')
 plt.show()
-
-from DataAnalysis_Module import distboxplot
-distboxplot(data=df, on='x1', group='x4')
-plt.show()
-
-
 
 
 # import matplotlib
@@ -942,118 +1522,11 @@ plt.show()
 # 【 Machine_Learning  】==========================================================
 import numpy as np
 import pandas as pd
-
 import matplotlib.pyplot as plt
 from matplotlib import font_manager, rc
 font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/malgun.ttf").get_name()
 rc('font', family=font_name)
 import seaborn as sns
-
-
-# Example Data
-test_dict = {'y': [10, 13, 20, 7, 15],
-            'x1': [2, 4, 5, 2, 4],
-            'x2': ['a', 'a', 'b', 'b', 'b'],
-            'x3': [10, 8, 5, 12, 7],
-            'x4': ['g1', 'g2', 'g1', 'g2', 'g3']}
-
-test_df = pd.DataFrame(test_dict)
-df = test_df.copy()
-
-y = test_df[['y']]
-
-# X = test_df[['x3']]
-X = test_df[['x1','x3']]
-
-
-# from DataAnalysis_Module import DF_Summary, SummaryPlot
-# path = r'C:\Users\USER\Desktop\Python\9) Dataset'
-# df = pd.read_csv(path + '\wine_aroma.csv')
-
-# df_summary = DF_Summary(df)
-# df_summary.summary
-
-# df_summary.summary_plot()
-
-
-# y = df[['Aroma']]
-# X = df[['Mo', 'Ba', 'Cr', 'Sr', 'Pb', 'B', 'Mg', 'Ca', 'K']]
-
-# y
-# X
-
-
-
-# 【 Linear_Regression  】==========================================================
-import statsmodels.api as sm
-
-
-# Learning
-# X_add = sm.add_constant(X)
-# LR = sm.OLS(y, X_add).fit()
-
-
-# LR.summary()
-# LR.model.params
-
-# # predict
-# LR_pred = LR.predict(X_add)
-
-# LR_pred_tb = LR_pred.to_frame(name='pred')
-# LR_pred_tb['true_y'] = y
-
-
-# # evaluate
-# LR.rsquared
-# LR.rsquared_adj
-# np.sqrt(LR.mse_resid)
-
-
-
-
-
-# 【 Cumstomizing Module: Regression 】
-from DataAnalysis_Module import sm_LinearRegression
-
-# Learning
-# LR = sm_LinearRegression()
-# LR.fit(X, y)
-
-LR = sm_LinearRegression()
-LR.fit(X,y)
-
-LR.summary()
-LR.model
-LR.model.params
-
-
-
-# predict
-LR_OLS_pred = LR.predict(X)
-
-OLS_pred_tb = LR_OLS_pred.to_frame(name='pred')
-OLS_pred_tb['true_y'] = y
-
-
-# evaluate
-LR.model.rsquared               # R2
-LR.model.rsquared_adj           # R2_adj
-LR.model.mse_resid              # MSE (statics)
-np.sqrt(LR.model.mse_resid)     # RMSE
-# np.sqrt(( (y['y'] - LR_OLS_pred)**2).sum() / 2 )  # RMSE
-LR.model.ssr / len(y)           # MSE (ML)
-
-
-# OLS_wine = sm_LinearRegression().fit(df.iloc[:,:-1], df.iloc[:,-1].to_frame())
-# OLS_wine.features_plot(df.iloc[:,:-1], df.iloc[:,-1].to_frame())
-
-
-# visualization
-LR.features_plot(X, y)
-
-
-
-
 
 
 
@@ -1062,40 +1535,382 @@ LR.features_plot(X, y)
 # sklearn is a Python module integrating classical machine learning algorithms 
 # in the tightly-knit world of scientific Python packages (numpy, scipy, matplotlib).
 
+
+# 【 Regressor 】--------------------------------------------
+path = r'D:\AHSS_교육\DataAnalysis_Basic01_Python'
+df = pd.read_csv(path + '\wine_aroma.csv')
+
+y = df[['Aroma']]
+X = df[['Sr']]
+
+plt.scatter(X, y)
+plt.show()
+
 from sklearn.linear_model import LinearRegression
+# y = a·x + b
 
-LR_sklearn = LinearRegression()
-LR_sklearn.fit(X, y)
+LR = LinearRegression()
+LR.fit(X, y)
 
-LR_sklearn.coef_
-LR_sklearn.intercept_
+LR.coef_
+LR.intercept_
 
 
 # predict
-LR_sklearn_pred = LR_sklearn.predict(X)
+LR_pred = LR.predict(X)
 
-LR_sklearn_tb = pd.DataFrame(LR_sklearn_pred, columns=['pred'])
-LR_sklearn_tb['true'] = y
-LR_sklearn_tb
+LR_tb = pd.DataFrame(LR_pred, columns=['pred'])
+LR_tb['true'] = y
+LR_tb
 
 
 # evaluate
 from sklearn.metrics import r2_score, mean_squared_error
-import sklearn
 
-r2_score(y_true=y, y_pred=LR_sklearn_pred)
-mean_squared_error(y_true=y, y_pred=LR_sklearn_pred)
-
-
-plt.scatter(LR_sklearn_pred, y)
-plt.plot(y.sort_values('y'), y.sort_values('y'), 'r--')
+r2_score(y_true=y, y_pred=LR_pred)
+mean_squared_error(y_true=y, y_pred=LR_pred)
+np.sqrt( mean_squared_error(y_true=y, y_pred=LR_pred) )
 
 
+# graph
+Xp = np.linspace(X.min(), X.max(), 10)
 
-
-
-
-
+plt.figure()
+plt.scatter(X, y)
+plt.plot(Xp, LR.predict(Xp), color='red')
+plt.show()
 
 
 
+
+
+
+
+# 【 Classifier 】 --------------------------------------------
+
+# clf_dict = {'X' :[3.8, 4. , 3. , 1.3, 3.5, 4.3, 2.1, 3.6, 2.4, 5.2, 3.8, 2.1, 2.8,
+#                  4.8, 3.2, 1.7, 4.2, 3.6, 4.3, 2.3, 5.6, 6. , 6.6, 3.8, 5.1, 5.7,
+#                 5.5, 6. , 5.3, 5.9, 3.7, 5.4, 7.1, 4.1, 6.6, 3.9, 5.4, 5.3, 6.2, 4.5],
+#             'y': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+#                 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
+#                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ]}
+# test_df = pd.DataFrame(clf_dict)
+# test_df.to_csv("test_df_clf.csv", index=False, encoding='utf-8-sig')
+
+test_df = pd.read_csv("test_df_clf.csv", encoding='utf-8-sig')
+# test_df = pd.read_clipboard(sep='\t')
+# test_df.to_clipboard()
+
+
+X = test_df[['X']]
+y = test_df['y']
+
+plt.scatter(X, y)
+plt.show()
+
+def sigmoid(x):
+    return 1 / (1+ np.exp( -1 * x))
+
+
+# modeling
+from sklearn.linear_model import LogisticRegression
+# y = p = sigmoid(z) = sigmoid(a·x + b)
+#       * p = sigmoid(z) → log( p/(1-p) ) = z = a·x + b 
+#       * z = a·x + b
+#       * y means 'p (probability)'
+
+
+LRC = LogisticRegression()
+LRC.fit(X, y)
+
+
+LRC_pred = LRC.predict(X)
+LRC_pred
+
+LRC.predict_proba(X)
+
+
+
+# (Graph)
+Xp = np.linspace(X.min(), X.max(), 10)
+
+LRC.predict_proba(Xp)
+y_pred_proba = pd.DataFrame(LRC.predict_proba(Xp))[1]
+
+plt.figure()
+plt.scatter(X, y)
+plt.plot(Xp, y_pred_proba, color='red')
+plt.axhline(0.5, color='orange', ls='--', alpha=0.5)
+plt.show()
+
+
+# (coef_, intercept_)
+LRC.coef_
+LRC.intercept_
+
+sigmoid(X*LRC.coef_ + LRC.intercept_)
+
+
+
+# (Decision-Boundary)
+Xp = np.linspace(X.min(), X.max(), 100)
+df_proba = pd.DataFrame(np.concatenate([Xp, LRC.predict_proba(Xp)], axis=1), columns=['Xp', 'proba_0', 'proba_1'])
+
+df_proba[df_proba['proba_1'] < 0.5]
+df_proba[df_proba['proba_1'] < 0.5].tail(1)
+df_proba[df_proba['proba_1'] < 0.5].tail(1)['Xp']
+db_1ord = df_proba[df_proba['proba_1'] < 0.5].tail(1)['Xp'].values[0]
+
+# log( p/(1-p) ) = a·x + b 
+# if threshold == 0.5 → log( 0.5/ (1-0.5) ) = log (1) = 0
+# Decision-Boundary plane : a·x + b = 0 
+threshold = 0.5
+db_1ord = ( - LRC.intercept_ / LRC.coef_ )[0][0]
+
+# if threshold != 0.5 → log( threshold/ (1-threshold) ) 
+# Decision-Boundary plane : a·x + b = log( threshold/ (1-threshold) ) 
+threshold = 0.3
+db_1ord = ( ( np.log(threshold / (1-threshold))- LRC.intercept_) / LRC.coef_ )[0][0]
+pred_y = (df_proba['proba_1'] >= threshold).astype(int)
+
+
+# Graph with Decision-Boundary
+Xp = np.linspace(X.min(), X.max(), 100)
+
+LRC.predict_proba(Xp)
+y_pred_proba = pd.DataFrame(LRC.predict_proba(Xp))[1]
+
+plt.figure()
+plt.scatter(X, y)
+plt.plot(Xp, y_pred_proba, color='red')
+plt.axhline(threshold, color='orange', ls='--', alpha=0.5)
+plt.axvline(db_1ord, color='orange',ls='--', alpha=0.5)
+plt.show()
+
+
+
+
+
+
+
+
+
+# (Evaluate Logistic Regression)
+# accuracy
+from sklearn.metrics import accuracy_score, confusion_matrix
+accuracy = accuracy_score(y, LRC_pred)
+accuracy
+
+# confusion_matrix
+from sklearn.metrics import confusion_matrix
+cm = confusion_matrix(y, LRC_pred)
+cm
+
+[[TN, FP], [FN, TP]] = cm
+#           (pred 0) (pred 1)
+# (real 0) [[ 18,       2],      [[ TN (True Negative),  FP (False Positve) ]
+# (real 1)  [  4,      16]]       [ FN (False Negative), TP (True Positive) ]]
+# 
+#  * True / False : 예측값과 실제값이 같은경우 True
+#  * Positive / Negative : 예측값이 1인경우 Positive
+
+
+
+cm_frame = pd.DataFrame(cm, index=['Real_T', 'Real_F'], columns=['Pred_T', 'Pred_F'])
+cm_frame
+
+
+# Other evaluation metrics
+from sklearn.metrics import precision_score, recall_score
+
+# accuracy = (TN + TP) / (cm.sum())
+accuracy
+(TN + TP) / (cm.sum())
+
+# precision = TP / (TP + FP)            #* 예측 1에 대한 정확도 (예측값이 얼마나 정확한가)
+precision_score(y, LRC_pred)
+TP / (TP + FP)
+
+
+# recall = TP / (TP + FN)               #* 실제 1에 대한 예측도 (=sensitivity) (실제정답을 예측이 얼마나 맞췄는냐?)
+# 1이라고 예측하는 것이 중요할때
+recall_score(y, LRC_pred)
+TP / (TP + FN)
+
+
+# * precision ↔ recall : 서로 trade-off 관계
+
+
+from sklearn.metrics import f1_score
+# f1_score = 2*(precision * recall ) / (precision + rec)
+# Harmonic_Mean of the precision and recall. (precision, recall의 조화평균)
+# Imbalance Data의경우 반드시 f1_score를 확인해주어야 함
+f1_score(y, LRC_pred)
+
+
+# classification_report
+from sklearn.metrics import classification_report
+# . macro avg : 단순 평균값
+# . weighted avg : 각 class에 속하는 표본의 갯수로 가중평균한 값
+#   * Imbalance Dataset의 경우 f1-score를 반드시 고려해야 함
+print(classification_report(y, LRC_pred))
+
+
+
+# ROC-curve, AUC
+# ROC-curve와 AUC를 사용하면 분류문제에서 여러 임계값 설정에 대한 모델의 성능을 구할 수 있게 된다.
+
+#           (pred 0) (pred 1)
+# (real 0) [[ 18,       2],      [[ TN (True Negative),  FP (False Positve) ]
+# (real 1)  [  4,      16]]       [ FN (False Negative), TP (True Positive) ]]
+
+# TPR(True Positive Ratio) = recall = TP / (TP + FN)        # 실제 1의 예측정확도
+TPR = TP / (TP + FN)
+
+# FPR(False Positive Ratio) =  TP / (TP + FN)               # 실제 0의 예측정확도
+FPR = FP / (FP + TN)
+
+from sklearn.metrics import roc_curve
+# ROC curve : 임계값에 대한 TPR, FPR의 변화를 곡선으로 나타낸 것
+#             X축에 FPR, Y축에 TPR을 두어 최적의 임계값을 찾는 것
+
+
+
+
+# practice
+df = pd.read_csv(path + '\Titanic.csv')
+y = df['Survived']
+X = df[['Fare']]
+
+plt.scatter(X, y)
+plt.show()
+
+plt.boxplot([df.query("Survived == 0")['Fare'], df.query("Survived == 1")['Fare']], vert=False)
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+# AUC(Area Under the ROC Curve) : ROC그래프의 하부영역 (클수록 예측능력이 좋음)
+# 1 완벽 / 0.9~1 매우 정확 / 0.7~0.9 정확 / 0.5~0.7 덜정확
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import sys
+sys.path.append(r'C:\Users\Admin\Desktop\DataScience\Reference1) ★★ Python_정리자료(Git)\DS_Library')
+from DS_DataFrame import *
+
+database_path = r'C:\Users\Admin\Desktop\DataBase'
+
+
+# df = pd.read_csv(f"{database_path}/datasets_breast_cancer.csv", encoding='utf-8-sig')
+df = pd.read_csv(f"{database_path}/datasets_Titanic.csv", encoding='utf-8-sig')
+
+# Pclass : 1 = 1등석, 2 = 2등석, 3 = 3등석
+# Survived : 0 = 사망, 1 = 생존
+# Sex : male = 남성, female = 여성
+# Age : 나이
+# SibSp : 타이타닉 호에 동승한 자매 / 배우자의 수
+# Parch : 타이타닉 호에 동승한 부모 / 자식의 수
+# Fare : 승객 요금
+# Embarked : 탑승지, C = 셰르부르, Q = 퀸즈타운, S = 사우샘프턴
+
+
+# from sklearn.model_selection import train_test_split
+df2 = df.dropna()
+titanic_simple = df2.sample(50, random_state=1)
+titanic_simple['pclass'] = titanic_simple['pclass'].astype(int).astype(str)
+titanic_simple['survived'] = titanic_simple['survived'].astype(int).astype(str)
+DF_Summary(titanic_simple).summary_plot()
+
+# titanic_simple.to_csv(f"{database_path}/datasets_Titanic_Simple.csv", index=False, encoding='utf-8-sig')
+
+
+
+
+df = titanic_simple[['survived','pclass', 'sex']]
+df['sex'] = (df['sex'] == 'male').astype(int).astype(str)
+
+
+y_col = 'survived'
+
+# gini = {}
+# for pclass in sorted(df['pclass'].unique()):
+#     g1 = df.query(f"pclass == '{pclass}'")
+#     g2 = df.query(f"pclass != '{pclass}'")
+    
+#     g1_0, g1_1 = gv['survived'].value_counts().sort_index()
+#     g2_0, g2_1 = gv['survived'].value_counts().sort_index()
+
+#     gini_g1 = 1 - (g1_0/len(g1))**2 - (g1_1/len(g1))**2
+#     gini_g2 = 1 - (g2_0/len(g2))**2 - (g2_1/len(g2))**2
+
+#     gini_value = len(g1)/len(df)*gini_g1 +  len(g2)/len(df)*gini_g2
+    
+#     gini[pclass] = gini_value
+
+# argmin_idx = np.argmin(list(gini.values()))
+# argmin_key = list(gini.keys())[argmin_idx]
+
+decision_tree(df, 'survived', 'pclass')
+decision_tree(df, 'survived', 'sex')
+
+
+
+def decision_tree(data, y_name, x_name):
+    gini = {}
+    gini['gini'] = None
+    gini['class'] = None
+
+    gini_ = {}
+    for sub_group in sorted(data[x_name].unique()):
+        g1 = data.query(f"{x_name} == '{sub_group}'")
+        g2 = data.query(f"{x_name} != '{sub_group}'")
+        
+        g1_0, g1_1 = g1[y_name].value_counts().sort_index()
+        g2_0, g2_1 = g2[y_name].value_counts().sort_index()
+
+        gini_g1 = 1 - (g1_0/len(g1))**2 - (g1_1/len(g1))**2
+        gini_g2 = 1 - (g2_0/len(g2))**2 - (g2_1/len(g2))**2
+
+        gini_value = len(g1)/len(data)*gini_g1 +  len(g2)/len(data)*gini_g2
+        
+        gini[sub_group] = {}
+        gini[sub_group]['gini'] = gini_value
+        gini[sub_group]['child_gini'] = (gini_g1, gini_g2)
+        gini[sub_group]['child_value'] = ((g1_0, g1_1), (g2_0, g2_1))
+        
+        gini_[sub_group] = gini_value
+
+    argmin_idx = np.argmin(list(gini_.values()))
+    argmin_class = list(gini_.keys())[argmin_idx]
+    gini['class'] = argmin_class
+    gini['gini'] = gini_[argmin_class]
+    return gini
+
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import tree
+X = df[['pclass', 'sex']]
+y = df['survived']
+
+
+DT = DecisionTreeClassifier()
+# DT = DecisionTreeClassifier(criterion='gini')
+DT.fit(X, y)
+
+np.array(dir(DT))
+tree.plot_tree(DT, feature_names=X.columns)
+tree.plot_tree(DT, feature_names=X.columns, filled=True)   # class의 쏠림에 따라 색상을 부여
+tree.plot_tree(DT, feature_names=X.columns, filled=True, max_depth=2)  # max_depth부여
+
+DT.predict_proba(X)
+DT.cost_complexity_pruning_path(X, y)   # 변화가 생기는 alpha값 list 및 그때의 불순도
+DT.feature_importances_
