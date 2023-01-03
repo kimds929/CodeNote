@@ -34,40 +34,6 @@
 # from six.moves import cPickle
 
 
-# -----------------------------------------------------------------------------------------------------
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
-
-# Example Data
-test_dict = {'y': [10, 13, 20, 7, 15],
-            'x1': [2, 4, 5, 2, 4],
-            'x2': ['a', 'a', 'b', 'b', 'b'],
-            'x3': [10, 8, 5, 12, 7],
-            'x4': ['g1', 'g2', 'g1', 'g2', 'g3']}
-
-test_df = pd.DataFrame(test_dict)
-test_df
-
-steel_dict = {'생산공장': ['1공장', '2공장', '2공장', '1공장', '2공장', '2공장', '1공장', '1공장'],
- '재료번호': ['ABC0001',  'ABC0002',  'ABC0003',  'ABC0004',  'ABC0005',
-          'ABC0006',  'ABC0007',  'ABC0008'],
- '두께': [0.7, 1.8, 0.7, 1.8, 1.8, 0.7, 0.7, 1.8],
- 'YP': [211, 174, 185, 161, 158, 203, 175, 153],
- '온도': [828, 834, 832, 842, 839, 817, 809, 847]}
-steel_df = pd.DataFrame(steel_dict)
-
-steel_df
-
-ex_df = pd.read_csv('example_df01.csv', encoding='utf-8-sig')
-ex_df
-
-
-df = test_df.copy()
-# df = steel_df.copy()
-# df = steel_df.copy()
-
 
 
 # 【 Python Basic 】 ==========================================================================
@@ -368,6 +334,9 @@ def series_sigma(s):
     simga_plus3 = round(s_mean + 3 * s_std,1)
     simga_minus3 = round(s_mean - 3 * s_std,1)
     return f"{simga_minus3} ~ {simga_plus3}"
+
+steel_df = pd.read
+
 
 # 위에서 구한 함수를 가지고 steel_df 데이터의 YP값의 평균을 구해보자
 series_mean(steel_df['YP'])
@@ -1536,12 +1505,17 @@ import seaborn as sns
 # in the tightly-knit world of scientific Python packages (numpy, scipy, matplotlib).
 
 
-# 【 Regressor 】--------------------------------------------
-path = r'D:\AHSS_교육\DataAnalysis_Basic01_Python'
-df = pd.read_csv(path + '\wine_aroma.csv')
 
-y = df[['Aroma']]
-X = df[['Sr']]
+# 【 Regressor 】--------------------------------------------
+path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/00_DataAnalysis_Basic'
+df = pd.read_csv(path + '/titanic_simple.csv')
+df.shape        # (50, 8)
+df.head()
+
+
+X = df[['Fare']]
+y = df['Aroma']
+
 
 plt.scatter(X, y)
 plt.show()
