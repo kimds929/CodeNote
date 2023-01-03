@@ -26,7 +26,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 # os.getcwd()
 
 # 1) 데이터 로드하기 --------------------------------
-dataset_path = r"D:\작업방\업무 - 자동차 ★★★\Dataset"
+dataset_path = r"C:\Users\Admin\Desktop\DataBase"
 train_data = pd.read_table(f'{dataset_path}/NLP_Raw_movie_ratings_train.txt')
 test_data = pd.read_table(f'{dataset_path}/NLP_Raw_movie_ratings_test.txt')
 
@@ -103,7 +103,7 @@ for sentence in tqdm(test_data02['document']):
     X_test_all.append(stopwords_removed_sentence)
 
 ################################################
-dataset_path = r"D:\작업방\업무 - 자동차 ★★★\Dataset"
+dataset_path = r"C:\Users\Admin\Desktop\DataBase"
 
 # train_token = pd.concat([train_data02[['id','label']].reset_index(drop=True), pd.Series(X_train_all, name='tokenized')], axis=1)
 # test_token = pd.concat([test_data02[['id','label']].reset_index(drop=True), pd.Series(X_test_all, name='tokenized')], axis=1)
@@ -114,13 +114,15 @@ dataset_path = r"D:\작업방\업무 - 자동차 ★★★\Dataset"
 # test_token[:3000].to_csv(f"{dataset_path}/NLP_movie_review_simple_test_tokenized.csv")
 
 ################################################
-# train_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_train_tokenized.csv", encoding='utf-8-sig')
-# test_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_test_tokenized.csv", encoding='utf-8-sig')
+train_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_train_tokenized.csv", encoding='utf-8-sig')
+test_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_test_tokenized.csv", encoding='utf-8-sig')
 simple_train_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_simple_train_tokenized.csv", encoding='utf-8-sig')
 simple_test_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_simple_test_tokenized.csv", encoding='utf-8-sig')
 
-train_X = list(map(lambda x: eval(x), simple_train_token['tokenized']))
-test_X = list(map(lambda x: eval(x), simple_test_token['tokenized']))
+train_X = list(map(lambda x: eval(x), train_token['tokenized']))
+test_X = list(map(lambda x: eval(x), test_token['tokenized']))
+# train_X = list(map(lambda x: eval(x), simple_train_token['tokenized']))
+# test_X = list(map(lambda x: eval(x), simple_test_token['tokenized']))
 
 # train_y = train_token['label'].values
 # test_y = test_token['label'].values
@@ -129,16 +131,18 @@ test_y = simple_test_token['label'].values
 print(len(train_X), len(train_y), len(test_X), len(test_y))
 
 
+
+
+
 # 4) 정수 인코딩 --------------------------------
 #   기계가 텍스트를 숫자로 처리할 수 있도록 훈련 데이터와 테스트 데이터에 정수 인코딩을 수행
 from tensorflow.keras.preprocessing.text import Tokenizer
 tokenizer = Tokenizer()
 tokenizer.fit_on_texts(train_X)
-
-
-pd.Series(tokenizer.word_index)
 #   각 정수는 전체 훈련 데이터에서 등장 빈도수가 높은 순서대로 부여되었기 때문에, 높은 정수가 부여된 단어들은 등장 빈도수가 매우 낮다는 것을 의미
 # {'영화': 1, '보다': 2, '을': 3, '없다': 4, '이다': 5, '있다': 6, '좋다': 7, ... 중략 ... '디케이드': 43751, '수간': 43752}
+
+
 
 
 threshold = 3
