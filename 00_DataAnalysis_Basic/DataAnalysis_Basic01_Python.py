@@ -33,7 +33,7 @@
 
 # from six.moves import cPickle
 
-
+data_url = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/00_DataAnalysis_Basic/'
 
 
 # 【 Python Basic 】 ==========================================================================
@@ -335,7 +335,9 @@ def series_sigma(s):
     simga_minus3 = round(s_mean - 3 * s_std,1)
     return f"{simga_minus3} ~ {simga_plus3}"
 
-steel_df = pd.read
+steel_df = pd.read_csv(data_url + "steel_simple.csv")
+steel_df.shape      # (8, 5)
+steel_df
 
 
 # 위에서 구한 함수를 가지고 steel_df 데이터의 YP값의 평균을 구해보자
@@ -698,17 +700,12 @@ pd.DataFrame(di3)
 
 
 
-
-
-
 # Data Save/Load from file ---------------------------------------------
 # csv
-df = pd.read_csv('test_df.csv')
-# path = r'D:\Python\★★Python_POSTECH_AI\파이썬_정리자료★★\00_DataAnalysis_Basic'
-# df = pd.read_csv(path + '/test_df.csv')
+df = pd.read_csv(data_url + 'test_data.csv')
 df.to_csv(path + '/test_df2.csv', index=False)
-
-
+df.shape
+df
 
 # ※ Excel
 # df.to_excel("output.xlsx")
@@ -720,11 +717,10 @@ df.to_csv(path + '/test_df2.csv', index=False)
 # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_excel.html
 
 
-df_wine = pd.read_csv(path + '/wine_aroma.csv')
+df_wine = pd.read_csv(data_url + 'wine_aroma.csv')
+df_wine.shape
+df_wine
 # df_wine = pd.read_clipboard()
-
-df_titanic = pd.read_csv(path + '/titanic.csv')
-# df_titanic = pd.read_clipboard()
 
 
 
@@ -1055,11 +1051,12 @@ test_dict2 = {'y': [10, 13, 20, 7, 15],
             'x4': ['g1', 'g2', 'g1', 'g2', 'g3']}
 
 test_df2 = pd.DataFrame(test_dict2)
+test_df2.to_csv("test_data2(na).csv", index=False, encoding='utf-8-sig')
 df = test_df2.copy()
 
-# path = 'D:\Python\Dataset'
-# df = pd.read_csv(path + '\Titanic.csv')
-# df
+df = pd.read_csv(data_url + 'titanic.csv')
+df.shape        # (1310, 8)
+df
 
 # Dataset Information --------------------------------------------------------------------
 # data information
@@ -1402,6 +1399,21 @@ plt.show()
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #【 Statistics 】----------------------------------------------------------------------------------------------------------
 # import scipy
 # scipy?
@@ -1488,6 +1500,34 @@ plt.show()
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 【 Machine_Learning  】==========================================================
 import numpy as np
 import pandas as pd
@@ -1507,13 +1547,13 @@ import seaborn as sns
 
 
 # 【 Regressor 】--------------------------------------------
-path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/00_DataAnalysis_Basic'
-df = pd.read_csv(path + '/titanic_simple.csv')
-df.shape        # (50, 8)
-df.head()
+data_url = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/00_DataAnalysis_Basic'
+df = pd.read_csv(data_url + '/wine_aroma.csv')
+df.shape        # (25, 10)
+df
 
 
-X = df[['Fare']]
+X = df[['Sr']]
 y = df['Aroma']
 
 
@@ -1541,9 +1581,9 @@ LR_tb
 # evaluate
 from sklearn.metrics import r2_score, mean_squared_error
 
-r2_score(y_true=y, y_pred=LR_pred)
-mean_squared_error(y_true=y, y_pred=LR_pred)
-np.sqrt( mean_squared_error(y_true=y, y_pred=LR_pred) )
+r2_score(y_true=y, y_pred=LR_pred)          # R2_score
+mean_squared_error(y_true=y, y_pred=LR_pred)        # MSE
+np.sqrt( mean_squared_error(y_true=y, y_pred=LR_pred) )     # RMSE
 
 
 # graph
@@ -1568,16 +1608,17 @@ plt.show()
 #             'y': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 #                 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
 #                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ]}
-# test_df = pd.DataFrame(clf_dict)
-# test_df.to_csv("test_df_clf.csv", index=False, encoding='utf-8-sig')
-
-test_df = pd.read_csv("test_df_clf.csv", encoding='utf-8-sig')
-# test_df = pd.read_clipboard(sep='\t')
-# test_df.to_clipboard()
+# df = pd.DataFrame(clf_dict)
+# df.to_csv("test_data3(clf).csv", index=False, encoding='utf-8-sig')
 
 
-X = test_df[['X']]
-y = test_df['y']
+# df = pd.read_csv(data_url + "/titanic_simple.csv", encoding='utf-8-sig')
+# df = pd.read_clipboard(sep='\t')
+# df.to_clipboard()
+
+
+X = df[['X']]
+y = df['y']
 
 plt.scatter(X, y)
 plt.show()
@@ -1601,7 +1642,8 @@ LRC.fit(X, y)
 LRC_pred = LRC.predict(X)
 LRC_pred
 
-LRC.predict_proba(X)
+LRC_pred_proba = LRC.predict_proba(X)
+LRC_pred_proba
 
 
 
@@ -1609,11 +1651,11 @@ LRC.predict_proba(X)
 Xp = np.linspace(X.min(), X.max(), 10)
 
 LRC.predict_proba(Xp)
-y_pred_proba = pd.DataFrame(LRC.predict_proba(Xp))[1]
+LRC_pred_proba_Xp = pd.DataFrame(LRC.predict_proba(Xp))[1]
 
 plt.figure()
 plt.scatter(X, y)
-plt.plot(Xp, y_pred_proba, color='red')
+plt.plot(Xp, LRC_pred_proba_Xp, color='red')
 plt.axhline(0.5, color='orange', ls='--', alpha=0.5)
 plt.show()
 
@@ -1643,23 +1685,58 @@ db_1ord = ( - LRC.intercept_ / LRC.coef_ )[0][0]
 
 # if threshold != 0.5 → log( threshold/ (1-threshold) ) 
 # Decision-Boundary plane : a·x + b = log( threshold/ (1-threshold) ) 
-threshold = 0.3
+threshold = 0.5
 db_1ord = ( ( np.log(threshold / (1-threshold))- LRC.intercept_) / LRC.coef_ )[0][0]
-pred_y = (df_proba['proba_1'] >= threshold).astype(int)
+
+LRC_proba_X = (LRC_pred_proba[:,1] > threshold).astype(int)
+LRC_pred_Xp = (df_proba['proba_1'] >= threshold).astype(int)
+
 
 
 # Graph with Decision-Boundary
 Xp = np.linspace(X.min(), X.max(), 100)
 
-LRC.predict_proba(Xp)
-y_pred_proba = pd.DataFrame(LRC.predict_proba(Xp))[1]
+LRC_pred_proba_Xp = LRC.predict_proba(Xp)[:,1]
+
+dot_colors = ['red','steelblue']
+pred_TF = (LRC_proba_X == y).apply(lambda x: dot_colors[x])
+
 
 plt.figure()
-plt.scatter(X, y)
-plt.plot(Xp, y_pred_proba, color='red')
+plt.scatter(X, y, c=pred_TF)
+plt.plot(Xp, LRC_pred_proba_Xp, color='red')
 plt.axhline(threshold, color='orange', ls='--', alpha=0.5)
 plt.axvline(db_1ord, color='orange',ls='--', alpha=0.5)
 plt.show()
+
+
+
+def draw_logistic_graph(X, y, estimator, threshold):
+    db_1ord = ( ( np.log(threshold / (1-threshold)) - estimator.intercept_) / estimator.coef_ )[0][0]
+
+    Xp = np.linspace(X.min(), X.max(), 100)
+
+    dot_colors = ['red','steelblue']
+    y_pred_proba_X = estimator.predict_proba(X)[:,1]
+    y_pred_proba_Xp = estimator.predict_proba(Xp)[:,1]
+    
+    y_pred_X = (y_pred_proba_X > threshold).astype(int)
+    pred_TF = (y_pred_X == y).apply(lambda x: dot_colors[x])
+
+    f= plt.figure()
+    plt.scatter(X, y, c= pred_TF)
+    plt.plot(Xp, y_pred_proba_Xp, color='red')
+    plt.axhline(threshold, color='orange', ls='--', alpha=0.5)
+    plt.axvline(db_1ord, color='orange',ls='--', alpha=0.5)
+    plt.close()
+
+    return f
+
+draw_logistic_graph(X,y, LRC, 0.8)
+
+
+
+
 
 
 
@@ -1719,6 +1796,7 @@ from sklearn.metrics import f1_score
 # f1_score = 2*(precision * recall ) / (precision + rec)
 # Harmonic_Mean of the precision and recall. (precision, recall의 조화평균)
 # Imbalance Data의경우 반드시 f1_score를 확인해주어야 함
+
 f1_score(y, LRC_pred)
 
 
@@ -1738,56 +1816,63 @@ print(classification_report(y, LRC_pred))
 # (real 0) [[ 18,       2],      [[ TN (True Negative),  FP (False Positve) ]
 # (real 1)  [  4,      16]]       [ FN (False Negative), TP (True Positive) ]]
 
-# TPR(True Positive Ratio) = recall = TP / (TP + FN)        # 실제 1의 예측정확도
+# FPR(False Positive Ratio) =  FP / (FP + TN)               # 실제 0의 예측 실패도
+FPR = FP / (FP + TN)
+
+# TPR(True Positive Ratio) = recall = TP / (TP + FN)        # 실제 1의 예측 정확도
 TPR = TP / (TP + FN)
 
-# FPR(False Positive Ratio) =  TP / (TP + FN)               # 실제 0의 예측정확도
-FPR = FP / (FP + TN)
+
 
 from sklearn.metrics import roc_curve
 # ROC curve : 임계값에 대한 TPR, FPR의 변화를 곡선으로 나타낸 것
 #             X축에 FPR, Y축에 TPR을 두어 최적의 임계값을 찾는 것
 
+LRC_pred_proba = LRC.predict_proba(X)
+roc_curve(y, LRC_pred_proba[:, 1])
+FPRs, TPRs, Thresholds = roc_curve(y, LRC_pred_proba[:, 1])
+# 실제 0의 예측정확도, 실제 1의 예측정확도
 
 
+# 최적 threshold 찾기
+# . 0의 예측 실패도는 최소화하면서, 1의 예측도는 최대화 : maximize(TPR - FPR)
+optimal_threshold = Thresholds[np.argmax(TPRs - FPRs)]
 
-# practice
-df = pd.read_csv(path + '\Titanic.csv')
-y = df['Survived']
-X = df[['Fare']]
-
-plt.scatter(X, y)
+# ROC_Curve
+plt.figure()
+plt.plot(FPRs,TPRs, label='ROC')
+plt.plot([0,1], [0,1], label='STR')     #  가운데 직선: ROC 곡선의 최저값
+plt.xlabel('FPR')   # 실제 0의 예측정확도
+plt.ylabel('TPR')   # 실제 1의 예측정확도
+plt.legend()
 plt.show()
 
-plt.boxplot([df.query("Survived == 0")['Fare'], df.query("Survived == 1")['Fare']], vert=False)
-plt.show()
 
-
-
-
-
-
-
-
-
-
-
-
+# AUC area
+from sklearn.metrics import roc_auc_score
 # AUC(Area Under the ROC Curve) : ROC그래프의 하부영역 (클수록 예측능력이 좋음)
 # 1 완벽 / 0.9~1 매우 정확 / 0.7~0.9 정확 / 0.5~0.7 덜정확
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import sys
-sys.path.append(r'C:\Users\Admin\Desktop\DataScience\Reference1) ★★ Python_정리자료(Git)\DS_Library')
-from DS_DataFrame import *
 
-database_path = r'C:\Users\Admin\Desktop\DataBase'
+LRC_pred = LRC.predict(X)
+roc_auc_score(y, LRC_pred)
 
 
-# df = pd.read_csv(f"{database_path}/datasets_breast_cancer.csv", encoding='utf-8-sig')
-df = pd.read_csv(f"{database_path}/datasets_Titanic.csv", encoding='utf-8-sig')
 
+
+
+
+
+
+
+
+
+
+
+####### 【 Decision_Tree 】##################################################################
+data_url = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/00_DataAnalysis_Basic'
+df_titanic = pd.read_csv(data_url + '/titanic.csv')
+df_titanic.shape    # (50,8)
+df_titanic.head()
 # Pclass : 1 = 1등석, 2 = 2등석, 3 = 3등석
 # Survived : 0 = 사망, 1 = 생존
 # Sex : male = 남성, female = 여성
@@ -1796,95 +1881,151 @@ df = pd.read_csv(f"{database_path}/datasets_Titanic.csv", encoding='utf-8-sig')
 # Parch : 타이타닉 호에 동승한 부모 / 자식의 수
 # Fare : 승객 요금
 # Embarked : 탑승지, C = 셰르부르, Q = 퀸즈타운, S = 사우샘프턴
+df = df_titanic.dropna().sample(50, random_state=3).reset_index(drop=True)
 
 
-# from sklearn.model_selection import train_test_split
-df2 = df.dropna()
-titanic_simple = df2.sample(50, random_state=1)
-titanic_simple['pclass'] = titanic_simple['pclass'].astype(int).astype(str)
-titanic_simple['survived'] = titanic_simple['survived'].astype(int).astype(str)
-DF_Summary(titanic_simple).summary_plot()
+# (Decision_Tree Classifier) - descrete X -----------------------------------------------------------------
+df['sex_class'] = (df['sex'] == 'male').astype(int)
 
-# titanic_simple.to_csv(f"{database_path}/datasets_Titanic_Simple.csv", index=False, encoding='utf-8-sig')
+X = df[['pclass', 'sex_class']]
+y = df['survived']
 
+df.groupby(['pclass', 'sex_class','survived']).size()
+df.groupby(['pclass', 'sex_class','survived']).size().unstack('survived')
 
+df.groupby(['pclass','survived']).size().unstack('survived')
+df.groupby(['sex_class','survived']).size().unstack('survived')
 
-
-df = titanic_simple[['survived','pclass', 'sex']]
-df['sex'] = (df['sex'] == 'male').astype(int).astype(str)
-
-
-y_col = 'survived'
-
-# gini = {}
-# for pclass in sorted(df['pclass'].unique()):
-#     g1 = df.query(f"pclass == '{pclass}'")
-#     g2 = df.query(f"pclass != '{pclass}'")
-    
-#     g1_0, g1_1 = gv['survived'].value_counts().sort_index()
-#     g2_0, g2_1 = gv['survived'].value_counts().sort_index()
-
-#     gini_g1 = 1 - (g1_0/len(g1))**2 - (g1_1/len(g1))**2
-#     gini_g2 = 1 - (g2_0/len(g2))**2 - (g2_1/len(g2))**2
-
-#     gini_value = len(g1)/len(df)*gini_g1 +  len(g2)/len(df)*gini_g2
-    
-#     gini[pclass] = gini_value
-
-# argmin_idx = np.argmin(list(gini.values()))
-# argmin_key = list(gini.keys())[argmin_idx]
-
-decision_tree(df, 'survived', 'pclass')
-decision_tree(df, 'survived', 'sex')
-
-
-
-def decision_tree(data, y_name, x_name):
-    gini = {}
-    gini['gini'] = None
-    gini['class'] = None
-
-    gini_ = {}
-    for sub_group in sorted(data[x_name].unique()):
-        g1 = data.query(f"{x_name} == '{sub_group}'")
-        g2 = data.query(f"{x_name} != '{sub_group}'")
-        
-        g1_0, g1_1 = g1[y_name].value_counts().sort_index()
-        g2_0, g2_1 = g2[y_name].value_counts().sort_index()
-
-        gini_g1 = 1 - (g1_0/len(g1))**2 - (g1_1/len(g1))**2
-        gini_g2 = 1 - (g2_0/len(g2))**2 - (g2_1/len(g2))**2
-
-        gini_value = len(g1)/len(data)*gini_g1 +  len(g2)/len(data)*gini_g2
-        
-        gini[sub_group] = {}
-        gini[sub_group]['gini'] = gini_value
-        gini[sub_group]['child_gini'] = (gini_g1, gini_g2)
-        gini[sub_group]['child_value'] = ((g1_0, g1_1), (g2_0, g2_1))
-        
-        gini_[sub_group] = gini_value
-
-    argmin_idx = np.argmin(list(gini_.values()))
-    argmin_class = list(gini_.keys())[argmin_idx]
-    gini['class'] = argmin_class
-    gini['gini'] = gini_[argmin_class]
-    return gini
 
 from sklearn.tree import DecisionTreeClassifier
+# gini = n1/N * gini_g1 + n2/N * gini_g2
+#       ㄴ gini_g1 = 1 - p(g1_class0)**2 - p(g1_class1)**2
+#       ㄴ gini_g2 = 1 - p(g2_class0)**2 - p(g2_class1)**2
+
+DT_clf = DecisionTreeClassifier()
+# DT_clf = DecisionTreeClassifier(criterion='gini')
+DT_clf.fit(X, y)
+
+DT_clf_pred = DT_clf.predict(X)
+DT_clf_pred_proba = DT_clf.predict_proba(X)
+DT_clf_pred_proba_df = pd.DataFrame(DT_clf_pred_proba)
+
+
+pd.concat([X, DT_clf_pred_proba_df], axis=1).to_clipboard()
+
+
 from sklearn import tree
-X = df[['pclass', 'sex']]
+tree.plot_tree(DT_clf)
+tree.plot_tree(DT_clf, feature_names=X.columns)
+tree.plot_tree(DT_clf, feature_names=X.columns, filled=True)   # class의 쏠림에 따라 색상을 부여
+tree.plot_tree(DT_clf, feature_names=X.columns, filled=True, max_depth=2)  # max_depth부여
+
+DT_clf.cost_complexity_pruning_path(X, y)   # 변화가 생기는 alpha값 list 및 그때의 불순도
+
+DT_clf.feature_importances_
+plt.barh(X.columns, DT_clf.feature_importances_)
+
+
+
+from sklearn.metrics import accuracy_score
+accuracy_score(y, DT_clf_pred)
+
+from sklearn.metrics import roc_auc_score
+roc_auc_score(y, DT_clf_pred)
+
+
+
+
+# (Decision_Tree Classifier) - continuous X -----------------------------------------------------------------
+X = df[['fare', 'age']]
 y = df['survived']
 
 
-DT = DecisionTreeClassifier()
-# DT = DecisionTreeClassifier(criterion='gini')
-DT.fit(X, y)
+DT_clf2 = DecisionTreeClassifier()
+# DT_clf2 = DecisionTreeClassifier(max_depth=3)
+# DT_clf = DecisionTreeClassifier(criterion='gini')
+DT_clf2.fit(X, y)
 
-np.array(dir(DT))
-tree.plot_tree(DT, feature_names=X.columns)
-tree.plot_tree(DT, feature_names=X.columns, filled=True)   # class의 쏠림에 따라 색상을 부여
-tree.plot_tree(DT, feature_names=X.columns, filled=True, max_depth=2)  # max_depth부여
+DT2_clf2_pred = DT_clf2.predict(X)
+DT2_clf2_pred_proba = DT_clf2.predict_proba(X)
+DT2_clf2_pred_proba_df = pd.DataFrame(DT2_clf2_pred_proba)
 
-DT.predict_proba(X)
-DT.cost_complexity_pruning_path(X, y)   # 변화가 생기는 alpha값 list 및 그때의 불순도
-DT.feature_importances_
+
+pd.concat([X, DT2_clf2_pred_proba_df], axis=1).to_clipboard()
+
+
+from sklearn import tree
+tree.plot_tree(DT_clf2)
+tree.plot_tree(DT_clf2, feature_names=X.columns)
+tree.plot_tree(DT_clf2, feature_names=X.columns, filled=True)   # class의 쏠림에 따라 색상을 부여
+tree.plot_tree(DT_clf2, feature_names=X.columns, filled=True, max_depth=3)  # max_depth부여
+
+DT_clf2.cost_complexity_pruning_path(X, y)   # 변화가 생기는 alpha값 list 및 그때의 불순도
+
+DT_clf2.feature_importances_
+plt.barh(X.columns, DT_clf2.feature_importances_)
+
+
+
+from sklearn.metrics import accuracy_score
+accuracy_score(y, DT2_clf2_pred)
+
+from sklearn.metrics import roc_auc_score
+roc_auc_score(y, DT2_clf2_pred)
+
+
+# Logistic Regression과 비교
+from sklearn.linear_model import LogisticRegression
+LRC = LogisticRegression()
+LRC.fit(X,y)
+
+LRC_pred = LRC.predict(X)
+
+accuracy_score(y, LRC_pred)
+roc_auc_score(y, LRC_pred)
+
+
+
+
+
+
+
+
+
+ # (Decision_Tree Regressor) - descrete X -----------------------------------------------------------------
+df['sex_class'] = (df['sex'] == 'male').astype(int)
+
+X = df[['pclass', 'sex_class']]
+y = df['fare']
+
+df.groupby(['pclass', 'sex_class'])['fare'].mean()
+df.groupby(['pclass', 'sex_class'])['fare'].mean().unstack('sex_class')
+
+
+from sklearn.tree import DecisionTreeRegressor
+DT_reg = DecisionTreeRegressor()
+DT_reg.fit(X, y)
+
+DT_reg_pred = DT_reg.predict(X)
+DT_reg_pred_df = pd.Series(DT_reg_pred).to_frame()
+
+pd.concat([X, DT_reg_pred_df], axis=1).to_clipboard()
+
+
+from sklearn import tree
+tree.plot_tree(DT_reg)
+tree.plot_tree(DT_reg, feature_names=X.columns)
+tree.plot_tree(DT_reg, feature_names=X.columns, filled=True)   # class의 쏠림에 따라 색상을 부여
+tree.plot_tree(DT_reg, feature_names=X.columns, filled=True, max_depth=2)  # max_depth부여
+
+DT_reg.cost_complexity_pruning_path(X, y)   # 변화가 생기는 alpha값 list 및 그때의 불순도
+
+DT_reg.feature_importances_
+plt.barh(X.columns, DT_reg.feature_importances_)
+
+
+
+
+
+
+
