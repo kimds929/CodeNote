@@ -1171,7 +1171,8 @@ import matplotlib.pyplot as plt
 
 # matplotlib 한글폰트사용
 from matplotlib import font_manager, rc
-font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/malgun.ttf").get_name()
+# font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/malgun.ttf").get_name()
+font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/gothic.ttf").get_name()
 rc('font', family=font_name)
 
 
@@ -1537,31 +1538,33 @@ font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/malgun.ttf").get
 rc('font', family=font_name)
 import seaborn as sns
 
-
-
-# 【 sklearn 】 ===============================================
-# Machine learning module for Python
-# sklearn is a Python module integrating classical machine learning algorithms 
-# in the tightly-knit world of scientific Python packages (numpy, scipy, matplotlib).
+# 【 sklearn 】 
+#   Machine learning module for Python
+#   sklearn is a Python module integrating classical machine learning algorithms 
+#   in the tightly-knit world of scientific Python packages (numpy, scipy, matplotlib).
 
 
 
-# 【 Regressor 】--------------------------------------------
+# 【 Regressor : LinearRegression 】--------------------------------------------
+
+# --- (Load Dataset) ------------------------------------------------
 data_url = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/00_DataAnalysis_Basic'
-df = pd.read_csv(data_url + '/wine_aroma.csv')
-df.shape        # (25, 10)
-df
+df_wine = pd.read_csv(data_url + '/wine_aroma.csv')
+df_wine.shape        # (25, 10)
+df_wine
+# ----------------------------------------------------------------
 
 
-X = df[['Sr']]
-y = df['Aroma']
+X = df_wine[['Sr']]
+y = df_wine['Aroma']
 
 
 plt.scatter(X, y)
 plt.show()
 
 from sklearn.linear_model import LinearRegression
-# y = a·x + b
+# (nst order) y = β0 + β1·x1 + β2·x2 + ... + βn·xn            * LinearCombination
+# (1st order) y = β0 + β1·x1
 
 LR = LinearRegression()
 LR.fit(X, y)
@@ -1570,7 +1573,7 @@ LR.coef_
 LR.intercept_
 
 
-# predict
+# (predict)
 LR_pred = LR.predict(X)
 
 LR_tb = pd.DataFrame(LR_pred, columns=['pred'])
@@ -1578,15 +1581,7 @@ LR_tb['true'] = y
 LR_tb
 
 
-# evaluate
-from sklearn.metrics import r2_score, mean_squared_error
-
-r2_score(y_true=y, y_pred=LR_pred)          # R2_score
-mean_squared_error(y_true=y, y_pred=LR_pred)        # MSE
-np.sqrt( mean_squared_error(y_true=y, y_pred=LR_pred) )     # RMSE
-
-
-# graph
+# (graph)
 Xp = np.linspace(X.min(), X.max(), 10)
 
 plt.figure()
@@ -1596,49 +1591,68 @@ plt.show()
 
 
 
+# (Evaluate Regressor) --------------------------------
+from sklearn.metrics import r2_score, mean_squared_error
+
+r2_score(y_true=y, y_pred=LR_pred)          # R2_score
+mean_squared_error(y_true=y, y_pred=LR_pred)        # MSE
+np.sqrt( mean_squared_error(y_true=y, y_pred=LR_pred) )     # RMSE
+# ------------------------------------------------------------
 
 
 
 
-# 【 Classifier 】 --------------------------------------------
 
+
+# 【 Classifier : Logistic Regression 】 --------------------------------------------
+
+# --- (Load Dataset) ------------------------------------------------
 # clf_dict = {'X' :[3.8, 4. , 3. , 1.3, 3.5, 4.3, 2.1, 3.6, 2.4, 5.2, 3.8, 2.1, 2.8,
 #                  4.8, 3.2, 1.7, 4.2, 3.6, 4.3, 2.3, 5.6, 6. , 6.6, 3.8, 5.1, 5.7,
 #                 5.5, 6. , 5.3, 5.9, 3.7, 5.4, 7.1, 4.1, 6.6, 3.9, 5.4, 5.3, 6.2, 4.5],
 #             'y': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 #                 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
 #                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ]}
-# df = pd.DataFrame(clf_dict)
-# df.to_csv("test_data3(clf).csv", index=False, encoding='utf-8-sig')
+# df_clf = pd.DataFrame(clf_dict)
+df_clf = pd.read_csv(data_url + "/test_data3(clf).csv", encoding='utf-8-sig')
+df_clf.shape    # (40,2)
+df_clf.head(10)
+# ----------------------------------------------------------------
 
 
-# df = pd.read_csv(data_url + "/titanic_simple.csv", encoding='utf-8-sig')
-# df = pd.read_clipboard(sep='\t')
-# df.to_clipboard()
-
-
-X = df[['X']]
-y = df['y']
+X = df_clf[['X']]
+y = df_clf['y']
 
 plt.scatter(X, y)
 plt.show()
 
-def sigmoid(x):
-    return 1 / (1+ np.exp( -1 * x))
-
-
-# modeling
+# (modeling)
 from sklearn.linear_model import LogisticRegression
-# y = p = sigmoid(z) = sigmoid(a·x + b)
-#       * p = sigmoid(z) → log( p/(1-p) ) = z = a·x + b 
-#       * z = a·x + b
-#       * y means 'p (probability)'
+# (LinearRegression)  y = β0 + β1·x1 + β2·x2 + ... + βn·xn
 
+# y = p = sigmoid(z) = sigmoid(β0 + β1·x1 + β2·x2 + ... + βn·xn)            * y means 'p (probability)'
+#       * p = sigmoid(z)  ↔  log( p/(1-p) ) = z
+#           ㄴ sigmoid(z) = 1 / (1 + exp(-z))
+#           ㄴ z = β0 + β1·x1 + β2·x2 + ... + βn·xn           * LinearCombination
+
+
+
+# (sigmoid function) -----------------
+def sigmoid(z):
+    return 1 / (1+ np.exp( -1 * z))
+
+Xp = np.linspace(-10,10)
+
+# (graph)
+plt.plot(Xp, sigmoid(Xp))
+plt.show()
+# ----------------------------------
 
 LRC = LogisticRegression()
 LRC.fit(X, y)
 
 
+# (predict)
 LRC_pred = LRC.predict(X)
 LRC_pred
 
@@ -1646,11 +1660,10 @@ LRC_pred_proba = LRC.predict_proba(X)
 LRC_pred_proba
 
 
-
 # (Graph)
 Xp = np.linspace(X.min(), X.max(), 10)
-
 LRC.predict_proba(Xp)
+pd.DataFrame(LRC.predict_proba(Xp))
 LRC_pred_proba_Xp = pd.DataFrame(LRC.predict_proba(Xp))[1]
 
 plt.figure()
@@ -1661,92 +1674,49 @@ plt.show()
 
 
 # (coef_, intercept_)
-LRC.coef_
+LRC.coef_       # 1.5778
 LRC.intercept_
 
-sigmoid(X*LRC.coef_ + LRC.intercept_)
+# Interpret Coeficient : X값이 1증가할수록 exp(계수)배 만큼 확률이 증가
+np.exp(LRC.coef_)   # 4.844 : X가 1증가할때 1일 확률이 4.844배 증가
 
 
 
 # (Decision-Boundary)
-Xp = np.linspace(X.min(), X.max(), 100)
-df_proba = pd.DataFrame(np.concatenate([Xp, LRC.predict_proba(Xp)], axis=1), columns=['Xp', 'proba_0', 'proba_1'])
-
-df_proba[df_proba['proba_1'] < 0.5]
-df_proba[df_proba['proba_1'] < 0.5].tail(1)
-df_proba[df_proba['proba_1'] < 0.5].tail(1)['Xp']
-db_1ord = df_proba[df_proba['proba_1'] < 0.5].tail(1)['Xp'].values[0]
-
-# log( p/(1-p) ) = a·x + b 
-# if threshold == 0.5 → log( 0.5/ (1-0.5) ) = log (1) = 0
-# Decision-Boundary plane : a·x + b = 0 
+# log( p/(1-p) ) =  β0 + β1·x1 + β2·x2 + ... + βn·xn
+#    (1st order)  log( p/(1-p) ) = logit =  β0 + β1·x1
+#                  → x1 = (logit - β0) / β1
 threshold = 0.5
-db_1ord = ( - LRC.intercept_ / LRC.coef_ )[0][0]
+logit = np.log(threshold / (1-threshold))
+decision_boundary = ( (logit - LRC.intercept_) / LRC.coef_ )[0][0]
+decision_boundary
 
-# if threshold != 0.5 → log( threshold/ (1-threshold) ) 
-# Decision-Boundary plane : a·x + b = log( threshold/ (1-threshold) ) 
-threshold = 0.5
-db_1ord = ( ( np.log(threshold / (1-threshold))- LRC.intercept_) / LRC.coef_ )[0][0]
-
+# LRC_pred_proba[:,1] > threshold
 LRC_proba_X = (LRC_pred_proba[:,1] > threshold).astype(int)
-LRC_pred_Xp = (df_proba['proba_1'] >= threshold).astype(int)
+LRC_proba_X
 
 
 
-# Graph with Decision-Boundary
+# (Graph with Decision-Boundary)
 Xp = np.linspace(X.min(), X.max(), 100)
-
 LRC_pred_proba_Xp = LRC.predict_proba(Xp)[:,1]
-
-dot_colors = ['red','steelblue']
-pred_TF = (LRC_proba_X == y).apply(lambda x: dot_colors[x])
 
 
 plt.figure()
-plt.scatter(X, y, c=pred_TF)
-plt.plot(Xp, LRC_pred_proba_Xp, color='red')
-plt.axhline(threshold, color='orange', ls='--', alpha=0.5)
-plt.axvline(db_1ord, color='orange',ls='--', alpha=0.5)
+plt.scatter(X, y)       # data
+plt.plot(Xp, LRC_pred_proba_Xp, color='red')    # Probability Graph
+plt.axhline(threshold, color='orange', ls='--', alpha=0.5)      # Threshold
+plt.axvline(decision_boundary, color='orange',ls='--', alpha=0.5)    # Decision Boundary
 plt.show()
 
 
 
-def draw_logistic_graph(X, y, estimator, threshold):
-    db_1ord = ( ( np.log(threshold / (1-threshold)) - estimator.intercept_) / estimator.coef_ )[0][0]
-
-    Xp = np.linspace(X.min(), X.max(), 100)
-
-    dot_colors = ['red','steelblue']
-    y_pred_proba_X = estimator.predict_proba(X)[:,1]
-    y_pred_proba_Xp = estimator.predict_proba(Xp)[:,1]
-    
-    y_pred_X = (y_pred_proba_X > threshold).astype(int)
-    pred_TF = (y_pred_X == y).apply(lambda x: dot_colors[x])
-
-    f= plt.figure()
-    plt.scatter(X, y, c= pred_TF)
-    plt.plot(Xp, y_pred_proba_Xp, color='red')
-    plt.axhline(threshold, color='orange', ls='--', alpha=0.5)
-    plt.axvline(db_1ord, color='orange',ls='--', alpha=0.5)
-    plt.close()
-
-    return f
-
-draw_logistic_graph(X,y, LRC, 0.8)
 
 
 
 
 
-
-
-
-
-
-
-
-
-# (Evaluate Logistic Regression)
+# (Evaluate Classifier) -------------------------------------------------
 # accuracy
 from sklearn.metrics import accuracy_score, confusion_matrix
 accuracy = accuracy_score(y, LRC_pred)
@@ -1856,7 +1826,7 @@ from sklearn.metrics import roc_auc_score
 LRC_pred = LRC.predict(X)
 roc_auc_score(y, LRC_pred)
 
-
+# --------------------------------------------------------------------------------------------------
 
 
 
@@ -1870,7 +1840,7 @@ roc_auc_score(y, LRC_pred)
 
 ####### 【 Decision_Tree 】##################################################################
 data_url = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/00_DataAnalysis_Basic'
-df_titanic = pd.read_csv(data_url + '/titanic.csv')
+df_titanic = pd.read_csv(data_url + '/titanic_simple.csv')
 df_titanic.shape    # (50,8)
 df_titanic.head()
 # Pclass : 1 = 1등석, 2 = 2등석, 3 = 3등석
@@ -1881,20 +1851,22 @@ df_titanic.head()
 # Parch : 타이타닉 호에 동승한 부모 / 자식의 수
 # Fare : 승객 요금
 # Embarked : 탑승지, C = 셰르부르, Q = 퀸즈타운, S = 사우샘프턴
-df = df_titanic.dropna().sample(50, random_state=3).reset_index(drop=True)
 
 
 # (Decision_Tree Classifier) - descrete X -----------------------------------------------------------------
-df['sex_class'] = (df['sex'] == 'male').astype(int)
+#  . X : pclass, sex_class
+#  . y : survived
 
-X = df[['pclass', 'sex_class']]
-y = df['survived']
+df_titanic['sex_class'] = (df_titanic['sex'] == 'male').astype(int)
 
-df.groupby(['pclass', 'sex_class','survived']).size()
-df.groupby(['pclass', 'sex_class','survived']).size().unstack('survived')
+X = df_titanic[['pclass', 'sex_class']]
+y = df_titanic['survived']
 
-df.groupby(['pclass','survived']).size().unstack('survived')
-df.groupby(['sex_class','survived']).size().unstack('survived')
+df_titanic.groupby(['pclass', 'sex_class','survived']).size()
+df_titanic.groupby(['pclass', 'sex_class','survived']).size().unstack('survived')
+
+df_titanic.groupby(['pclass','survived']).size().unstack('survived')
+df_titanic.groupby(['sex_class','survived']).size().unstack('survived')
 
 
 from sklearn.tree import DecisionTreeClassifier
@@ -1906,14 +1878,21 @@ DT_clf = DecisionTreeClassifier()
 # DT_clf = DecisionTreeClassifier(criterion='gini')
 DT_clf.fit(X, y)
 
-DT_clf_pred = DT_clf.predict(X)
-DT_clf_pred_proba = DT_clf.predict_proba(X)
-DT_clf_pred_proba_df = pd.DataFrame(DT_clf_pred_proba)
 
+# (predict)
+DT_clf_pred = DT_clf.predict(X)
+DT_clf_pred
+
+DT_clf_pred_proba = DT_clf.predict_proba(X)
+DT_clf_pred_proba
+
+DT_clf_pred_proba_df = pd.DataFrame(DT_clf_pred_proba)
+DT_clf_pred_proba_df
 
 pd.concat([X, DT_clf_pred_proba_df], axis=1).to_clipboard()
 
 
+# (tree plot)
 from sklearn import tree
 tree.plot_tree(DT_clf)
 tree.plot_tree(DT_clf, feature_names=X.columns)
@@ -1922,11 +1901,12 @@ tree.plot_tree(DT_clf, feature_names=X.columns, filled=True, max_depth=2)  # max
 
 DT_clf.cost_complexity_pruning_path(X, y)   # 변화가 생기는 alpha값 list 및 그때의 불순도
 
+# (Feature Importance)
 DT_clf.feature_importances_
 plt.barh(X.columns, DT_clf.feature_importances_)
 
 
-
+# (Evaluate Decision Tree Classifier)
 from sklearn.metrics import accuracy_score
 accuracy_score(y, DT_clf_pred)
 
@@ -1934,26 +1914,48 @@ from sklearn.metrics import roc_auc_score
 roc_auc_score(y, DT_clf_pred)
 
 
+# (Logistic Regression과 비교) ---
+from sklearn.linear_model import LogisticRegression
+LRC1 = LogisticRegression()
+LRC1.fit(X,y)
+
+LRC1_pred = LRC1.predict(X)
+
+accuracy_score(y, LRC1_pred)
+roc_auc_score(y, LRC1_pred)
+
+
 
 
 # (Decision_Tree Classifier) - continuous X -----------------------------------------------------------------
-X = df[['fare', 'age']]
-y = df['survived']
+#  . X : fare, age
+#  . y : survived
+X = df_titanic[['fare', 'age']]
+y = df_titanic['survived']
 
 
+# (modeling)
+from sklearn.tree import DecisionTreeClassifier
 DT_clf2 = DecisionTreeClassifier()
 # DT_clf2 = DecisionTreeClassifier(max_depth=3)
 # DT_clf = DecisionTreeClassifier(criterion='gini')
 DT_clf2.fit(X, y)
 
-DT2_clf2_pred = DT_clf2.predict(X)
-DT2_clf2_pred_proba = DT_clf2.predict_proba(X)
-DT2_clf2_pred_proba_df = pd.DataFrame(DT2_clf2_pred_proba)
+
+# (predict)
+DT_clf2_pred = DT_clf2.predict(X)
+DT_clf2_pred
+
+DT_clf2_pred_proba = DT_clf2.predict_proba(X)
+DT_clf2_pred_proba
+
+DT_clf2_pred_proba_df = pd.DataFrame(DT2_clf2_pred_proba)
+DT_clf2_pred_proba_df
+
+pd.concat([X, DT_clf2_pred_proba_df], axis=1).to_clipboard()
 
 
-pd.concat([X, DT2_clf2_pred_proba_df], axis=1).to_clipboard()
-
-
+# (tree plot)
 from sklearn import tree
 tree.plot_tree(DT_clf2)
 tree.plot_tree(DT_clf2, feature_names=X.columns)
@@ -1962,11 +1964,12 @@ tree.plot_tree(DT_clf2, feature_names=X.columns, filled=True, max_depth=3)  # ma
 
 DT_clf2.cost_complexity_pruning_path(X, y)   # 변화가 생기는 alpha값 list 및 그때의 불순도
 
+# (Feature Importance)
 DT_clf2.feature_importances_
 plt.barh(X.columns, DT_clf2.feature_importances_)
 
 
-
+# (Evaluate Decision Tree Classifier)
 from sklearn.metrics import accuracy_score
 accuracy_score(y, DT2_clf2_pred)
 
@@ -1974,17 +1977,15 @@ from sklearn.metrics import roc_auc_score
 roc_auc_score(y, DT2_clf2_pred)
 
 
-# Logistic Regression과 비교
+# (Logistic Regression과 비교) ---
 from sklearn.linear_model import LogisticRegression
-LRC = LogisticRegression()
-LRC.fit(X,y)
+LRC2 = LogisticRegression()
+LRC2.fit(X,y)
 
-LRC_pred = LRC.predict(X)
+LRC2_pred = LRC2.predict(X)
 
-accuracy_score(y, LRC_pred)
-roc_auc_score(y, LRC_pred)
-
-
+accuracy_score(y, LRC2_pred)
+roc_auc_score(y, LRC2_pred)
 
 
 
@@ -1992,26 +1993,34 @@ roc_auc_score(y, LRC_pred)
 
 
 
- # (Decision_Tree Regressor) - descrete X -----------------------------------------------------------------
-df['sex_class'] = (df['sex'] == 'male').astype(int)
-
-X = df[['pclass', 'sex_class']]
-y = df['fare']
-
-df.groupby(['pclass', 'sex_class'])['fare'].mean()
-df.groupby(['pclass', 'sex_class'])['fare'].mean().unstack('sex_class')
 
 
+# (Decision_Tree Regressor) - descrete X -----------------------------------------------------------------
+#  . X : pclass, sex_class
+#  . y : fare
+df_titanic['sex_class'] = (df_titanic['sex'] == 'male').astype(int)
+
+X = df_titanic[['pclass', 'sex_class']]
+y = df_titanic['fare']
+
+
+# (modeling)
 from sklearn.tree import DecisionTreeRegressor
 DT_reg = DecisionTreeRegressor()
 DT_reg.fit(X, y)
 
+
+# (predict)
 DT_reg_pred = DT_reg.predict(X)
+DT_reg_pred
+
 DT_reg_pred_df = pd.Series(DT_reg_pred).to_frame()
+DT_reg_pred_df
 
 pd.concat([X, DT_reg_pred_df], axis=1).to_clipboard()
 
 
+# (tree plot)
 from sklearn import tree
 tree.plot_tree(DT_reg)
 tree.plot_tree(DT_reg, feature_names=X.columns)
@@ -2020,12 +2029,88 @@ tree.plot_tree(DT_reg, feature_names=X.columns, filled=True, max_depth=2)  # max
 
 DT_reg.cost_complexity_pruning_path(X, y)   # 변화가 생기는 alpha값 list 및 그때의 불순도
 
+# (Feature Importance)
 DT_reg.feature_importances_
 plt.barh(X.columns, DT_reg.feature_importances_)
 
 
+# (Evaluate Decision Tree Regressor)
+from sklearn.metrics import r2_score, mean_squared_error
+r2_score(y, DT_reg_pred)
+mean_squared_error(y, DT_reg_pred)
+np.sqrt(mean_squared_error(y, DT_reg_pred))
+
+
+# (Linear Regression과 비교) ---
+from sklearn.linear_model import LinearRegression
+LR1 = LinearRegression()
+LR1.fit(X,y)
+
+LR1_pred = LR1.predict(X)
+
+r2_score(y, LR1_pred)
+mean_squared_error(y, LR1_pred)
+np.sqrt(mean_squared_error(y, LR1_pred))
 
 
 
 
+# (Decision_Tree Regressor) - Continuous X -----------------------------------------------------------------
+#  . X : pclass, age
+#  . y : fare
 
+X = df_titanic[['pclass', 'age']]
+y = df_titanic['fare']
+
+df_titanic.groupby(['pclass', 'sex_class'])['fare'].mean()
+df_titanic.groupby(['pclass', 'sex_class'])['fare'].mean().unstack('sex_class')
+
+
+# (modeling)
+from sklearn.tree import DecisionTreeRegressor
+DT_reg2 = DecisionTreeRegressor()
+DT_reg2.fit(X, y)
+
+
+# (predict)
+DT_reg2_pred = DT_reg2.predict(X)
+DT_reg2_pred
+
+DT_reg2_pred_df = pd.Series(DT_reg2_pred).to_frame()
+DT_reg2_pred_df
+
+pd.concat([X, DT_reg2_pred_df], axis=1).to_clipboard()
+
+
+# (tree plot)
+from sklearn import tree
+tree.plot_tree(DT_reg2)
+tree.plot_tree(DT_reg2, feature_names=X.columns)
+tree.plot_tree(DT_reg2, feature_names=X.columns, filled=True)   # class의 쏠림에 따라 색상을 부여
+tree.plot_tree(DT_reg2, feature_names=X.columns, filled=True, max_depth=2)  # max_depth부여
+
+DT_reg2.cost_complexity_pruning_path(X, y)   # 변화가 생기는 alpha값 list 및 그때의 불순도
+
+
+# (Feature Importance)
+DT_reg.feature_importances_
+plt.barh(X.columns, DT_reg2.feature_importances_)
+
+
+# (Evaluate Decision Tree Regressor)
+from sklearn.metrics import r2_score, mean_squared_error
+r2_score(y, DT_reg2_pred)
+mean_squared_error(y, DT_reg2_pred)
+np.sqrt(mean_squared_error(y, DT_reg2_pred))
+
+
+# (Linear Regression과 비교) ---
+from sklearn.linear_model import LinearRegression
+LR2 = LinearRegression()
+LR2.fit(X,y)
+
+LR2_pred = LR2.predict(X)
+
+r2_score(y, LR2_pred)
+mean_squared_error(y, LR2_pred)
+np.sqrt(mean_squared_error(y, LR2_pred))
