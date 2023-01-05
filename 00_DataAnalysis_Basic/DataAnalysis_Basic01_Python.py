@@ -1949,7 +1949,7 @@ DT_clf2_pred
 DT_clf2_pred_proba = DT_clf2.predict_proba(X)
 DT_clf2_pred_proba
 
-DT_clf2_pred_proba_df = pd.DataFrame(DT2_clf2_pred_proba)
+DT_clf2_pred_proba_df = pd.DataFrame(DT_clf2_pred_proba)
 DT_clf2_pred_proba_df
 
 pd.concat([X, DT_clf2_pred_proba_df], axis=1).to_clipboard()
@@ -1971,10 +1971,10 @@ plt.barh(X.columns, DT_clf2.feature_importances_)
 
 # (Evaluate Decision Tree Classifier)
 from sklearn.metrics import accuracy_score
-accuracy_score(y, DT2_clf2_pred)
+accuracy_score(y, DT_clf2_pred)
 
 from sklearn.metrics import roc_auc_score
-roc_auc_score(y, DT2_clf2_pred)
+roc_auc_score(y, DT_clf2_pred)
 
 
 # (Logistic Regression과 비교) ---
