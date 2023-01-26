@@ -146,6 +146,10 @@ w1 = np.random.random((4,5))
 w2 = np.random.random((5,5))
 w3 = np.zeros(5)
 
+# w1 = np.arange(20).reshape(4,5)/20
+# w2 = np.arange(25).reshape(5,5)/25
+# w3 = np.zeros(5)
+
 
 # Tensorflow.keras RNN ------------------------------------------------------------------
 rnn1 = tf.keras.layers.SimpleRNN(5)
@@ -174,8 +178,25 @@ rnn1_3(x)[1].shape   # (2, 5) (batch, last_state)
 
 
 # torch RNN ------------------------------------------------------------------
+
+# x = np.random.random((2,3,4)).astype('float32')
+# x.shape      # (2,3,4) (batch, seq, features) (batch, len_sentence, voca_embedding)
+
+# w1 = np.random.random((4,5))
+# w2 = np.random.random((5,5))
+# w3 = np.zeros(5)
+
+# w1 = np.arange(20).reshape(4,5)/20
+# w2 = np.arange(25).reshape(5,5)/25
+# w3 = np.zeros(5)
+
 rnn2 = torch.nn.RNN(4, 5)  # (2,3,4) (batch, seq, features) (batch, len_sentence, voca_embedding)
 rnn2_1 = torch.nn.RNN(4, 5,  batch_first=True)  # (3,2,4) (seq, batch, features) (len_sentence, batch, voca_embedding)
+rnn2_2 = torch.nn.RNN(4, 5,  batch_first=True)  # (3,2,4) (seq, batch, features) (len_sentence, batch, voca_embedding)
+
+rnn3 = torch.nn.RNN(4, 5,  batch_first=True, bidirectional=True)  # (3,2,4) (seq, batch, features) (len_sentence, batch, voca_embedding)
+rnn3 = torch.nn.RNN(4, 5,  batch_first=True, bidirectional=True)  # (3,2,4) (seq, batch, features) (len_sentence, batch, voca_embedding)
+
 
 
 # batch_first – If True, then the input and output tensors are provided as (batch, seq, feature) 
@@ -184,32 +205,81 @@ rnn2_1 = torch.nn.RNN(4, 5,  batch_first=True)  # (3,2,4) (seq, batch, features)
 t_x = torch.tensor(x, dtype=torch.float32)
 t_x_tp = torch.tensor(x.transpose(1,0,2), dtype=torch.float32)
 
+# mono0direcional
 set_params=  [torch.tensor(w1.T, requires_grad=True),
             torch.tensor(w2.T, requires_grad=True),
             torch.tensor(w3, requires_grad=True),
             torch.tensor(w3, requires_grad=True),
             ]
+
 state_dict = rnn2_1.state_dict()
+state_dict2 = rnn2_2.state_dict()
 for k, vn in zip(state_dict, set_params):
     state_dict[k] = vn
-state_dict
+    state_dict2[k] = -vn
 
 rnn2.load_state_dict(state_dict)
 rnn2_1.load_state_dict(state_dict)
-# rnn2_1.state_dict()
-# rnn1_2.weights
-    
+rnn2_2.load_state_dict(state_dict2)
+
+# bi0directional
+set_params3=  set_params + [-p for p in set_params]
+
+state_dict3 = rnn3.state_dict()
+for k, vn in zip(state_dict3, set_params3):
+    state_dict3[k] = vn
+state_dict3
+rnn3.load_state_dict(state_dict3)
 
 
-rnn2(t_x_tp)
-rnn2(t_x)
-rnn2(t_x)[0].shape  # (2, 3, 5)   (seq, batch, last_state)
-rnn2(t_x)[1].shape  # (1, 3, 5)   (1, seq, last_state)
+r2 = rnn2(torch.Tensor(x))
+r21 = rnn2_1(torch.Tensor(x))
+r22 = rnn2_2(torch.Tensor(x[:,::-1,:].copy()))
+r31 = rnn3(torch.Tensor(x))
 
-rnn2_1(t_x)
-rnn2_1(t_x)[0].shape  # (2, 3, 5)   (batch, seq, last_state)
-rnn2_1(t_x)[1].shape  # (1, 2, 5)   (1, batch, last_state)
-rnn2_1(t_x)[1][0]
+
+# B: Batch, S: Sequence, E: Embedding, D: Bidirectional, H: Hidden, L: num_layers
+# *(rnn2) batch_first = False
+x.shape     # (S,B,E) (2,3,4)
+r2[0]       # (S, B, D∗H) (2,3,5)
+r2[1]       # (D*L, B, H) (1,3,5)
+
+# *(rnn2_1) batch_first = True
+x.shape     # (B,S,E) (2,3,4)
+r21[0]      # (B, S, D∗H) (2,3,5)
+r21[1]      # (D*L, B, H) (1,2,5)
+
+# *(rnn2_2) batch_first = False, reverse_input
+x.shape     # (B,S,E) (2,3,4)
+r22[0]      # (B, S, D∗H) (2,3,5)
+r22[1]      # (D*L, B, H) (1,2,5)
+
+# *(rnn3) batch_first = False, bidirectional=True
+x.shape     # (B,S,E) (2,3,4)
+r31[0]      # (B, S, D∗H) (2,3,10)    
+#  . forward:  r31[0][:,:,:5] == r21[0] 
+#  . backward: r31[0][:,:,5:] == r22[0][:,::-1,:]
+r31[1]      # (D*L, B, H) (2,2,5)
+#   . forward:  r31[1][0,:,:] == r21[1]
+#   . backward: r31[1][1,:,:] == r22[1]
+#   [ r31[0][:,-1,:5],  # (batch, last, forward)    == r21[1]
+#     r31[0][:,0,5:] ]  # (batch, first, backward)  == r22[1]
+
+
+
+# (einsum rnn) --------------------------------------------------
+# c2_1 = np.tanh(np.einsum('se,eh->sh',x[0,:,:],w1)+w3@w2)
+# c2_2 = np.tanh(np.einsum('se,eh->sh',x[1,:,:],w1)+c2_1@w2)
+
+# c21_1 = np.tanh(np.einsum('se,eh->sh',x[:,0,:],w1)+w3@w2)
+# c21_2 = np.tanh(np.einsum('se,eh->sh',x[:,1,:],w1)+c21_1@w2)
+# c21_3 = np.tanh(np.einsum('se,eh->sh',x[:,2,:],w1)+c21_2@w2)
+
+# c22_1 = np.tanh(np.einsum('se,eh->sh',x[:,2,:],w1)+w3@w2)
+# c22_2 = np.tanh(np.einsum('se,eh->sh',x[:,1,:],w1)+c22_1@w2)
+# c22_3 = np.tanh(np.einsum('se,eh->sh',x[:,0,:],w1)+c22_2@w2)
+# ----------------------------------------------------------------
+
 
 # ----------------------------------------------------------------------------------------------
 ####################################################################################################
@@ -265,7 +335,7 @@ rnn2_1(x[..., np.newaxis])
 rnn2_2(x[..., np.newaxis])  # return seq / state
 #   output [seq_s, last_state]
 
-rnn2_3(x[..., np.newaxis])  # return state
+rnn2_3(x[..., np.newaxis])
 #   output [last_seq, last_state]
 
 rnn2_4(x[..., np.newaxis])  # return seq
@@ -331,6 +401,64 @@ x[..., np.newaxis]
 
 
 
+
+
+
+### LSTM Tensorflow vs Torch ####################################################################
+# params 확인
+x = np.random.random((2,3,4)).astype('float32')
+w1 = np.random.random((4,4))
+w2 = np.random.random((1,4))
+w3 = np.zeros(4)
+for k,v in l1.state_dict().items():
+    print(v.shape)
+
+
+
+# tensorflow
+l2 = tf.keras.layers.LSTM(1, return_state=True, return_sequences=True)
+
+# set weights
+l2.build(input_shape=(1,1,4))
+l2.set_weights([tf.constant(w1),tf.constant(w2),tf.constant(w3)])
+# l2.weights
+
+# predict
+r2 = l2(tf.constant(x))
+
+r2      # return seq / (state / cell)
+r2[0]
+r2[1]
+r2[2]
+
+
+
+
+l2.weights[0].shape
+l2.weights[1].shape
+l2.weights[2].shape
+
+# torch **
+l1 = torch.nn.LSTM(4, 1, batch_first=True)
+
+# set weights
+set_params=  [torch.tensor(w1.T, requires_grad=True),
+            torch.tensor(w2.T, requires_grad=True),
+            torch.tensor(w3, requires_grad=True),
+            torch.tensor(w3, requires_grad=True),
+            ]
+state_dict = l1.state_dict()
+for k, vn in zip(state_dict, set_params):
+    state_dict[k] = vn
+l1.load_state_dict(state_dict)
+
+# predict
+r1 = l1(torch.Tensor(x))
+r1      # return seq / (state / cell)
+r1[0]
+r1[1]
+
+############################################################################################################
 
 
 
