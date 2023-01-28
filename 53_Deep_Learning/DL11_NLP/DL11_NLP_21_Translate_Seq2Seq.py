@@ -159,6 +159,7 @@ print(padseq_kor_inout.shape)
 
 
 ################################################################################################
+path = r'D:\작업방\업무 - 자동차 ★★★\Dataset'
 # Save_to_csv ***
 word_index_X = pd.Series(tokenizer_en.word_index).reset_index()
 word_index_y = pd.Series(tokenizer_kor.word_index).reset_index()
@@ -168,36 +169,41 @@ word_index_y.columns = ['word', 'index']
 padseq_X = pd.DataFrame(padseq_en.copy())
 padseq_y = pd.DataFrame(padseq_kor_inout.copy())
 
-word_index_X.to_csv(f'{path}/NLP_EN_to_KR_word_index(EN).csv', index=False, encoding='utf-8-sig')
-word_index_y.to_csv(f'{path}/NLP_EN_to_KR_word_index(KR).csv', index=False, encoding='utf-8-sig')
-padseq_X.to_csv(f'{path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
-padseq_y.to_csv(f'{path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
+# word_index_X.to_csv(f'{path}/NLP_EN_to_KR1_word_index(EN).csv', index=False, encoding='utf-8-sig')
+# word_index_y.to_csv(f'{path}/NLP_EN_to_KR1_word_index(KR).csv', index=False, encoding='utf-8-sig')
+# padseq_X.to_csv(f'{path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
+# padseq_y.to_csv(f'{path}/NLP_EN_to_KR1_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
 
-# word_index_X.to_csv(f'{path}/NLP_EN_to_KR2_word_index(EN).csv', index=False, encoding='utf-8-sig')
-# word_index_y.to_csv(f'{path}/NLP_EN_to_KR2_word_index(KR).csv', index=False, encoding='utf-8-sig')
-# padseq_X.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
-# padseq_y.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
+word_index_X.to_csv(f'{path}/NLP_EN_to_KR2_word_index(EN).csv', index=False, encoding='utf-8-sig')
+word_index_y.to_csv(f'{path}/NLP_EN_to_KR2_word_index(KR).csv', index=False, encoding='utf-8-sig')
+padseq_X.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
+padseq_y.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
 
 # Read_from_csv *** ---------------------------------------------------------------------------------
-word_index_X = pd.read_csv(f'{path}/NLP_EN_to_KR_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
-word_index_y = pd.read_csv(f'{path}/NLP_EN_to_KRword_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
-padseq_X = pd.read_csv(f'{path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
-padseq_y = pd.read_csv(f'{path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
+word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
+word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
+padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
+padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 
-# word_index_X = pd.read_csv(f'{path}/NLP_EN_to_KR2_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
-# word_index_y = pd.read_csv(f'{path}/NLP_EN_to_KR2_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
-# padseq_X = pd.read_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
-# padseq_y = pd.read_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
+# word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
+# word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
+# padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
+# padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 # pd.Series(word_index_X.index, index=word_index_X)
+
+word_index_X[0] = ''
+word_index_y[0] = ''
 
 vocab_size_X = len(word_index_X) + 1 #어휘수
 vocab_size_y = len(word_index_y) + 1 #어휘수
-X = padseq_X.to_numpy()
-y = padseq_y.to_numpy()
+X = padseq_X.to_numpy()[:1000]
+y = padseq_y.to_numpy()[:1000]
 
 X_oh = tf.keras.utils.to_categorical(X, vocab_size_X)
 y_oh = tf.keras.utils.to_categorical(y, vocab_size_y)
 ################################################################################################
+
 
 
 
@@ -278,7 +284,7 @@ else:
 print(device)
 
 
-# Seq2Seq ------- ---------------------------------------------------------------------------------------------------------------------
+# Seq2Seq -----------------------------------------------------------------------------------------------------------------------------
 class Seq2Seq_Encoder(torch.nn.Module):
     def __init__(self, vocab_size_X):
         super().__init__()
@@ -288,11 +294,11 @@ class Seq2Seq_Encoder(torch.nn.Module):
         self.rnn = torch.nn.LSTM(256, 512, batch_first=True)
     
     def forward(self, X):
-        # X (seq, word)
-        self.emb = self.embed(X)    # emb (seq, word, emb)
-        self.emb_dropout = self.dropout(self.emb)
-        self.rnn_output, self.rnn_hidden = self.rnn(self.emb_dropout)   # rnn_output (seq, word, rnn_layers), rnn_hidden (1, seq, rnn_layers)
-        return self.rnn_output, self.rnn_hidden
+        # X (batch_seq, X_word)
+        self.enc_emb = self.embed(X)    # enc_emb (batch_seq, X_word, enc_emb)
+        self.emb_dropout = self.dropout(self.enc_emb)
+        self.enc_output, self.enc_hidden = self.rnn(self.emb_dropout)   # rnn_output (batch_seq, X_word, enc_rnn), rnn_hidden (1, batch_seq, enc_rnn)
+        return self.enc_output, self.enc_hidden
 
 class Seq2Seq_Decoder(torch.nn.Module):
     def __init__(self, vocab_size_y):
@@ -303,13 +309,13 @@ class Seq2Seq_Decoder(torch.nn.Module):
         self.rnn = torch.nn.LSTM(256, 512, batch_first=True)
         self.fc = torch.nn.Linear(512, vocab_size_y)
 
-    def forward(self, y, context_vector):
-        # y (seq, word)
-        self.emb = self.embed(y)    # emb (seq, word, emb)
-        self.emb_dropout = self.dropout(self.emb)
-        self.rnn_output, self.rnn_hidden = self.rnn(self.emb_dropout, context_vector)   # rnn_output (seq, word, rnn_layers), rnn_hidden (1, seq, rnn_layers)
-        self.fc_output = self.fc(self.rnn_output)   # fc_output (seq, word, fc_layers)
-        return self.fc_output
+    def forward(self, y_before, context_vector):
+        # y_before (batch_seq, y_word)
+        self.dec_emb = self.embed(y_before)    # dec_emb (batch_seq, y_word, dec_emb)
+        self.emb_dropout = self.dropout(self.dec_emb)
+        self.dec_output, self.dec_hidden = self.rnn(self.emb_dropout, context_vector)   # rnn_output (batch_seq, y_word, dec_rnn), rnn_hidden (1, batch_seq, dec_rnn)
+        self.dec_fc = self.fc(self.dec_output)   # fc_output (batch_seq, y_word, dec_fc)
+        return self.dec_fc, self.dec_hidden
 
 class Seq2Seq(torch.nn.Module):
     def __init__(self, vocab_size_X, vocab_size_y):
@@ -318,35 +324,36 @@ class Seq2Seq(torch.nn.Module):
         self.decoder = Seq2Seq_Decoder(vocab_size_y)
 
     def forward(self, X, y=None, teacher_forcing=0):
-        # X (seq, word)
-        # y (seq, word)
+        # X (batch_seq, X_word)
+        # y (batch_seq, y_word)
         if y is not None:
             with torch.no_grad():
                 self.y_shape = y.shape
-                self.init = np.array(y[0,0].to('cpu').detach())
+                self.init = np.array(y[0,0].to('cpu').detach()) # 학습시 초기값 저장
 
         # (encoding) --------------------------------------------------------------------------------------------
         self.enc_output, self.context_vector = self.encoder(X)
-        #       enc_output (X_seq, X_word, X_rnn_layers), context_vector (1, X_seq, X_rnn_layers)
+        #       enc_output (batch_seq, X_word, enc_rnn), context_vector (1, batch_seq, enc_rnn)
 
         # (decoding) --------------------------------------------------------------------------------------------
         if y is not None:
-            pre_st = y[:,0][:,None]     # y[:,0].unsqueeze(1)   # pre_st (y_seq, 1)
+            y_before = y[:,0][:,None]     # y[:,0].unsqueeze(1)   # y_before (batch_seq, 1)
         else:
-            pre_st = torch.tensor(np.ones((X.shape[0],1))*self.init, dtype=torch.int64).to(X.device)
-        self.result = self.decoder(pre_st, self.context_vector)     # result (y_seq, 1, fc_layers==vocab_size_y)
+            y_before = torch.tensor(np.ones((X.shape[0],1))*self.init, dtype=torch.int64).to(X.device)  # 저장된 초기값을 예측시 활용
+        self.result, hidden_input = self.decoder(y_before, self.context_vector)     # result (batch_seq, 1, dec_fc==vocab_size_y)
 
         for i in range(1, self.y_shape[1]):
-            pred_output = self.decoder(pre_st, self.context_vector) # (y_seq, 1, fc_layers==vocab_size_y)
-            
-            self.result = torch.cat([self.result, pred_output],axis=1)  # (y_seq, i->y_word, fc_layers==vocab_size_y)
+            pred_output, dec_hidden = self.decoder(y_before, hidden_input) # (batch_seq, 1, dec_fc==vocab_size_y)
+            hidden_input = dec_hidden
+
+            self.result = torch.cat([self.result, pred_output],axis=1)  # (batch_seq, i->y_word, dec_fc==vocab_size_y)
 
             if teacher_forcing >= np.random.rand():     # teacher_forcing
-                pre_st = y[:,i][:,None] # pre_st (y_seq, 1)
+                y_before = y[:,i][:,None] # y_before (batch_seq, 1)
             else:
-                pre_st = torch.argmax(pred_output, axis=2)  # pre_st (y_seq, 1)
+                y_before = torch.argmax(pred_output, axis=2)  # y_before (batch_seq, 1)
         # ------------------------------------------------------------------------------------------------------
-        return self.result      # (y_seq, y_word, fc_layers==vocab_size_y)
+        return self.result      # (y_seq, y_word, dec_fc==vocab_size_y)
 
     def predict(self, X, return_word=True):
         with torch.no_grad():
@@ -357,71 +364,178 @@ class Seq2Seq(torch.nn.Module):
             return y_pred
 # ------------------------------------------------------------------------------------------------------------------------------------
 
-# Seq2Seq + Attention
+# Seq2Seq + Attention -----------------------------------------------------------------------------------------------------------------------------
 # https://github.com/ndb796/Deep-Learning-Paper-Review-and-Practice/blob/master/code_practices/Sequence_to_Sequence_with_Attention_Tutorial.ipynb
+
+# torch mm, bmm, matmul 차이
+# https://sunghee.kaist.ac.kr/entry/torch-mm-bmm-matmul-%EC%B0%A8%EC%9D%B4
+
 class AttSeq2Seq_Encoder(torch.nn.Module):
     def __init__(self, vocab_size_X):
         super().__init__()
-        self.embed = torch.nn.Embedding(vocab_size_X, 256)
+        self.embed = torch.nn.Embedding(vocab_size_X, 256)      # X_Sentece_Embedding
         self.dropout = torch.nn.Dropout(0.5)
         # self.rnn = torch.nn.RNN(256, 512, batch_first=True, bidirectional=True)
         # self.rnn = torch.nn.LSTM(256, 512, batch_first=True, bidirectional=True)
         self.rnn = torch.nn.GRU(256, 512, batch_first=True, bidirectional=True)
 
-        self.fc = torch.nn.Linear(512*2, 512)   # (enc_rnn_layers*2, fc_layers==dec_rnn_layers)
+        self.fc = torch.nn.Linear(512*2, 512)   # (enc_rnn*2, enc_fc)
     
     def forward(self, X):
-        # X (seq, X_word)
-        self.emb = self.embed(X)    # emb (seq, X_word, emb)
-        self.emb_dropout = self.dropout(self.emb)
-        self.rnn_output, self.rnn_hidden = self.rnn(self.emb_dropout)   # rnn_output (seq, X_word, rnn_layers), rnn_hidden (1, seq, rnn_layers)
-        self.rnn_concat = torch.cat([self.rnn_hidden[0,:,:], self.rnn_hidden[1,:,:]], axis=1)[None,...]  # rnn_concat (1, seq, rnn_layers * 2)
+        # X (batch_seq, X_word)
+        self.enc_emb = self.embed(X)    # enc_emb (batch_seq, X_word, enc_emb)
+        self.emb_dropout = self.dropout(self.enc_emb)
+        self.rnn_output, self.rnn_hidden = self.rnn(self.emb_dropout)   # rnn_output (batch_seq, X_word, rnn_enc), rnn_hidden (2, batch_seq, rnn_enc)
+        self.rnn_concat = torch.cat([self.rnn_hidden[0,:,:], self.rnn_hidden[1,:,:]], axis=1)[None,...]  # rnn_concat (1, batch_seq, rnn_enc * 2) ←(cat)← (1, seq, rnn_enc_forward), (1, seq, rnn_enc_backward) 
         # self.rnn_hidden[0,:,:] == self.rnn_output[:,-1,:512] : forward
         # self.rnn_hidden[1,:,:] == self.rnn_output[:,0,512:] : backward
 
-        self.final_hidden = torch.tanh(self.fc(self.rnn_concat))       # final_hidden (1, seq, fc_layers==dec_rnn_layers)
+        self.enc_fc = torch.tanh(self.fc(self.rnn_concat))       # enc_fc (1, batch_seq, enc_fc)
         
-        return self.rnn_output, self.final_hidden
+        return self.rnn_output, self.enc_fc
 
 class AttSeq2Seq_Attention(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.energy_fc = torch.nn.Linear((512 * 2) + 512, 512)     # (enc_rnn_layer *2) + dec_hidden, dec_hidden
-        self.att_fc = torch.nn.Linear(512, 1)     # dec_hidden, 1
+        self.energy_fc = torch.nn.Linear((512 * 2) + 512, 512)     # (enc_rnn_layer *2) + dec_rnn, energy_fc
+        self.att_fc = torch.nn.Linear(512, 1)     # enc_fc, 1
     
     def forward(self, enc_output, dec_hidden):
-        # enc_output (seq, X_word, enc_rnn_layers)
-        # dec_hidden (1, seq, enc_final_hidden or dec_rnn_layers)
+        # enc_output (batch_seq, X_word, enc_rnn*2)
+        # dec_hidden (1, batch_seq, dec_rnn)
         with torch.no_grad():
             self.enc_output_shape = enc_output.shape
         
-        self.dec_hidden_transform = dec_hidden.permute(1,0,2).repeat(1, self.enc_output_shape[1], 1)    # dec_hidden_transform (seq, X_word(repeat), dec_rnn_layers)
-        self.att_concat = torch.cat([enc_output, self.dec_hidden_transform], axis=2)        # att_concat (seq, X_word, enc_rnn_layers + dec_rnn_layers)
-        self.energy = torch.tanh(self.energy_fc(self.att_concat))   # energy (seq, X_word, dec_hidden)
-        self.attention = self.att_fc(self.energy).squeeze(2)   # attention (seq, X_word, 1) → (seq, X_word)
-        self.att_score = torch.nn.functional.softmax(self.attention, dim=1)  # att_score (seq, X_word)
-        return self.att_score
+        self.enc_hidden_expand = dec_hidden.permute(1,0,2).repeat(1, self.enc_output_shape[1], 1)    # enc_hidden_expand (batch_seq, X_word(repeat), dec_rnn)
+        self.att_concat = torch.cat([enc_output, self.enc_hidden_expand], axis=2)        # att_concat (batch_seq, X_word, enc_rnn*2 + dec_rnn) ←(cat)← (seq, X_word, enc_rnn*2), (seq, X_word, dec_rnn)
+        self.energy = torch.tanh(self.energy_fc(self.att_concat))       # energy (batch_seq, X_word, energy_fc)
+        self.att = self.att_fc(self.energy).squeeze(2)        # att (batch_seq, X_word, 1) → (batch_seq, X_word)
+        self.att_score = torch.nn.functional.softmax(self.att, dim=1)      # att_score (batch_seq, X_word)
+        
+        self.weighted = torch.bmm(self.att_score.unsqueeze(1), enc_output)      # weigted (batch_seq, 1, enc_rnn*2) ← (batch_seq, 1, X_word), (batch_seq, X_word, enc_rnn*2)  
+        # self.weighted = (self.att_score.unsqueeze(1).permute(0,2,1) * enc_output).sum(1).unsqueeze(1)
+        # (행렬 곱 함수) torch.bmm((i, n, m), (i, m, k)) → (i, n, k)
+        
+        return self.att_score, self.weighted    # att_score (batch_seq, X_word), weigted (batch_seq, 1, enc_rnn*2)
 
-enc = AttSeq2Seq_Encoder(vocab_size_X)
-enc_result = enc(X_sample)
-att = AttSeq2Seq_Attention()
+class AttSeq2Seq_Decoder(torch.nn.Module):
+    def __init__(self, vocab_size_y, attention_layer):
+        super().__init__()
+        self.embed = torch.nn.Embedding(vocab_size_y, 256)      # y_Sentece_Embedding
+        self.dropout = torch.nn.Dropout(0.5)
+        self.attention = attention_layer
+       
+        # self.rnn = torch.nn.RNN(256 + (512 * 2), 512, batch_first=True)
+        # self.rnn = torch.nn.LSTM(256 + (512 * 2), 512, batch_first=True)
+        self.rnn = torch.nn.GRU(256 + (512 * 2), 512, batch_first=True)  # (enc_rnn_layer *2) + y_embed, enc_fc
+
+        # self.fc = torch.nn.Linear(512, vocab_size_y)   # (dec_rnn, dec_fc=vocab_size_y)
+        self.fc = torch.nn.Linear(256+512+(512 * 2), vocab_size_y)   # (dec_emb + dec_rnn + enc_rnn*2 , dec_fc=vocab_size_y)
+    
+    def forward(self, y_before, enc_output, dec_hidden):
+        # y_before (batch_seq, y_word) ☞ (batch_seq, 1) * 1단어
+        # enc_output (batch_seq, X_word, enc_rnn*2)
+        # dec_hidden (1, batch_seq, dec_rnn)
+        with torch.no_grad():
+            self.y_shape = y_before.shape
+            
+        self.dec_embed = self.dropout(self.embed(y_before))     # dec_embed (batch_seq, y_word, dec_emb) ☞ (batch_seq, 1, dec_emb) * 1단어
+        
+        self.att_score, self.weighted = self.attention(enc_output, dec_hidden)  # att_score (batch_seq, X_word), weigted (batch_seq, 1, enc_rnn*2)
+        self.weigthed_expand = self.weighted.repeat(1, self.y_shape[1], 1)     # weigthed_expand (batch_seq, y_word, enc_rnn*2) ☞ (batch_seq, 1, enc_rnn*2) * 1단어
+        
+        self.dec_rnn_input = torch.cat([self.dec_embed, self.weigthed_expand], dim=2)   # dec_rnn_input (batch_seq, y_word, dec_emb + enc_rnn*2) ←(cat)← (batch_seq, y_word, dec_emb), (seq, y_word, enc_rnn*2)
+        
+        self.dec_output, self.dec_hidden = self.rnn(self.dec_rnn_input, dec_hidden) # dec_output (batch_seq, y_word, dec_rnn), dec_hidden (1, batch_seq, dec_rnn)
+        
+        # self.dec_fc = torch.fc(self.dec_output)   # dec_fc (batch_seq, y_word, dec_fc)
+        self.fc_input = torch.cat([self.dec_embed, self.dec_output, self.weigthed_expand], dim=2)  # fc_input (batch_seq, y_word, dec_emb + dec_rnn + enc_rnn*2) ←(cat)← (batch_seq, y_word, dec_emb), (seq, y_word, dec_rnn), (seq, y_word, enc_rnn*2)
+        self.dec_fc = self.fc(self.fc_input)   # dec_fc (batch_seq, y_word, dec_fc)
+        
+        return self.dec_fc, self.dec_hidden     # dec_fc (batch_seq, y_word, dec_fc), dec_hidden (1, batch_seq, dec_rnn)
+
+class AttSeq2Seq(torch.nn.Module):
+    def __init__(self, vocab_size_X, vocab_size_y):
+        super().__init__()
+        self.encoder = AttSeq2Seq_Encoder(vocab_size_X)
+        self.attention = AttSeq2Seq_Attention()
+        self.decoder = AttSeq2Seq_Decoder(vocab_size_y, self.attention)
+
+    def forward(self, X, y=None, teacher_forcing=0):
+        # X (batch_seq, X_word)
+        # y (batch_seq, y_word)
+        if y is not None:
+            with torch.no_grad():
+                self.y_shape = y.shape
+                self.init = np.array(y[0,0].to('cpu').detach()) # 학습시 초기값 저장
+
+        # (encoding) --------------------------------------------------------------------------------------------
+        self.enc_output, self.context_vector = self.encoder(X)
+        #       enc_output (batch_seq, X_word, enc_rnn), context_vector (1, batch_seq, enc_rnn)
+
+        # (decoding) --------------------------------------------------------------------------------------------
+        if y is not None:
+            y_before = y[:,0][:,None]     # y[:,0].unsqueeze(1)   # y_before (batch_seq, 1)
+        else:
+            y_before = torch.tensor(np.ones((X.shape[0],1))*self.init, dtype=torch.int64).to(X.device)  # 저장된 초기값을 예측시 활용
+
+        self.result, hidden_input = self.decoder(y_before, self.enc_output, self.context_vector)     # result (batch_seq, 1, dec_fc==vocab_size_y)
+
+        for i in range(1, self.y_shape[1]):
+            pred_output, dec_hidden = self.decoder(y_before, self.enc_output, hidden_input) # (batch_seq, 1, dec_fc==vocab_size_y)
+            hidden_input = dec_hidden
+
+            self.result = torch.cat([self.result, pred_output],axis=1)  # (batch_seq, i->y_word, dec_fc==vocab_size_y)
+
+            if teacher_forcing >= np.random.rand():     # teacher_forcing
+                y_before = y[:,i][:,None] # y_before (batch_seq, 1)
+            else:
+                y_before = torch.argmax(pred_output, axis=2)  # y_before (batch_seq, 1)
+        # ------------------------------------------------------------------------------------------------------
+        return self.result      # (y_seq, y_word, dec_fc==vocab_size_y)
+
+    def predict(self, X, return_word=True):
+        with torch.no_grad():
+            y_pred = self.forward(X, teacher_forcing=0)
+        if return_word:
+            return torch.argmax(y_pred, axis=2)
+        else:
+            return y_pred
+# ------------------------------------------------------------------------------------------------------------------------------------
 
 
-# torch.cuda.empty_cache()  # 메모리 비우기
+# enc = AttSeq2Seq_Encoder(vocab_size_X)
+# att = AttSeq2Seq_Attention()
+# dec = AttSeq2Seq_Decoder(vocab_size_y, att)
 
-enc()[0].shape
-enc(X_sample)[1].shape
+# output, hidden = enc(X_sample)
+# y_result, dec_hidden = dec(y_sample[:,:1], output, hidden)
+# y_result.shape, dec_hidden.shape
 
-enc(X_sample)[1].permute(1,0,2).repeat(1, enc(X_sample)[0].shape[1],1).shape
+# y_result2, dec_hidden2 = dec(y_sample[:,:2], output, dec_hidden)
+# y_result2.shape, dec_hidden2.shape
 
 
 # training prepare * -------------------------------------------------------------------------------------------------------
-model = Seq2Seq(vocab_size_en, vocab_size_kor).to(device)
+model = Seq2Seq(vocab_size_X, vocab_size_y).to(device)
+# model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
+
+
+# model weights parameter initialize (가중치 초기화) ***
+# def init_weights(model):
+#     for name, param in model.named_parameters():
+#         if 'weight' in name:
+#             nn.init.normal_(param.data, mean=0, std=0.01)
+#         else:
+#             nn.init.constant_(param.data, 0)
+# model.apply(init_weights)
+
 
 # trg_pad_idx = TRG.vocab.stoi[TRG.pad_token] ## pad에 해당하는 index는 무시합니다.
 loss_function = torch.nn.CrossEntropyLoss()     # ignore_index=trg_pad_idx
 optimizer = torch.optim.Adam(model.parameters())
-epochs = 50
+epochs = 30
+
 
 # training * -------------------------------------------------------------------------------------------------------
 train_losses = []
@@ -454,8 +568,11 @@ for e in range(epochs):
     valid_losses.append(np.mean(valid_epoch_loss))
     print(f"{e+1} epochs) train_loss: {train_losses[-1]},  valid_loss: {valid_losses[-1]}", end='\r')
 
+
+
 # predict * -------------------------------------------------------------------------------------------------------
 model.predict(X_sample.to(device))
+np.stack([[word_index_X[word] for word in sentence] for sentence in X_sample.numpy()])
 np.stack([[word_index_y[word] for word in sentence] for sentence in model.predict(X_sample.to(device)).to('cpu').numpy()])
 
 
@@ -473,19 +590,71 @@ plt.show()
 # pip install torchmetrics
 # pip install nltk
 # pip install torchtext
-# import nltk.translate.bleu_score as bleu
+import nltk.translate.bleu_score as bleu
 # from torchtext.data.metrics import bleu_score
 # bleu.sentence_bleu(references_corpus, candidate_corpus)
 
-# bleu_scores = []
-# for r, c in zip(batch_y.unsqueeze(1), torch.argmax(pred, axis=2).to('cpu').detach()):
-#     bleu_scores.append(bleu.sentence_bleu(r,c))
-# np.mean(bleu_scores)
+bleu_scores = []
+for r, c in zip(batch_y.unsqueeze(1), torch.argmax(pred, axis=2).to('cpu').detach()):
+    bleu_scores.append(bleu.sentence_bleu(r,c))
+np.mean(bleu_scores)
 
 
 
 
 
+
+
+# dot, matmul, bmm ---------------------------------------------------------------------------------------------------
+# https://m.blog.naver.com/PostView.naver?isHttpsRedirect=true&blogId=cjh226&logNo=221356884894
+# (*) numpy.dot(a, b, out=None) : Dot product of two arrays. (내적곱)
+#   . 텐서(또는 고차원 배열)의 곱연산
+#   . 5) 만약 a가 N차원 배열이고 b가 2이상의 M차원 배열이라면, 
+#        dot(a,b)는 a의 마지막 축과 b의 뒤에서 두번째 축과의 내적으로 계산된다.
+# np.dot(A,B)[i,j,k,m] == np.sum(A[i,j,:] * B[k,:,m]) → (i, j, k, m)
+
+# (*) numpy.matmul(a, b, out=None) : Matrix product of two arrays. (행렬곱)
+#   . 두번째 설명이 고차원 배열(N>2)에 대한 내용
+#   . 2) 만약 배열이 2차원보다 클 경우, 
+#        마지막 2개의 축으로 이루어진 행렬을 나머지 축에 따라 쌓아놓은 것이라고 생각한다.
+# np.matmul(A,B)[i,j,k] == np.sum(A[i,j,:] * B[i,:,k]) → i, j, k
+
+
+# (*) torch.bmm : matrix multiplicatoin
+#  . bmm(A,B) [i,k] == np.sum(A[i,j], b[j,k]) → i, k
+
+
+
+A0 = np.arange(2*3*4).reshape((2,3,4))
+
+B1 = np.arange(2*3*4).reshape((2,3,4))
+B2 = np.arange(2*3*4).reshape((2,4,3))
+B3 = np.arange(2*3*4).reshape((3,2,4))
+B4 = np.arange(2*3*4).reshape((3,4,2))
+B5 = np.arange(2*3*4).reshape((4,2,3))
+B6 = np.arange(2*3*4).reshape((4,3,2))
+
+# (dot) operation
+A0.shape    # (2,3,4)
+np.dot(A0, B1) # (2,3,4) Error
+np.dot(A0, B2) # (2,4,3) Ok -> (2,3,2,3)
+np.dot(A0, B3) # (3,2,4) Error
+np.dot(A0, B4) # (3,4,2) Ok -> (2,3,3,2)
+np.dot(A0, B5) # (4,2,3) Error
+np.dot(A0, B6) # (4,3,2) Error
+
+
+# (matmul) opertaion
+A0.shape    # (2,3,4)
+np.matmul(A0, B1) # (2,3,4) Error
+np.matmul(A0, B2) # (2,4,3) Ok -> (2,3,3)
+np.matmul(A0, B3) # (3,2,4) Error
+np.matmul(A0, B4) # (3,4,2) Error
+np.matmul(A0, B5) # (4,2,3) Error
+np.matmul(A0, B6) # (4,3,2) Error
+
+
+# ---------------------------------------------------------------------------------------------------
 
 
 
