@@ -101,25 +101,32 @@ train_iterator, valid_iterator, test_iterator = BucketIterator.splits(
 
 
 
-import numpy as np
-import pandas as pd
-word_index_src = pd.Series(SRC.vocab.stoi.keys(), index=SRC.vocab.stoi.values())
-word_index_trg = pd.Series(TRG.vocab.stoi.keys(), index=TRG.vocab.stoi.values())
+# import numpy as np
+# import pandas as pd
+word_index_src = pd.Series(SRC.vocab.stoi).reset_index()
+word_index_trg = pd.Series(TRG.vocab.stoi).reset_index()
+word_index_src.columns = ['word', 'index']
+word_index_trg.columns = ['word', 'index']
+
+word_index_src_filtered = word_index_src[~word_index_src.apply(lambda x:(x['word'] != '<unk>') & (x['index']==0), axis=1)]
+word_index_trg_filtered = word_index_trg[~word_index_trg.apply(lambda x:(x['word'] != '<unk>') & (x['index']==0), axis=1)]
 
 path = r'C:\Users\Admin\Desktop\DataScience\★★ Python_정리자료(Git)\53_Deep_Learning\DL11_NLP'
-word_index_src.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index=False, encoding='utf-8-sig')
-word_index_trg.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index=False, encoding='utf-8-sig')
+word_index_src.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index_full(DE_SRC).csv', index=False, encoding='utf-8-sig')
+word_index_trg.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index_full(EN_TRG).csv', index=False, encoding='utf-8-sig')
+word_index_src_filtered.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index=False, encoding='utf-8-sig')
+word_index_trg_filtered.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index=False, encoding='utf-8-sig')
 
-for e, batch in enumerate(test_iterator):
-    print(e)
-    src_data.append(batch.src.numpy())
-    trg_data.append(batch.trg.numpy())
+# for e, batch in enumerate(test_iterator):
+#     print(e)
+#     src_data.append(batch.src.numpy())
+#     trg_data.append(batch.trg.numpy())
 
-src_frame = pd.DataFrame(batch.src.numpy().T)
-trg_frame = pd.DataFrame(batch.trg.numpy().T)
-print(src_frame.shape, trg_frame.shape)
+# src_frame = pd.DataFrame(batch.src.numpy().T)
+# trg_frame = pd.DataFrame(batch.trg.numpy().T)
+# print(src_frame.shape, trg_frame.shape)
 
-src_frame.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(DE_SRC).csv', index=False, encoding='utf-8-sig')
-trg_frame.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(EN_TRG).csv', index=False, encoding='utf-8-sig')
+# src_frame.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(DE_SRC).csv', index=False, encoding='utf-8-sig')
+# trg_frame.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(EN_TRG).csv', index=False, encoding='utf-8-sig')
 
 

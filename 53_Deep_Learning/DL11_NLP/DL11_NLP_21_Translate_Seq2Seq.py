@@ -204,9 +204,6 @@ X_oh = tf.keras.utils.to_categorical(X, vocab_size_X)
 y_oh = tf.keras.utils.to_categorical(y, vocab_size_y)
 ################################################################################################
 
-
-
-
 # (Train_Test_Split) -------------------------------------------
 from sklearn.model_selection import train_test_split
 train_valid_idx, test_idx = train_test_split(range(len(X)), test_size=0.2, random_state=0)
@@ -220,9 +217,32 @@ train_y_oh, valid_y_oh, test_y_oh = y_oh[train_idx,:], y_oh[valid_idx,:], y_oh[t
 print(train_X.shape, valid_X.shape, test_X.shape)
 print(train_y.shape, valid_y.shape, test_y.shape)
 print(train_y_oh.shape, valid_y_oh.shape, test_y_oh.shape)
+################################################################################################
 
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
+word_index_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index_col='index', encoding='utf-8-sig')['word']
+word_index_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index_col='index', encoding='utf-8-sig')['word']
 
+train_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(DE_SRC).csv', encoding='utf-8-sig').to_numpy()
+valid_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(DE_SRC).csv', encoding='utf-8-sig').to_numpy()
+test_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(DE_SRC).csv', encoding='utf-8-sig').to_numpy()
 
+train_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(EN_TRG).csv', encoding='utf-8-sig').to_numpy()
+valid_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(EN_TRG).csv', encoding='utf-8-sig').to_numpy()
+test_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(EN_TRG).csv', encoding='utf-8-sig').to_numpy()
+
+vocab_size_X = len(word_index_X) + 1 #어휘수
+vocab_size_y = len(word_index_y) + 1 #어휘수
+
+train_y_oh = tf.keras.utils.to_categorical(train_y, vocab_size_y)
+valid_y_oh = tf.keras.utils.to_categorical(valid_X, vocab_size_y)
+test_y_oh = tf.keras.utils.to_categorical(test_y, vocab_size_y)
+
+print(train_X.shape, valid_X.shape, test_X.shape)
+print(train_y.shape, valid_y.shape, test_y.shape)
+print(train_y_oh.shape, valid_y_oh.shape, test_y_oh.shape)
+
+################################################################################################
 
 
 # torch dataset ----------
@@ -517,8 +537,8 @@ class AttSeq2Seq(torch.nn.Module):
 
 
 # training prepare * -------------------------------------------------------------------------------------------------------
-model = Seq2Seq(vocab_size_X, vocab_size_y).to(device)
-# model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
+# model = Seq2Seq(vocab_size_X, vocab_size_y).to(device)
+model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
 
 
 # model weights parameter initialize (가중치 초기화) ***
