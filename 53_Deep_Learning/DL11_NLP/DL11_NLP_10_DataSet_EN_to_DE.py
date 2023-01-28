@@ -108,14 +108,11 @@ word_index_trg = pd.Series(TRG.vocab.stoi).reset_index()
 word_index_src.columns = ['word', 'index']
 word_index_trg.columns = ['word', 'index']
 
-word_index_src_filtered = word_index_src[~word_index_src.apply(lambda x:(x['word'] != '<unk>') & (x['index']==0), axis=1)]
-word_index_trg_filtered = word_index_trg[~word_index_trg.apply(lambda x:(x['word'] != '<unk>') & (x['index']==0), axis=1)]
-
+word_index_src['index'] = word_index_src.apply(lambda x: -1 if (x['word'] != '<unk>') & (x['index']==0) else x['index'], axis=1)
+word_index_trg['index'] = word_index_trg.apply(lambda x: -1 if (x['word'] != '<unk>') & (x['index']==0) else x['index'], axis=1)
 path = r'C:\Users\Admin\Desktop\DataScience\★★ Python_정리자료(Git)\53_Deep_Learning\DL11_NLP'
-word_index_src.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index_full(DE_SRC).csv', index=False, encoding='utf-8-sig')
-word_index_trg.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index_full(EN_TRG).csv', index=False, encoding='utf-8-sig')
-word_index_src_filtered.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index=False, encoding='utf-8-sig')
-word_index_trg_filtered.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index=False, encoding='utf-8-sig')
+word_index_src.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index=False, encoding='utf-8-sig')
+word_index_trg.to_csv(f'{path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index=False, encoding='utf-8-sig')
 
 # for e, batch in enumerate(test_iterator):
 #     print(e)
