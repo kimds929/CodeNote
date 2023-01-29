@@ -105,7 +105,6 @@ tokenizer_kor.index_word[tokenizer_kor.word_index['<SOS>']] = '<SOS>'
 tokenizer_kor.index_word[tokenizer_kor.word_index['<EOS>']] = '<EOS>'
 # tokenizer_kor.index_word = {v:k for k, v in tokenizer_kor.word_index.items()}
 # list(tokenizer_kor.word_index.items())[-2:]
-# list(tokenizer_kor.index_word.items())[-2:]
 vocab_size_kor = len(tokenizer_kor.word_index) + 1 #어휘수
 
 
@@ -117,15 +116,9 @@ seq_kor = tokenizer_kor.texts_to_sequences(tokened_k)
 # seq_kor_output = []
 seq_kor_inout = []
 for sentence in seq_kor:
-    # seq_kor_input.append([tokenizer_kor.word_index['<SOS>']] + sentence)
-    # seq_kor_output.append(sentence + [tokenizer_kor.word_index['<EOS>']])
     seq_kor_inout.append([tokenizer_kor.word_index['<SOS>']] + sentence + [tokenizer_kor.word_index['<EOS>']])
 
-# padseq_kor_input = tf.keras.preprocessing.sequence.pad_sequences(seq_kor_input, padding='post')
-# padseq_kor_output = tf.keras.preprocessing.sequence.pad_sequences(seq_kor_output, padding='post')
 padseq_kor_inout = tf.keras.preprocessing.sequence.pad_sequences(seq_kor_inout, padding='post')
-# padseq_kor_inout_oh = tf.keras.utils.to_categorical(padseq_kor_inout, vocab_size_kor) #원핫 인코딩
-
 # df_nlp2_k_inv_train = np.stack([['' if s ==0 else tokenizer_kor.index_word[s] for s in sentence] for sentence in padseq_kor_input])
 # df_nlp2_k_inv_eval = np.stack([['' if s ==0 else tokenizer_kor.index_word[s] for s in sentence] for sentence in padseq_kor_output])
 # df_nlp2_k_inv_train[0]
@@ -157,8 +150,86 @@ print(padseq_kor_inout.shape)
 
 
 
+################################################################################################
+max_len = None
+max_len = 5000
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
+word_index_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index_col='index', encoding='utf-8-sig')['word']
+word_index_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index_col='index', encoding='utf-8-sig')['word']
+
+train_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(DE_SRC).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+valid_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(DE_SRC).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+test_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(DE_SRC).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+
+train_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(EN_TRG).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+valid_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(EN_TRG).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+test_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(EN_TRG).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+
+vocab_size_X = len(word_index_X) + 1 #어휘수
+vocab_size_y = len(word_index_y) + 1 #어휘수
+
+train_y_oh = tf.keras.utils.to_categorical(train_y, vocab_size_y)
+valid_y_oh = tf.keras.utils.to_categorical(valid_y, vocab_size_y)
+test_y_oh = tf.keras.utils.to_categorical(test_y, vocab_size_y)
+
+print(train_X.shape, valid_X.shape, test_X.shape)
+print(train_y.shape, valid_y.shape, test_y.shape)
+print(train_y_oh.shape, valid_y_oh.shape, test_y_oh.shape)
+
 
 ################################################################################################
+# spaCy 라이브러리: 문장의 토큰화(tokenization), 태깅(tagging) 등의 전처리 기능을 위한 라이브러리
+# 영어(Engilsh)와 독일어(Deutsch) 전처리 모듈 설치
+import spacy
+import spacy
+
+spacy_en = spacy.load('en_core_web_sm')
+spacy_de = spacy.load('de_core_news_sm')
+
+# 영어(English) 및 독일어(Deutsch) 토큰화 함수 정의 -----------------------------------
+# 독일어(Deutsch) 문장을 토큰화 하는 함수 (순서를 뒤집지 않음)
+def tokenize_de(text):
+    return [token.text for token in spacy_de.tokenizer(text)]
+
+# 영어(English) 문장을 토큰화 하는 함수
+def tokenize_en(text):
+    return [token.text for token in spacy_en.tokenizer(text)]
+
+
+# 필드(field) 라이브러리를 이용해 데이터셋에 대한 구체적인 전처리 내용을 명시합니다. -----------------------------------
+# 번역 목표
+# 소스(SRC): 독일어
+# 목표(TRG): 영어
+from torchtext.data import Field, BucketIterator
+
+SRC = Field(tokenize=tokenize_de, init_token="", eos_token="", lower=True)
+TRG = Field(tokenize=tokenize_en, init_token="", eos_token="", lower=True)
+
+from torchtext.datasets import Multi30k
+train_dataset, valid_dataset, test_dataset = Multi30k.splits(exts=(".de", ".en"), fields=(SRC, TRG))
+
+
+# 필드(field) 객체의 build_vocab 메서드를 이용해 영어와 독어의 단어 사전을 생성합니다.
+# 최소 2번 이상 등장한 단어만을 선택합니다.
+SRC.build_vocab(train_dataset, min_freq=2)
+TRG.build_vocab(train_dataset, min_freq=2)
+
+
+import torch
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+BATCH_SIZE = 128
+# 일반적인 데이터 로더(data loader)의 iterator와 유사하게 사용 가능
+train_iterator, valid_iterator, test_iterator = BucketIterator.splits(
+    (train_dataset, valid_dataset, test_dataset),
+    batch_size=BATCH_SIZE,
+    device=device)
+
+################################################################################################
+
+
+
 path = r'D:\작업방\업무 - 자동차 ★★★\Dataset'
 # Save_to_csv ***
 word_index_X = pd.Series(tokenizer_en.word_index).reset_index()
@@ -200,8 +271,8 @@ vocab_size_y = len(word_index_y) + 1 #어휘수
 X = padseq_X.to_numpy()[:1000]
 y = padseq_y.to_numpy()[:1000]
 
-X_oh = tf.keras.utils.to_categorical(X, vocab_size_X)
-y_oh = tf.keras.utils.to_categorical(y, vocab_size_y)
+# X_oh = tf.keras.utils.to_categorical(X, vocab_size_X)
+# y_oh = tf.keras.utils.to_categorical(y, vocab_size_y)
 ################################################################################################
 
 # (Train_Test_Split) -------------------------------------------
@@ -212,37 +283,11 @@ train_idx, valid_idx = train_test_split(train_valid_idx, test_size=0.2, random_s
 train_X, valid_X, test_X = X[train_idx,:], X[valid_idx,:], X[test_idx,:]
 
 train_y, valid_y, test_y = y[train_idx,:], y[valid_idx,:], y[test_idx,:]
-train_y_oh, valid_y_oh, test_y_oh = y_oh[train_idx,:], y_oh[valid_idx,:], y_oh[test_idx,:]
 
 print(train_X.shape, valid_X.shape, test_X.shape)
 print(train_y.shape, valid_y.shape, test_y.shape)
-print(train_y_oh.shape, valid_y_oh.shape, test_y_oh.shape)
-################################################################################################
 
-url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
-word_index_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index_col='index', encoding='utf-8-sig')['word']
-word_index_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index_col='index', encoding='utf-8-sig')['word']
 
-train_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(DE_SRC).csv', encoding='utf-8-sig').to_numpy()
-valid_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(DE_SRC).csv', encoding='utf-8-sig').to_numpy()
-test_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(DE_SRC).csv', encoding='utf-8-sig').to_numpy()
-
-train_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(EN_TRG).csv', encoding='utf-8-sig').to_numpy()
-valid_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(EN_TRG).csv', encoding='utf-8-sig').to_numpy()
-test_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(EN_TRG).csv', encoding='utf-8-sig').to_numpy()
-
-vocab_size_X = len(word_index_X) + 1 #어휘수
-vocab_size_y = len(word_index_y) + 1 #어휘수
-
-train_y_oh = tf.keras.utils.to_categorical(train_y, vocab_size_y)
-valid_y_oh = tf.keras.utils.to_categorical(valid_X, vocab_size_y)
-test_y_oh = tf.keras.utils.to_categorical(test_y, vocab_size_y)
-
-print(train_X.shape, valid_X.shape, test_X.shape)
-print(train_y.shape, valid_y.shape, test_y.shape)
-print(train_y_oh.shape, valid_y_oh.shape, test_y_oh.shape)
-
-################################################################################################
 
 
 # torch dataset ----------
@@ -254,24 +299,17 @@ train_y_torch = torch.tensor(train_y)
 valid_y_torch = torch.tensor(valid_y)
 test_y_torch = torch.tensor(test_y)
 
-train_y_oh_torch = torch.tensor(train_y_oh)
-valid_y_oh_torch = torch.tensor(valid_y_oh)
-test_y_oh_torch = torch.tensor(test_y_oh)
-
 print(train_X_torch.shape, valid_X_torch.shape, test_X_torch.shape)
 print(train_y_torch.shape, valid_y_torch.shape, test_y_torch.shape)
-print(train_y_oh_torch.shape, valid_y_oh.shape, test_y_oh_torch.shape)
 
 
-train_dataset = torch.utils.data.TensorDataset(train_X_torch, train_y_torch, train_y_oh_torch)
-valid_dataset = torch.utils.data.TensorDataset(valid_X_torch, valid_y_torch, valid_y_oh_torch)
-test_dataset = torch.utils.data.TensorDataset(test_X_torch, test_y_torch, test_y_oh_torch)
+train_dataset = torch.utils.data.TensorDataset(train_X_torch, train_y_torch)
+valid_dataset = torch.utils.data.TensorDataset(valid_X_torch, valid_y_torch)
+test_dataset = torch.utils.data.TensorDataset(test_X_torch, test_y_torch)
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
 valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=64, shuffle=True)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=True)
-
-
 
 
 # Sample -----------------------------
@@ -280,12 +318,10 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=T
 # y_sample_oh = test_y_oh[:3]
 X_sample = torch.tensor(train_X[:3])
 y_sample = torch.tensor(test_y[:3])
-y_oh_sample = torch.tensor(test_y_oh[:3])
 
-print(X_sample.shape, y_sample.shape, y_oh_sample.shape)
+print(X_sample.shape, y_sample.shape)
 X_sample
 y_sample
-y_oh_sample
 # ------------------------------------
 
 
@@ -302,7 +338,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 print(device)
-
+# torch.cuda.empty_cache()
 
 # Seq2Seq -----------------------------------------------------------------------------------------------------------------------------
 class Seq2Seq_Encoder(torch.nn.Module):
@@ -337,7 +373,7 @@ class Seq2Seq_Decoder(torch.nn.Module):
         self.dec_fc = self.fc(self.dec_output)   # fc_output (batch_seq, y_word, dec_fc)
         return self.dec_fc, self.dec_hidden
 
-class Seq2Seq(torch.nn.Module):
+class Seq2Seq_Model(torch.nn.Module):
     def __init__(self, vocab_size_X, vocab_size_y):
         super().__init__()
         self.encoder = Seq2Seq_Encoder(vocab_size_X)
@@ -488,6 +524,7 @@ class AttSeq2Seq(torch.nn.Module):
             with torch.no_grad():
                 self.y_shape = y.shape
                 self.init = np.array(y[0,0].to('cpu').detach()) # 학습시 초기값 저장
+                
 
         # (encoding) --------------------------------------------------------------------------------------------
         self.enc_output, self.context_vector = self.encoder(X)
@@ -500,6 +537,8 @@ class AttSeq2Seq(torch.nn.Module):
             y_before = torch.tensor(np.ones((X.shape[0],1))*self.init, dtype=torch.int64).to(X.device)  # 저장된 초기값을 예측시 활용
 
         self.result, hidden_input = self.decoder(y_before, self.enc_output, self.context_vector)     # result (batch_seq, 1, dec_fc==vocab_size_y)
+        with torch.no_grad():
+            self.attention_scores = self.decoder.att_score
 
         for i in range(1, self.y_shape[1]):
             pred_output, dec_hidden = self.decoder(y_before, self.enc_output, hidden_input) # (batch_seq, 1, dec_fc==vocab_size_y)
@@ -511,6 +550,9 @@ class AttSeq2Seq(torch.nn.Module):
                 y_before = y[:,i][:,None] # y_before (batch_seq, 1)
             else:
                 y_before = torch.argmax(pred_output, axis=2)  # y_before (batch_seq, 1)
+            
+            with torch.no_grad():
+                self.attention_scores = torch.cat([self.attention_scores, self.decoder.att_score],axis=0)
         # ------------------------------------------------------------------------------------------------------
         return self.result      # (y_seq, y_word, dec_fc==vocab_size_y)
 
@@ -537,7 +579,7 @@ class AttSeq2Seq(torch.nn.Module):
 
 
 # training prepare * -------------------------------------------------------------------------------------------------------
-# model = Seq2Seq(vocab_size_X, vocab_size_y).to(device)
+# model = Seq2Seq_Model(vocab_size_X, vocab_size_y).to(device)
 model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
 
 
@@ -554,46 +596,106 @@ model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
 # trg_pad_idx = TRG.vocab.stoi[TRG.pad_token] ## pad에 해당하는 index는 무시합니다.
 loss_function = torch.nn.CrossEntropyLoss()     # ignore_index=trg_pad_idx
 optimizer = torch.optim.Adam(model.parameters())
-epochs = 30
+epochs = 100
 
+# import sys
+# sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
+# from DS_DeepLearning import EarlyStopping
+es = EarlyStopping()
+
+def epoch_time(start_time, end_time):
+    elapsed_time = end_time - start_time
+    elapsed_mins = int(elapsed_time / 60)
+    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
+    return elapsed_mins, elapsed_secs
 
 # training * -------------------------------------------------------------------------------------------------------
 train_losses = []
 valid_losses = []
 for e in range(epochs):
+    start_time = time.time() # 시작 시간 기록
     # train_set learning*
     model.train()
     train_epoch_loss = []
-    for batch_X, batch_y, batch_y_oh in train_loader:
+    for batch_X, batch_y in train_loader:
         optimizer.zero_grad()                   # wegiht initialize
         pred = model(batch_X.to(device), batch_y.to(device), teacher_forcing=1)                   # predict
-        loss = loss_function(pred, batch_y_oh.to(device))     # loss
+
+        pred_eval = pred[:,1:,:].reshape(-1, vocab_size_y)
+        real_eval = batch_y[:,1:].reshape(-1).to(device)
+        loss = loss_function(pred_eval, real_eval)     # loss
         loss.backward()                         # backward
+        
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)    # 기울기(gradient) clipping 진행
+        # (gradient clipping) https://sanghyu.tistory.com/87
         optimizer.step()                        # update_weight
 
         with torch.no_grad():
             train_batch_loss = loss.to('cpu').detach().numpy()
             train_epoch_loss.append( train_batch_loss )
-    train_losses.append(np.mean(train_epoch_loss))
+    
 
     # valid_set evaluation *
     valid_epoch_loss = []
     with torch.no_grad():
         model.eval() 
-        for batch_X, batch_y, batch_y_oh in valid_loader:
+        for batch_X, batch_y in valid_loader:
             pred = model(batch_X.to(device), batch_y.to(device), teacher_forcing=1)                   # predict
-            loss = loss_function(pred, batch_y_oh.to(device))     # loss
+
+            pred_eval = pred[:,1:,:].reshape(-1, vocab_size_y)
+            real_eval = batch_y[:,1:].reshape(-1).to(device)
+            loss = loss_function(pred_eval, real_eval)     # loss
             valid_batch_loss = loss.to('cpu').detach().numpy()
             valid_epoch_loss.append( valid_batch_loss )
-    valid_losses.append(np.mean(valid_epoch_loss))
-    print(f"{e+1} epochs) train_loss: {train_losses[-1]},  valid_loss: {valid_losses[-1]}", end='\r')
+
+    with torch.no_grad():
+        train_loss = np.mean(train_epoch_loss)
+        valid_loss = np.mean(valid_epoch_loss)
+        train_losses.append(train_loss)
+        valid_losses.append(valid_loss)
+
+        end_time = time.time() # 종료 시간 기록
+        epoch_mins, epoch_secs = epoch_time(start_time, end_time)
+        # print(f'Epoch: {e + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
+        # print(f'\tTrain Loss: {train_loss:.3f} | Train PPL: {np.exp(train_loss):.3f}')
+        # print(f'\tValidation Loss: {valid_loss:.3f} | Validation PPL: {np.exp(valid_loss):.3f}')
+        early_stop = es.early_stop(score=valid_loss, reference_score=train_loss, save=model.state_dict(), verbose=2)
+
+        if early_stop == 'break':
+            break
+
+
+# early_stopping plot
+es.plot
+
+# optimum model (load weights)
+model.load_state_dict(es.optimum[2])
 
 
 
 # predict * -------------------------------------------------------------------------------------------------------
-model.predict(X_sample.to(device))
-np.stack([[word_index_X[word] for word in sentence] for sentence in X_sample.numpy()])
-np.stack([[word_index_y[word] for word in sentence] for sentence in model.predict(X_sample.to(device)).to('cpu').numpy()])
+idx = 15
+sentence_input = train_X[[idx],:]
+sentence_output = train_y[[idx],:]
+model.predict(sentence.to(device))
+
+sentence_en = np.stack([[word_index_X[word] for word in sentence] for sentence in sentence_input])[0]
+sentence_kr_real = np.stack([[word_index_y[word] for word in sentence] for sentence in sentence_output])[0]
+sentence_kr_pred = np.stack([[word_index_y[word] for word in sentence] for sentence in model.predict(torch.tensor(sentence_input).to(device)).to('cpu').numpy()])[0]
+
+sentence_en
+sentence_kr_real
+sentence_kr_pred
+
+
+# attention map
+import seaborn as sns
+sns.heatmap(model.attention_scores.to('cpu').numpy(), cmap='jet')
+plt.xticks(np.arange(sentence_en.shape[0]), sentence_en, rotation=90)
+plt.yticks(np.arange(sentence_kr_pred.shape[0]), sentence_kr_pred, rotation=0)
+
+
+
 
 
 # loss graph * -------------------------------------------------------------------------------------------------------
@@ -603,6 +705,7 @@ plt.plot(train_losses, label='train_loss')
 plt.plot(valid_losses, label='valid_loss')
 plt.xlabel('epochs')
 plt.ylabel('cross_entropy_loss')
+plt.legend()
 plt.show()
 
 
@@ -675,6 +778,17 @@ np.matmul(A0, B6) # (4,3,2) Error
 
 
 # ---------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
 
 
 
