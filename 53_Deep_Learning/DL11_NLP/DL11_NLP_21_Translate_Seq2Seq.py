@@ -180,6 +180,20 @@ padseq_y.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', index=False, 
 
 
 # Read_from_csv *** ---------------------------------------------------------------------------------
+import os
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+import torch
+import tensorflow as tf
+
+import datetime
+
+
+# max_len = None
+max_len = 1000
 url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
 
 word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
@@ -187,10 +201,10 @@ word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(KR).csv', index_
 padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
 padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 
-word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
-word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
-padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
-padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
+# word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
+# word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
+# padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
+# padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 
 # word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
 # word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
@@ -203,17 +217,19 @@ word_index_y[0] = ''
 
 vocab_size_X = len(word_index_X) + 1 #어휘수
 vocab_size_y = len(word_index_y) + 1 #어휘수
-X = padseq_X.to_numpy()[:1000]
-y = padseq_y.to_numpy()[:1000]
+X = padseq_X.to_numpy()[:max_len]
+y = padseq_y.to_numpy()[:max_len]
 
+print(f"vocab_size: {vocab_size_X}, {vocab_size_y}")
+print(f"data_size: {X.shape}, {y.shape}")
 # X_oh = tf.keras.utils.to_categorical(X, vocab_size_X)
 # y_oh = tf.keras.utils.to_categorical(y, vocab_size_y)
 ################################################################################################
 
 # (Train_Test_Split) -------------------------------------------
 from sklearn.model_selection import train_test_split
-train_valid_idx, test_idx = train_test_split(range(len(X)), test_size=0.2, random_state=0)
-train_idx, valid_idx = train_test_split(train_valid_idx, test_size=0.2, random_state=0)
+train_valid_idx, test_idx = train_test_split(range(len(X)), test_size=0.05, random_state=0)
+train_idx, valid_idx = train_test_split(train_valid_idx, test_size=0.1, random_state=0)
 
 train_X, valid_X, test_X = X[train_idx,:], X[valid_idx,:], X[test_idx,:]
 
@@ -241,9 +257,10 @@ train_dataset = torch.utils.data.TensorDataset(train_X_torch, train_y_torch)
 valid_dataset = torch.utils.data.TensorDataset(valid_X_torch, valid_y_torch)
 test_dataset = torch.utils.data.TensorDataset(test_X_torch, test_y_torch)
 
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
-valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=64, shuffle=True)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=True)
+batch_size=64
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
 
 # Sample -----------------------------
@@ -265,8 +282,8 @@ y_sample
 
 
 ################################################################################################
-max_len = None
-# max_len = 5000
+# max_len = None
+max_len = 1000
 url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
 word_index_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index_col='index', encoding='utf-8-sig')['word']
 word_index_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index_col='index', encoding='utf-8-sig')['word']
@@ -570,7 +587,8 @@ class AttSeq2Seq(torch.nn.Module):
             y_before = torch.tensor(np.ones((X.shape[0],1))*self.init, dtype=torch.int64).to(X.device)  # 저장된 초기값을 예측시 활용
 
         # self.result, hidden_input = self.decoder(y_before, self.enc_output, self.context_vector)     # result (batch_seq, 1, dec_fc==vocab_size_y)
-        self.result = torch.zeros(X.shape[0], self.y_shape[1], self.vocab_size_y).to(X.device)
+        self.result = torch.zeros(X.shape[0], 1, self.vocab_size_y).to(X.device)
+        # self.result = torch.zeros(X.shape[0], self.y_shape[1], self.vocab_size_y).to(X.device)
         hidden_input = self.context_vector
 
         with torch.no_grad():
@@ -581,8 +599,8 @@ class AttSeq2Seq(torch.nn.Module):
             pred_output, dec_hidden = self.decoder(y_before, self.enc_output, hidden_input) # (batch_seq, 1, dec_fc==vocab_size_y)
             hidden_input = dec_hidden
 
-            # self.result = torch.cat([self.result, pred_output],axis=1)  # (batch_seq, i->y_word, dec_fc==vocab_size_y)
-            self.result[:,[i],:] = pred_output
+            self.result = torch.cat([self.result, pred_output],axis=1)  # (batch_seq, i->y_word, dec_fc==vocab_size_y)
+            # self.result[:,[i],:] = pred_output
 
             if teacher_forcing >= np.random.rand():     # teacher_forcing
                 y_before = y[:,i][:,None] # y_before (batch_seq, 1)
@@ -606,22 +624,16 @@ class AttSeq2Seq(torch.nn.Module):
 
 
 
-# enc = AttSeq2Seq_Encoder(vocab_size_X)
-att = AttSeq2Seq_Attention()
-# dec = AttSeq2Seq_Decoder(vocab_size_y, att)
-
-# output, hidden = enc(X_sample)
-# y_result, dec_hidden = dec(y_sample[:,:1], output, hidden)
-# y_result.shape, dec_hidden.shape
-
-# y_result2, dec_hidden2 = dec(y_sample[:,:2], output, dec_hidden)
-# y_result2.shape, dec_hidden2.shape
+import sys
+sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
+from DS_DeepLearning import EarlyStopping
+import time
 
 
 # training prepare * -------------------------------------------------------------------------------------------------------
 # model = Seq2Seq_Model(vocab_size_X, vocab_size_y).to(device)
 model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
-
+# model(X_sample.to(device), y_sample.to(device)).shape
 
 # model weights parameter initialize (가중치 초기화) ***
 # def init_weights(model):
@@ -632,15 +644,11 @@ model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
 #             nn.init.constant_(param.data, 0)
 # model.apply(init_weights)
 
-
 # trg_pad_idx = TRG.vocab.stoi[TRG.pad_token] ## pad에 해당하는 index는 무시합니다.
-loss_function = torch.nn.CrossEntropyLoss()     # ignore_index=trg_pad_idx
+loss_function = torch.nn.CrossEntropyLoss(ignore_index=0)     # ignore_index=trg_pad_idx
 optimizer = torch.optim.Adam(model.parameters())
-epochs = 100
+epochs = 10
 
-# import sys
-# sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
-# from DS_DeepLearning import EarlyStopping
 es = EarlyStopping()
 
 def epoch_time(start_time, end_time):
