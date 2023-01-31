@@ -24,18 +24,26 @@ import datetime
 # korean = korean_df['korean'].to_numpy()
 # df = pd.concat([english_df, korean_df], axis=1).drop('etc',axis=1)
 
-# df.to_csv(f"{path}/NLP_Translate_ENG_to_KOR.csv", index=False, encoding='utf-8-sig')
-
 
 path = r'C:\Users\Admin\Desktop\DataBase'
+
+# df01 = pd.read_csv(f"{path}/NLP_EN_to_KR1_Data.csv", encoding='utf-8-sig')
+# df02 = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
+# df = pd.concat([df02, df01],axis=0).reset_index(drop=True)
+
+
 df = pd.read_csv(f"{path}/NLP_EN_to_KR1_Data.csv", encoding='utf-8-sig')
-# df = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
+df = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
+
 df.head(6)
+print(df.shape)
+
+# df.to_csv(f"{path}/NLP_EN_to_KR_Data.csv", index=False, encoding='utf-8-sig')
+
 
 
 df1 = df.copy()
 # df1 = df.iloc[:1000]
-
 
 # (Preprocessing) -------------------------------------------
 # english *
@@ -56,6 +64,7 @@ df1_kor = df1_kor.apply(lambda x: np.nan if x =='' else x)
 df2 = pd.concat([df1_en, df1_kor], axis=1).dropna()
 print(df2.shape)
 
+
 # (Tokenize) -----------------------------------------------------------------------
 # pad_sequences *
 # https://wikidocs.net/83544
@@ -67,178 +76,97 @@ print(df2.shape)
 #   . truncated : (default) 'pre' / 'post'      # maxlen때문에 데이터가 잘릴때 어느부분을 자를것인지?
 # ----------------------------------------------------------------------------------
 
-# english *
+add_tokens = pd.DataFrame([['<sos>', '<sos>'], ['<eos>', '<eos>']], columns=df2.columns)
+df2_add_tokens = pd.concat([add_tokens, df2], axis=0)
+
+
+# (english) *
 df2_en = df2['english']
-tokenizer_en = tf.keras.preprocessing.text.Tokenizer() 
-tokenizer_en.fit_on_texts(df2_en)
-vocab_size_en = len(tokenizer_en.word_index) + 1 #어휘수
-# tokenizer_en.word_index
+tokenizer_en = tf.keras.preprocessing.text.Tokenizer(filters='!"#$%&()*+,-./:;=?@[\\]^_`{|}~\t\n') 
+tokenizer_en.fit_on_texts(df2_add_tokens['english'])
+
+tokenizer_en.word_index
 # tokenizer_en.word_counts
+vocab_size_en = len(tokenizer_en.word_index) + 1 #어휘수
+print(f"vocab_size_en : {vocab_size_en}")
+
 
 # (text_to_sequence / pad_sequence) *
-df2_en
 seq_en = tokenizer_en.texts_to_sequences(df2_en)
-padseq_en = tf.keras.preprocessing.sequence.pad_sequences(seq_en, padding='post')
-print(padseq_en.shape)
-# df_nlp2_e_inv = np.stack([['' if s ==0 else tokenizer_en.index_word[s] for s in sentence] for sentence in padseq_en])
 
-# korean *
+# SOS / EOS
+seq_en_inout = []
+for sentence in seq_en:
+    seq_en_inout.append([tokenizer_en.word_index['<sos>']] + sentence + [tokenizer_en.word_index['<eos>']])
+padseq_en = tf.keras.preprocessing.sequence.pad_sequences(seq_en_inout, padding='post')
+
+padseq_en[:3,:]
+print(padseq_en.shape)
+
+
+
+# (korean) *
+# from konlpy.tag import Mecab
+# mecab = Mecab()
+# !git clone https://github.com/SOMJANG/Mecab-ko-for-Google-Colab.git
+# %cd Mecab-ko-for-Google-Colab
+# !bash install_mecab-ko_on_colab190912.sh
 from konlpy.tag import Okt
 okt = Okt()
 
 df2_kor = df2['korean']
-tokened_k = []
+
+tokened_kr = []
 for sentence in df2_kor:
-    sen_token = okt.morphs(sentence, stem=True)
-    tokened_k.append(sen_token)
+    sen_token = okt.morphs(sentence, stem=False)
+    # sen_token = okt.morphs(sentence, stem=True)
+    tokened_kr.append(sen_token)
 
 # okt.morphs(df2_kor[5], norm=False, stem=False)  
 #   . norm: 문장을 정규화
 #   . stem: 은 각 단어에서 어간을 추출하는 기능 (True: 동사의 원형을 찾아줌)
-tokenizer_kor = tf.keras.preprocessing.text.Tokenizer()
-tokenizer_kor.fit_on_texts(tokened_k)
+tokenizer_kr = tf.keras.preprocessing.text.Tokenizer()
+tokenizer_kr.fit_on_texts([['<sos>'],['<eos>']] + tokened_kr)
 
-len_k_tokens = len(tokenizer_kor.word_index)
-tokenizer_kor.word_index['<SOS>'] =  len_k_tokens + 1
-tokenizer_kor.word_index['<EOS>'] = len_k_tokens + 2
-tokenizer_kor.index_word[tokenizer_kor.word_index['<SOS>']] = '<SOS>'
-tokenizer_kor.index_word[tokenizer_kor.word_index['<EOS>']] = '<EOS>'
+tokenizer_kr.word_index
 # tokenizer_kor.index_word = {v:k for k, v in tokenizer_kor.word_index.items()}
-# list(tokenizer_kor.word_index.items())[-2:]
-vocab_size_kor = len(tokenizer_kor.word_index) + 1 #어휘수
+vocab_size_kr = len(tokenizer_kor.word_index) + 1 #어휘수
+print(f"vocab_size_kr : {vocab_size_kr}")
 
 
 # (text_to_sequence / pad_sequence) *
-seq_kor = tokenizer_kor.texts_to_sequences(tokened_k)
+seq_kr = tokenizer_kor.texts_to_sequences(tokened_kr)
 
 # SOS / EOS
-# seq_kor_input = []
-# seq_kor_output = []
-seq_kor_inout = []
-for sentence in seq_kor:
-    seq_kor_inout.append([tokenizer_kor.word_index['<SOS>']] + sentence + [tokenizer_kor.word_index['<EOS>']])
+seq_kr_inout = []
+for sentence in seq_kr:
+    seq_kr_inout.append([tokenizer_kor.word_index['<sos>']] + sentence + [tokenizer_kor.word_index['<eos>']])
+padseq_kr = tf.keras.preprocessing.sequence.pad_sequences(seq_kr_inout, padding='post')
 
-padseq_kor_inout = tf.keras.preprocessing.sequence.pad_sequences(seq_kor_inout, padding='post')
-# df_nlp2_k_inv_train = np.stack([['' if s ==0 else tokenizer_kor.index_word[s] for s in sentence] for sentence in padseq_kor_input])
-# df_nlp2_k_inv_eval = np.stack([['' if s ==0 else tokenizer_kor.index_word[s] for s in sentence] for sentence in padseq_kor_output])
-# df_nlp2_k_inv_train[0]
-# df_nlp2_k_inv_eval[0]
-
-# padseq_kor_input[0]
-# padseq_kor_output[0]
-print(padseq_kor_inout.shape)
-# print(padseq_kor_input.shape, padseq_kor_output.shape, padseq_kor_inout.shape)
+padseq_kr[:3,:]
+print(padseq_kr.shape)
 
 
-
-# class TokenizeTransformer():
-#     def __init__(x, tokenizer, to_lang='kr'):
-#         self.x = x
-#         self.tokenizer = tokenizer
-        
-#     def tokenizer_en(x, tokenizer):
-#         seq = tokenize.texts_to_sequences(x)
-#         pad_seq = tf.keras.preprocessing.sequence.pad_sequences(seq, padding='post')
-    
-#     def tokenizer_kr(x, tokenizer):
-#         seq = tokenize.texts_to_sequences(x)
-#         pad_seq = tf.keras.preprocessing.sequence.pad_sequences(seq, padding='post')
+print(padseq_en.shape, padseq_kr.shape)
 
 
 
 
-
-
-
-################################################################################################
-max_len = None
-max_len = 5000
-url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
-word_index_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index_col='index', encoding='utf-8-sig')['word']
-word_index_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index_col='index', encoding='utf-8-sig')['word']
-
-train_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(DE_SRC).csv', encoding='utf-8-sig').to_numpy()[:max_len]
-valid_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(DE_SRC).csv', encoding='utf-8-sig').to_numpy()[:max_len]
-test_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(DE_SRC).csv', encoding='utf-8-sig').to_numpy()[:max_len]
-
-train_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(EN_TRG).csv', encoding='utf-8-sig').to_numpy()[:max_len]
-valid_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(EN_TRG).csv', encoding='utf-8-sig').to_numpy()[:max_len]
-test_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(EN_TRG).csv', encoding='utf-8-sig').to_numpy()[:max_len]
-
-vocab_size_X = len(word_index_X) + 1 #어휘수
-vocab_size_y = len(word_index_y) + 1 #어휘수
-
-train_y_oh = tf.keras.utils.to_categorical(train_y, vocab_size_y)
-valid_y_oh = tf.keras.utils.to_categorical(valid_y, vocab_size_y)
-test_y_oh = tf.keras.utils.to_categorical(test_y, vocab_size_y)
-
-print(train_X.shape, valid_X.shape, test_X.shape)
-print(train_y.shape, valid_y.shape, test_y.shape)
-print(train_y_oh.shape, valid_y_oh.shape, test_y_oh.shape)
-
-
-################################################################################################
-# spaCy 라이브러리: 문장의 토큰화(tokenization), 태깅(tagging) 등의 전처리 기능을 위한 라이브러리
-# 영어(Engilsh)와 독일어(Deutsch) 전처리 모듈 설치
-import spacy
-import spacy
-
-spacy_en = spacy.load('en_core_web_sm')
-spacy_de = spacy.load('de_core_news_sm')
-
-# 영어(English) 및 독일어(Deutsch) 토큰화 함수 정의 -----------------------------------
-# 독일어(Deutsch) 문장을 토큰화 하는 함수 (순서를 뒤집지 않음)
-def tokenize_de(text):
-    return [token.text for token in spacy_de.tokenizer(text)]
-
-# 영어(English) 문장을 토큰화 하는 함수
-def tokenize_en(text):
-    return [token.text for token in spacy_en.tokenizer(text)]
-
-
-# 필드(field) 라이브러리를 이용해 데이터셋에 대한 구체적인 전처리 내용을 명시합니다. -----------------------------------
-# 번역 목표
-# 소스(SRC): 독일어
-# 목표(TRG): 영어
-from torchtext.data import Field, BucketIterator
-
-SRC = Field(tokenize=tokenize_de, init_token="", eos_token="", lower=True)
-TRG = Field(tokenize=tokenize_en, init_token="", eos_token="", lower=True)
-
-from torchtext.datasets import Multi30k
-train_dataset, valid_dataset, test_dataset = Multi30k.splits(exts=(".de", ".en"), fields=(SRC, TRG))
-
-
-# 필드(field) 객체의 build_vocab 메서드를 이용해 영어와 독어의 단어 사전을 생성합니다.
-# 최소 2번 이상 등장한 단어만을 선택합니다.
-SRC.build_vocab(train_dataset, min_freq=2)
-TRG.build_vocab(train_dataset, min_freq=2)
-
-
-import torch
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-BATCH_SIZE = 128
-# 일반적인 데이터 로더(data loader)의 iterator와 유사하게 사용 가능
-train_iterator, valid_iterator, test_iterator = BucketIterator.splits(
-    (train_dataset, valid_dataset, test_dataset),
-    batch_size=BATCH_SIZE,
-    device=device)
-
-################################################################################################
-
-
-
-path = r'D:\작업방\업무 - 자동차 ★★★\Dataset'
+path = r'C:\Users\Admin\Desktop\DataBase'
 # Save_to_csv ***
 word_index_X = pd.Series(tokenizer_en.word_index).reset_index()
-word_index_y = pd.Series(tokenizer_kor.word_index).reset_index()
+word_index_y = pd.Series(tokenizer_kr.word_index).reset_index()
 word_index_X.columns = ['word', 'index']
 word_index_y.columns = ['word', 'index']
 
 padseq_X = pd.DataFrame(padseq_en.copy())
-padseq_y = pd.DataFrame(padseq_kor_inout.copy())
+padseq_y = pd.DataFrame(padseq_kr.copy())
+
+
+# word_index_X.to_csv(f'{path}/NLP_EN_to_KR_word_index(EN).csv', index=False, encoding='utf-8-sig')
+# word_index_y.to_csv(f'{path}/NLP_EN_to_KR_word_index(KR).csv', index=False, encoding='utf-8-sig')
+# padseq_X.to_csv(f'{path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
+# padseq_y.to_csv(f'{path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
 
 # word_index_X.to_csv(f'{path}/NLP_EN_to_KR1_word_index(EN).csv', index=False, encoding='utf-8-sig')
 # word_index_y.to_csv(f'{path}/NLP_EN_to_KR1_word_index(KR).csv', index=False, encoding='utf-8-sig')
@@ -250,8 +178,15 @@ word_index_y.to_csv(f'{path}/NLP_EN_to_KR2_word_index(KR).csv', index=False, enc
 padseq_X.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
 padseq_y.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
 
+
 # Read_from_csv *** ---------------------------------------------------------------------------------
 url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
+
+word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
+word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
+padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
+padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
+
 word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
 word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
 padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
@@ -289,7 +224,6 @@ print(train_y.shape, valid_y.shape, test_y.shape)
 
 
 
-
 # torch dataset ----------
 train_X_torch = torch.tensor(train_X)
 valid_X_torch = torch.tensor(valid_X)
@@ -323,6 +257,101 @@ print(X_sample.shape, y_sample.shape)
 X_sample
 y_sample
 # ------------------------------------
+
+
+
+
+
+
+
+################################################################################################
+max_len = None
+# max_len = 5000
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
+word_index_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(DE_SRC).csv', index_col='index', encoding='utf-8-sig')['word']
+word_index_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_word_index(EN_TRG).csv', index_col='index', encoding='utf-8-sig')['word']
+
+train_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(DE_SRC).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+valid_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(DE_SRC).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+test_X = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(DE_SRC).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+
+train_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_train(EN_TRG).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+valid_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_valid(EN_TRG).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+test_y = pd.read_csv(f'{url_path}/NLP_Multi30k_EN_to_DE_pad_seq_sentences_test(EN_TRG).csv', encoding='utf-8-sig').to_numpy()[:max_len]
+
+vocab_size_X = len(word_index_X) + 1 #어휘수
+vocab_size_y = len(word_index_y) + 1 #어휘수
+
+train_y_oh = tf.keras.utils.to_categorical(train_y, vocab_size_y)
+valid_y_oh = tf.keras.utils.to_categorical(valid_y, vocab_size_y)
+test_y_oh = tf.keras.utils.to_categorical(test_y, vocab_size_y)
+
+print(train_X.shape, valid_X.shape, test_X.shape)
+print(train_y.shape, valid_y.shape, test_y.shape)
+print(train_y_oh.shape, valid_y_oh.shape, test_y_oh.shape)
+
+
+################################################################################################
+# spaCy 라이브러리: 문장의 토큰화(tokenization), 태깅(tagging) 등의 전처리 기능을 위한 라이브러리
+# 영어(Engilsh)와 독일어(Deutsch) 전처리 모듈 설치
+import spacy
+
+spacy_en = spacy.load('en_core_web_sm')
+spacy_de = spacy.load('de_core_news_sm')
+
+# 영어(English) 및 독일어(Deutsch) 토큰화 함수 정의 -----------------------------------
+# 독일어(Deutsch) 문장을 토큰화 하는 함수 (순서를 뒤집지 않음)
+def tokenize_de(text):
+    return [token.text for token in spacy_de.tokenizer(text)]
+
+# 영어(English) 문장을 토큰화 하는 함수
+def tokenize_en(text):
+    return [token.text for token in spacy_en.tokenizer(text)]
+
+
+# 필드(field) 라이브러리를 이용해 데이터셋에 대한 구체적인 전처리 내용을 명시합니다. -----------------------------------
+# 번역 목표
+# 소스(SRC): 독일어
+# 목표(TRG): 영어
+from torchtext.data import Field, BucketIterator
+
+SRC = Field(tokenize=tokenize_de, init_token="", eos_token="", lower=True, batch_first=True)
+TRG = Field(tokenize=tokenize_en, init_token="", eos_token="", lower=True, batch_first=True)
+
+from torchtext.datasets import Multi30k
+train_dataset, valid_dataset, test_dataset = Multi30k.splits(exts=(".de", ".en"), fields=(SRC, TRG))
+
+
+# 필드(field) 객체의 build_vocab 메서드를 이용해 영어와 독어의 단어 사전을 생성합니다.
+# 최소 2번 이상 등장한 단어만을 선택합니다.
+SRC.build_vocab(train_dataset, min_freq=2)
+TRG.build_vocab(train_dataset, min_freq=2)
+
+
+import torch
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+BATCH_SIZE = 128
+# 일반적인 데이터 로더(data loader)의 iterator와 유사하게 사용 가능
+train_iterator, valid_iterator, test_iterator = BucketIterator.splits(
+    (train_dataset, valid_dataset, test_dataset),
+    batch_size=BATCH_SIZE,
+    device=device)
+
+index_dict_src
+index_dict_src = {v: k for k, v in SRC.vocab.stoi.items()}
+index_dict_trg = {v: k for k, v in TRG.vocab.stoi.items()}
+for batch in train_iterator:
+    break
+np.stack([[index_dict_src[word] for word in seq] for seq in batch.src[:5,:].to('cpu').numpy()])
+np.stack([[index_dict_src[word] for word in seq] for seq in batch.trg[:5,:].to('cpu').numpy()])
+################################################################################################
+
+
+
+
+
 
 
 ##########모델 생성
@@ -513,6 +542,10 @@ class AttSeq2Seq_Decoder(torch.nn.Module):
 class AttSeq2Seq(torch.nn.Module):
     def __init__(self, vocab_size_X, vocab_size_y):
         super().__init__()
+        self.vocab_size_X = vocab_size_X
+        self.vocab_size_y = vocab_size_y
+        # self.device = device
+
         self.encoder = AttSeq2Seq_Encoder(vocab_size_X)
         self.attention = AttSeq2Seq_Attention()
         self.decoder = AttSeq2Seq_Decoder(vocab_size_y, self.attention)
@@ -536,15 +569,20 @@ class AttSeq2Seq(torch.nn.Module):
         else:
             y_before = torch.tensor(np.ones((X.shape[0],1))*self.init, dtype=torch.int64).to(X.device)  # 저장된 초기값을 예측시 활용
 
-        self.result, hidden_input = self.decoder(y_before, self.enc_output, self.context_vector)     # result (batch_seq, 1, dec_fc==vocab_size_y)
+        # self.result, hidden_input = self.decoder(y_before, self.enc_output, self.context_vector)     # result (batch_seq, 1, dec_fc==vocab_size_y)
+        self.result = torch.zeros(X.shape[0], self.y_shape[1], self.vocab_size_y).to(X.device)
+        hidden_input = self.context_vector
+
         with torch.no_grad():
-            self.attention_scores = self.decoder.att_score
+            # self.attention_scores = self.decoder.att_score
+            self.attention_scores = torch.zeros(X.shape[0], X.shape[1]).to(X.device)
 
         for i in range(1, self.y_shape[1]):
             pred_output, dec_hidden = self.decoder(y_before, self.enc_output, hidden_input) # (batch_seq, 1, dec_fc==vocab_size_y)
             hidden_input = dec_hidden
 
-            self.result = torch.cat([self.result, pred_output],axis=1)  # (batch_seq, i->y_word, dec_fc==vocab_size_y)
+            # self.result = torch.cat([self.result, pred_output],axis=1)  # (batch_seq, i->y_word, dec_fc==vocab_size_y)
+            self.result[:,[i],:] = pred_output
 
             if teacher_forcing >= np.random.rand():     # teacher_forcing
                 y_before = y[:,i][:,None] # y_before (batch_seq, 1)
@@ -566,8 +604,10 @@ class AttSeq2Seq(torch.nn.Module):
 # ------------------------------------------------------------------------------------------------------------------------------------
 
 
+
+
 # enc = AttSeq2Seq_Encoder(vocab_size_X)
-# att = AttSeq2Seq_Attention()
+att = AttSeq2Seq_Attention()
 # dec = AttSeq2Seq_Decoder(vocab_size_y, att)
 
 # output, hidden = enc(X_sample)
