@@ -38,12 +38,192 @@ df = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
 df.head(6)
 print(df.shape)
 
-# df.to_csv(f"{path}/NLP_EN_to_KR_Data.csv", index=False, encoding='utf-8-sig')
+
+#################################################################################################################################
+class NLP_PreProcessor():
+    def __init__(self, texts=None, num_words=None, filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n', lower=True, split=' ', char_level=False, oov_token=None, document_count=0, **kwargs):
+        self.texts = texts
+        self.tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=num_words, filters=filters, lower=lower,
+                             split=split, char_level=char_level, oov_token=oov_token, document_count=document_count, **kwargs)
+    
+    def input_texts(self, texts):
+        self.texts = texts
+    
+    def replace(self, texts=None, re="[^ㄱ-ㅎㅏ-ㅣ가-힣A-Za-z ]", replace="", inplace=True, verbose=1):
+        texts = texts if texts is not None else self.texts
+
+        texts_result = []
+        for sentence in texts:
+            texts_result.append(sentence.replace(re, replace))
+
+        self.texts_replace = texts_result.copy()
+        if verbose > 0:
+            print("self.texts_replace")
+        if inplace:
+            self.texts = texts_result
+        return self
+
+    def remove_stopword(self, texts=None, stopword=[], inplace=True, verbose=1):
+        texts = texts if texts is not None else self.texts
+
+        if stopword:
+            texts_result = []
+            for sentence in texts:
+                sentence = [word for word in sentence if word != stopword]
+                texts_result.append(sentence)
+        
+        self.texts_remove_stopword = texts_result
+        if verbose > 0:
+            print("self.texts_replace")
+        if inplace:
+            self.texts = texts_result
+        return self
+
+    def morphs_split(self, texts=None, morphs=None, inplace=True, verbose=1, **kwargs):
+        texts = texts if texts is not None else self.texts
+
+        texts_result = []
+        for sentence in texts:
+            if 'okt' in str(morphs):
+                texts_result.append(morphs.morphs(sentence, **kwargs))
+        
+        self.texts_morphs = texts_result
+        if verbose > 0:
+            print("self.texts_morphs")
+        if inplace:
+            self.texts = texts_result
+        return self  
+
+    def fit_on_texts(self, texts=None):
+        texts = texts if texts is not None else self.texts
+        self.tokenizer.fit_on_texts(texts)
+        
+        self.vocab_size = len(self.tokenizer.word_index)
+
+        self.tokenizer.word_index[''] = 0
+        self.tokenizer.index_word[0] = ''
+
+        self.word_index = self.tokenizer.word_index
+        self.index_word = self.tokenizer.index_word
+        return self
+
+    def texts_to_sequences(self, texts=None, inplace=True, verbose=1):
+        texts = texts if texts is not None else self.texts
+
+        texts_result = self.tokenizer.texts_to_sequences(texts)
+
+        self.texts_texts_to_seq = texts_result
+        if verbose > 0:
+            print("self.texts_texts_to_seq")
+        if inplace:
+            self.texts = texts_result
+        return self    
+
+    def add_sos_eos(self, texts=None, sos='<SOS>', eos='<EOS>', inplace=True, verbose=1):
+        texts = texts if texts is not None else self.texts
+
+        self.sos = sos
+        self.eos = eos
+
+        if bool(sos):
+            self.vocab_size += 1
+            self.tokenizer.word_index[sos] =  self.vocab_size
+            self.tokenizer.index_word[self.tokenizer.word_index[sos]] = sos
+        
+        if bool(eos):
+            self.vocab_size += 1
+            self.tokenizer.word_index[eos] =  self.vocab_size
+            self.tokenizer.index_word[self.tokenizer.word_index[eos]] = eos
+
+        self.word_index = self.tokenizer.word_index
+        self.index_word = self.tokenizer.index_word
+        # return self
+        if bool(sos) + bool(eos) > 0:
+            texts_result = []
+            for sentence in texts:
+                if bool(sos) is True and bool(eos) is True:
+                    texts_result.append([self.word_index[sos]] + sentence + [self.word_index[eos]])
+                elif bool(sos) is True:
+                    texts_result.append([self.word_index[sos]] + sentence)
+                elif bool(eos) is True:
+                    texts_result.append(sentence + [self.word_index[eos]])
+        else:
+            texts_result = list(texts)
+        
+        self.texts_add_sos_eos = texts_result
+        if verbose > 0:
+            print("self.texts_add_sos_eos")
+        if inplace:
+            self.texts = texts_result
+        return self     
+
+    def pad_sequences(self, texts=None, maxlen=None, dtype='int32', padding='post', truncating='post', value=0.0, inplace=True, verbose=1):
+        texts = texts if texts is not None else self.texts
+
+        texts_result = tf.keras.preprocessing.sequence.pad_sequences(sequences=texts, maxlen=maxlen, dtype=dtype, padding=padding, truncating=truncating, value=value)
+        
+        self.texts_pad_seq = texts_result
+        if verbose > 0:
+            print("self.texts_pad_seq")
+        if inplace:
+                self.texts = texts_result
+        return self
+    
+    def to_categorical(self, texts=None, num_classes=None, dtype='float32', inplace=True, verbose=1):
+        texts = texts if texts is not None else self.texts
+        num_classes = num_classes if num_classes is not None else self.vocab_size
+
+        texts_result = tf.keras.utils.to_categorical(y=texts, num_classes=num_classes, dtype=dtype)
+        
+        self.texts_categorical = texts_categorical
+        if verbose > 0:
+            print("self.texts_categorical")
+        if inplace:
+            self.texts = texts_result
+        return self
+
+    def sequences_to_texts(self, texts, join=None, sos=False, eos=False, padding=False):
+        indexes = self.index_word.keys()
+        
+        texts_result = []
+        for sentence in texts:
+            sentence_result = []
+            for word in sentence:
+                if word in indexes:
+                    word_text = self.index_word[word]
+                    if sos is False and word_text == self.sos:
+                        pass
+                    elif eos is False and word_text == self.eos:
+                        pass
+                    elif padding is False and word_text == '':
+                        pass
+                    else:
+                        sentence_result.append(word_text)
+                else:
+                    sentence_result.append('')
+            if join is not None:
+                sentence_result = join.join(sentence_result)
+            texts_result.append(sentence_result)
+        
+        return texts_result
+
+processor_en = NLP_PreProcessor(df['english'])
+processor_en.replace().fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
+processor_en.texts.shape
+vocab_size_y = processor_en.vocab_size
+processor_en.sequences_to_texts(processor_en.texts, join=' ')
 
 
+processor_kr = NLP_PreProcessor(df['korean'])
+processor_kr.replace().morphs_split(morphs=okt, stem=True).fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
+processor_kr.texts.shape
+vocab_size_X = processor_en.vocab_size
 
-df1 = df.copy()
-# df1 = df.iloc[:1000]
+processor_kr.sequences_to_texts(processor_kr.texts, join=' ')
+
+#################################################################################################################################
+
+
 
 # (Preprocessing) -------------------------------------------
 # english *
@@ -76,16 +256,19 @@ print(df2.shape)
 #   . truncated : (default) 'pre' / 'post'      # maxlen때문에 데이터가 잘릴때 어느부분을 자를것인지?
 # ----------------------------------------------------------------------------------
 
-add_tokens = pd.DataFrame([['<sos>', '<sos>'], ['<eos>', '<eos>']], columns=df2.columns)
-df2_add_tokens = pd.concat([add_tokens, df2], axis=0)
+# add_tokens = pd.DataFrame([['<sos>', '<sos>'], ['<eos>', '<eos>']], columns=df2.columns)
+# df2_add_tokens = pd.concat([add_tokens, df2], axis=0)
 
 
 # (english) *
 df2_en = df2['english']
-tokenizer_en = tf.keras.preprocessing.text.Tokenizer(filters='!"#$%&()*+,-./:;=?@[\\]^_`{|}~\t\n') 
-tokenizer_en.fit_on_texts(df2_add_tokens['english'])
+# tokenizer_en = tf.keras.preprocessing.text.Tokenizer(filters='!"#$%&()*+,-./:;=?@[\\]^_`{|}~\t\n') 
+# tokenizer_en.fit_on_texts(df2_add_tokens['english'])
+tokenizer_en = tf.keras.preprocessing.text.Tokenizer() 
+tokenizer_en.fit_on_texts(df2_en)
 
-tokenizer_en.word_index
+
+
 # tokenizer_en.word_counts
 vocab_size_en = len(tokenizer_en.word_index) + 1 #어휘수
 print(f"vocab_size_en : {vocab_size_en}")
@@ -94,11 +277,13 @@ print(f"vocab_size_en : {vocab_size_en}")
 # (text_to_sequence / pad_sequence) *
 seq_en = tokenizer_en.texts_to_sequences(df2_en)
 
+
 # SOS / EOS
 seq_en_inout = []
 for sentence in seq_en:
     seq_en_inout.append([tokenizer_en.word_index['<sos>']] + sentence + [tokenizer_en.word_index['<eos>']])
 padseq_en = tf.keras.preprocessing.sequence.pad_sequences(seq_en_inout, padding='post')
+# padseq_en = tf.keras.preprocessing.sequence.pad_sequences(seq_en, padding='post')
 
 padseq_en[:3,:]
 print(padseq_en.shape)
@@ -151,6 +336,34 @@ print(padseq_en.shape, padseq_kr.shape)
 
 
 
+#################################################################################################################################
+# df01 = pd.read_csv(f"{path}/NLP_EN_to_KR1_Data.csv", encoding='utf-8-sig')
+# df02 = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
+# df = pd.concat([df02, df01],axis=0).reset_index(drop=True)
+
+df = pd.read_csv(f"{path}/NLP_EN_to_KR1_Data.csv", encoding='utf-8-sig')
+df = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
+
+processor_en = NLP_PreProcessor(df['english'])
+processor_en.replace().fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
+processor_en.texts.shape
+vocab_size_y = processor_en.vocab_size
+# processor_en.sequences_to_texts(processor_en.texts, join=' ')
+
+tokenizer_en = processor_en.tokenizer
+padseq_en = processor_en.texts
+
+
+processor_kr = NLP_PreProcessor(df['korean'])
+processor_kr.replace().morphs_split(morphs=okt, stem=True).fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
+processor_kr.texts.shape
+vocab_size_X = processor_en.vocab_size
+
+# processor_kr.sequences_to_texts(processor_kr.texts, join=' ')
+tokenizer_kr = processor_kr.tokenizer
+padseq_kr = processor_kr.texts
+
+
 
 path = r'C:\Users\Admin\Desktop\DataBase'
 # Save_to_csv ***
@@ -173,10 +386,10 @@ padseq_y = pd.DataFrame(padseq_kr.copy())
 # padseq_X.to_csv(f'{path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
 # padseq_y.to_csv(f'{path}/NLP_EN_to_KR1_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
 
-word_index_X.to_csv(f'{path}/NLP_EN_to_KR2_word_index(EN).csv', index=False, encoding='utf-8-sig')
-word_index_y.to_csv(f'{path}/NLP_EN_to_KR2_word_index(KR).csv', index=False, encoding='utf-8-sig')
-padseq_X.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
-padseq_y.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
+# word_index_X.to_csv(f'{path}/NLP_EN_to_KR2_word_index(EN).csv', index=False, encoding='utf-8-sig')
+# word_index_y.to_csv(f'{path}/NLP_EN_to_KR2_word_index(KR).csv', index=False, encoding='utf-8-sig')
+# padseq_X.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
+# padseq_y.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
 
 
 # Read_from_csv *** ---------------------------------------------------------------------------------
@@ -196,15 +409,15 @@ import datetime
 max_len = 1000
 url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
 
-word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
-word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
-padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
-padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
+# word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
+# word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
+# padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
+# padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 
-# word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
-# word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
-# padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
-# padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
+word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
+word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
+padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
+padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 
 # word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
 # word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
@@ -212,8 +425,8 @@ padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', enc
 # padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 # pd.Series(word_index_X.index, index=word_index_X)
 
-word_index_X[0] = ''
-word_index_y[0] = ''
+# word_index_X[0] = ''
+# word_index_y[0] = ''
 
 vocab_size_X = len(word_index_X) + 1 #어휘수
 vocab_size_y = len(word_index_y) + 1 #어휘수
@@ -306,6 +519,9 @@ test_y_oh = tf.keras.utils.to_categorical(test_y, vocab_size_y)
 print(train_X.shape, valid_X.shape, test_X.shape)
 print(train_y.shape, valid_y.shape, test_y.shape)
 print(train_y_oh.shape, valid_y_oh.shape, test_y_oh.shape)
+
+train_X
+train_y
 
 
 ################################################################################################
@@ -442,7 +658,10 @@ class Seq2Seq_Model(torch.nn.Module):
             y_before = y[:,0][:,None]     # y[:,0].unsqueeze(1)   # y_before (batch_seq, 1)
         else:
             y_before = torch.tensor(np.ones((X.shape[0],1))*self.init, dtype=torch.int64).to(X.device)  # 저장된 초기값을 예측시 활용
-        self.result, hidden_input = self.decoder(y_before, self.context_vector)     # result (batch_seq, 1, dec_fc==vocab_size_y)
+
+        # self.result, hidden_input = self.decoder(y_before, self.enc_output, self.context_vector)     # result (batch_seq, 1, dec_fc==vocab_size_y)
+        self.result = torch.tensor(np.zeros((X.shape[0], 1, self.vocab_size_y)), dtype=torch.float64).to(X.device)  # 저장된 초기값을 예측시 활용
+        hidden_input = self.context_vector
 
         for i in range(1, self.y_shape[1]):
             pred_output, dec_hidden = self.decoder(y_before, hidden_input) # (batch_seq, 1, dec_fc==vocab_size_y)
@@ -471,7 +690,7 @@ class Seq2Seq_Model(torch.nn.Module):
 
 # torch mm, bmm, matmul 차이
 # https://sunghee.kaist.ac.kr/entry/torch-mm-bmm-matmul-%EC%B0%A8%EC%9D%B4
-
+# (python) Attention_Seq2Seq 230203
 class AttSeq2Seq_Encoder(torch.nn.Module):
     def __init__(self, vocab_size_X):
         super().__init__()
@@ -561,8 +780,7 @@ class AttSeq2Seq(torch.nn.Module):
         super().__init__()
         self.vocab_size_X = vocab_size_X
         self.vocab_size_y = vocab_size_y
-        # self.device = device
-
+        
         self.encoder = AttSeq2Seq_Encoder(vocab_size_X)
         self.attention = AttSeq2Seq_Attention()
         self.decoder = AttSeq2Seq_Decoder(vocab_size_y, self.attention)
@@ -587,20 +805,18 @@ class AttSeq2Seq(torch.nn.Module):
             y_before = torch.tensor(np.ones((X.shape[0],1))*self.init, dtype=torch.int64).to(X.device)  # 저장된 초기값을 예측시 활용
 
         # self.result, hidden_input = self.decoder(y_before, self.enc_output, self.context_vector)     # result (batch_seq, 1, dec_fc==vocab_size_y)
-        self.result = torch.zeros(X.shape[0], 1, self.vocab_size_y).to(X.device)
-        # self.result = torch.zeros(X.shape[0], self.y_shape[1], self.vocab_size_y).to(X.device)
+        self.result = torch.tensor(np.zeros((X.shape[0], 1, self.vocab_size_y)), dtype=torch.float64).to(X.device)  # 저장된 초기값을 예측시 활용
         hidden_input = self.context_vector
-
+        
         with torch.no_grad():
             # self.attention_scores = self.decoder.att_score
-            self.attention_scores = torch.zeros(X.shape[0], X.shape[1]).to(X.device)
+            self.attention_scores = torch.zeros(X.shape).to(X.device)
 
         for i in range(1, self.y_shape[1]):
             pred_output, dec_hidden = self.decoder(y_before, self.enc_output, hidden_input) # (batch_seq, 1, dec_fc==vocab_size_y)
             hidden_input = dec_hidden
 
             self.result = torch.cat([self.result, pred_output],axis=1)  # (batch_seq, i->y_word, dec_fc==vocab_size_y)
-            # self.result[:,[i],:] = pred_output
 
             if teacher_forcing >= np.random.rand():     # teacher_forcing
                 y_before = y[:,i][:,None] # y_before (batch_seq, 1)
@@ -622,6 +838,294 @@ class AttSeq2Seq(torch.nn.Module):
 # ------------------------------------------------------------------------------------------------------------------------------------
 
 
+#######################################################################################################################################
+# ★★★ Transformer
+class Transformer(torch.nn.Module):
+    def __init__(self, vocab_size_X, vocab_size_y, X_pad_idx, y_pad_idx,
+                 embed_dim=256, n_layers=1, n_heads=4, pos_maxlen=100, posff_dim=512, device='cpu'):
+        super().__init__()
+        self.X_pad_idx = X_pad_idx
+        self.y_pad_idx = y_pad_idx
+        self.device = device
+        
+        self.encoder = Transformer_Encoder(vocab_size_X, embed_dim, n_layers, n_heads, pos_maxlen, posff_dim, device=device)
+        self.decoder = Transformer_Decoder(vocab_size_y, embed_dim, n_layers, n_heads, pos_maxlen, posff_dim, device=device)
+    
+    def make_X_mask(self, X):
+        # X : (batch_seq, X_word)
+        X_mask = (X != self.X_pad_idx).unsqueeze(1).unsqueeze(2)     # (batch_seq, 1, ,1, X_word)
+        return X_mask   # (batch_seq, 1, ,1, X_word)
+    
+    def make_y_mask(self, y):
+        # y : (batch_seq, y_word)
+        pad_mask_y = (y != self.y_pad_idx).unsqueeze(1).unsqueeze(2)     # (batch_seq, 1, ,1, X_word)
+        
+        y_word = y.shape[1]
+        sub_mask_y = torch.tril(torch.ones((y_word, y_word)).to(self.device)).bool()  # (batch_seq, batch_seq)
+        # sub_mask_y = torch.tril(torch.ones((y_word, y_word), device=self.device)).bool()  # (batch_seq, batch_seq)
+        
+        y_mask = pad_mask_y & sub_mask_y    # (batch_seq, 1, y_word, y_word)
+        # (diagonal 이용하여) batch_seq에 따라 순차적  mask적용 
+        
+        return y_mask   # (batch_seq, 1, y_word, y_word)
+    
+    def forward(self, X, y):
+        # X : (batch_seq, X_word)
+        # y : (batch_seq, y_word)
+        
+        # mask
+        self.X_mask = self.make_X_mask(X)
+        self.y_mask = self.make_y_mask(y)
+        
+        # encoder
+        self.context_matrix, self.encoder_self_attention = self.encoder(X, self.X_mask)
+        # decoder
+        self.output, self.decoder_self_attention, self.encoder_attention = self.decoder(y, self.X_mask, self.y_mask, self.context_matrix)
+        
+        return self.output
+
+
+# ★★ Encoder
+class Transformer_Encoder(torch.nn.Module):
+    def __init__(self, vocab_size_X, embed_dim=256, n_layers=1, n_heads=4, pos_maxlen=100, posff_dim=512, device='cpu'):
+        super().__init__()
+        self.device = device
+        
+        self.X_embed = torch.nn.Embedding(vocab_size_X, embed_dim)
+        self.pos_X_embed = torch.nn.Embedding(pos_maxlen, embed_dim)
+
+        self.dropout = torch.nn.Dropout(0.5)
+        self.encoder_layers = torch.nn.ModuleList([Transformer_EncoderLayer(embed_dim, n_heads, posff_dim, device) for _ in range(n_layers)])
+
+        self.scaled = torch.sqrt(torch.FloatTensor([embed_dim])).to(device)    # [1]   # sqrt([hidden_dim])
+        # self.scaled = math.sqrt(embed_dim)
+        self.scaled = np.sqrt(embed_dim)
+
+    def forward(self, X, X_mask=None):
+        # X : (batch_Seq, X_word)
+        
+        # Scaled X
+        self.X_emb_scaled = self.X_embed(X) * self.scaled   # (batch_seq, X_word, emb)
+        
+        # positional vector (encoder)
+        self.pos_X = torch.arange(0, X.shape[1]).unsqueeze(0).repeat(X.shape[0],1).to(self.device)     # [[0,1,2 ... W]...] (batch_seq, X_word)
+        self.pos_emb_X = self.pos_X_embed(self.pos_X)     # (batch_seq, X_word, emb)
+
+        # sum of X_emb_scaled and pos_emb_X
+        self.X_input = self.dropout(self.X_emb_scaled + self.pos_emb_X)     # (batch_seq, X_word, emb)
+
+        self.encoder_layer_history = [(self.X_input, None)]
+
+        for enc_layer in self.encoder_layers:
+            enc_output, self_att_score = enc_layer(self.encoder_layer_history[-1][0], X_mask)
+            self.encoder_layer_history.append((enc_output, self_att_score))
+            
+        self.encocder_output = self.encoder_layer_history[-1][0]
+        return self.encocder_output, self.encocder_output[-1][1]  # (batch_seq, X_word, emb), (batch_seq, n_heads, X_word, key_length)
+
+# ★ Encoder_Layer
+class Transformer_EncoderLayer(torch.nn.Module):
+    def __init__(self, embed_dim, n_heads, posff_dim, device):
+        super().__init__()
+        self.dropout = torch.nn.Dropout(0.5)
+
+        self.self_attention = Transformer_MultiHeadAttentionLayer(embed_dim, n_heads, device)
+        self.self_attention_layer_norm = torch.nn.LayerNorm(embed_dim)
+        
+        self.pos_feedforward = Transformer_PositionalwiseFeedForwardLayer(embed_dim, posff_dim)
+        self.pos_feedforward_layer_norm = torch.nn.LayerNorm(embed_dim)
+        
+    def forward(self, X_emb, X_mask):
+        # X_emb : (batch_seq, X_word, emb)
+        # X_mask : (batch_seq, 1, ,1, X_word)
+        
+        # (Self Attention Layer) ------------------------------------------------------------------
+        self.self_att_output, self.self_att_score = self.self_attention(key=X_emb, query=X_emb, value=X_emb, mask=X_mask)
+        #  (batch_seq, X_word, fc_dim=emb), (batch_seq, n_heads, X_word, key_length=X_word)
+        self.X_add_self_att_ouput = X_emb + self.dropout(self.self_att_output)   # (batch_seq, X_word, emb)
+        # embeding+pos_input 값을 self_attention 결과와 더해준다.
+        
+        # (Layer Normalization) --------------------------------------------------------------------
+        self.layer_normed_self_att_X = self.self_attention_layer_norm(self.X_add_self_att_ouput)  # layer normalization
+        
+        # (Positional FeedForward Layer) -----------------------------------------------------------
+        self.posff_X = self.pos_feedforward(self.layer_normed_self_att_X)    # (batch_seq, X_word, emb)
+        self.layer_normed_X_add_posff_output = self.layer_normed_self_att_X + self.dropout(self.posff_X)     # (batch_seq, X_word, emb)
+        # layer_norm_X와 positional_feedforward를 통과한 결과를 더해준다.
+        
+        # (Layer Normalization) --------------------------------------------------------------------
+        self.layer_normed_posff_output_X = self.pos_feedforward_layer_norm(self.layer_normed_X_add_posff_output)
+
+        return self.layer_normed_posff_output_X, self.self_att_score    # (batch_seq, X_word, emb), (batch_seq, n_heads, X_word, key_length)
+
+# ★ Positionalwise_FeedForward_Layer
+class Transformer_PositionalwiseFeedForwardLayer(torch.nn.Module):
+    def __init__(self, embed_dim, pf_dim):
+        super().__init__()
+        self.dropout = torch.nn.Dropout(0.5)
+        
+        self.fc1 = torch.nn.Linear(embed_dim, pf_dim)
+        self.fc2 = torch.nn.Linear(pf_dim, embed_dim)
+        
+    def forward(self, X):
+        # X : (batch_seq, X_word, emb)
+        self.output_ff1 = self.dropout(torch.relu(self.fc1(X)))    # (batch_seq, X_word, pf_dim)
+        self.output_ff2 = self.fc2(self.output_ff1)    # (batch_seq, X_word, emb)
+        return self.output_ff2  # (batch_seq, X_word, emb)
+
+# ★ Multihead_Attention_Layer
+class Transformer_MultiHeadAttentionLayer(torch.nn.Module):
+    def __init__(self, embed_dim, n_heads, device):
+        super().__init__()
+        assert embed_dim % n_heads == 0, 'embed_dim은 n_head의 배수값 이어야만 합니다.'
+        
+        self.embed_dim = embed_dim
+        self.n_heads = n_heads
+        self.head_dim = embed_dim // n_heads
+
+        self.query_layer = torch.nn.Linear(embed_dim, embed_dim)
+        self.key_layer = torch.nn.Linear(embed_dim, embed_dim)
+        self.value_layer = torch.nn.Linear(embed_dim, embed_dim)
+
+        self.dropout = torch.nn.Dropout(0.5)
+        self.fc = torch.nn.Linear(embed_dim, embed_dim)
+        
+        self.scaled = torch.sqrt(torch.FloatTensor([embed_dim])).to(device)    # [1]   # sqrt([hidden_dim])
+        # self.scaled = math.sqrt(embed_dim)
+        # self.scaled = np.sqrt(embed_dim)
+
+    def forward(self, query, key, value, mask=None):
+        # query, key, value : (batch_seq, len, emb)
+        batch_size = query.shape[0] 
+
+        self.query = self.query_layer(query)    # (batch_seq, query_len, emb)
+        self.key = self.query_layer(key)        # (batch_seq, key_len, emb)
+        self.value = self.query_layer(value)    # (batch_seq, value_len, emb)
+
+        self.query_multihead = self.query.view(batch_size, -1, self.n_heads, self.head_dim).permute(0,2,1,3)     # (batch_seq, n_heads, query_len, head_emb_dim)   ←permute←  (batch_seq, query_len, n_heads, head_emb_dim)
+        self.key_multihead = self.key.view(batch_size, -1, self.n_heads, self.head_dim).permute(0,2,1,3)         # (batch_seq, n_heads, key_len, head_emb_dim)   ←permute←  (batch_seq, key_len, n_heads, head_emb_dim)
+        self.value_multihead = self.value.view(batch_size, -1, self.n_heads, self.head_dim).permute(0,2,1,3)     # (batch_seq, n_heads, value_len, head_emb_dim)   ←permute←  (batch_seq, value_len, n_heads, head_emb_dim)
+
+        self.energy = torch.matmul(self.query_multihead, self.key_multihead.permute(0,1,3,2)) / self.scaled        # (B, H, QL, KL) ← (B, H, QL, HE), (B, H, HE, KL) 
+        # self.energy = (self.query_multihead @ self.key_multihead.permute(0,1,3,2)) / scaled        # (B, H, QL, KL) ← (B, H, QL, HE), (B, H, HE, KL) 
+        # np.matmul(A,B)[i,j,k] == np.sum(A[i,j,:] * B[i,:,k]) → i, j, k
+        # * summation of muliply between embedding vectors : Query에 해당하는 각 Length(단어) embedding이 어떤 key의 Length(단어) embedding과 연관(내적)되는지?
+        # (B, H, QL, KL) : (QL) query의 length(word),   (KL) queyr의 length(word) 대한 key의 length(word) 내적값
+
+        if mask is not None:
+            # masking 영역(==0)에 대해 -1e10으로 채우기 (softmax → 0)
+            self.energy = self.energy.masked_fill(mask==0, -1e10)
+        
+        self.att_score = torch.softmax(self.energy, dim=-1)
+        self.att_score_dropout = self.dropout(self.att_score)    
+
+        self.weigted = torch.matmul(self.att_score_dropout, self.value_multihead)       # (B, H, QL, HE) ← (B, H, QL, KL), (B, H, VL, HE) 
+        # self.weigted = self.att_score, @ self.value_multihead       # (B, H, QL, HE) ← (B, H, QL, KL), (B, H, VL, HE) 
+        # * summation of muliply between softmax_score and embeding of value
+        # (B, H, QL, HE) : (QL) query의 length(word)   (HE) attention의 softmax_socre에 대한 value embeding 의 내적값 (어떤 value의 embedding과 연관성이 있는지?)
+
+        self.weighted_arange = self.weigted.permute(0,2,1,3).contiguous()        # (B, QL, H, HE) ← (B, H, QL, HE)
+        self.weighted_flatten = self.weighted_arange.view(batch_size, -1, self.embed_dim)   # (B, QL, E) ← (B, H, E)
+
+        self.multihead_output = self.fc(self.weighted_flatten)       # (B, QL, FC)
+        return self.multihead_output, self.att_score        #  (batch_seq, query_length, fc_dim), (batch_seq, n_heads, query_length, key_length)
+
+
+# ★★ Decoder 
+class Transformer_Decoder(torch.nn.Module):
+    def __init__(self, vocab_size_y, embed_dim=256, n_layers=1, n_heads=4, pos_maxlen=100, posff_dim=512, device='cpu'):
+        super().__init__()
+        self.device = device
+        
+        self.y_embed = torch.nn.Embedding(vocab_size_y, embed_dim)
+        self.pos_y_embed = torch.nn.Embedding(pos_maxlen, embed_dim)
+
+        self.dropout = torch.nn.Dropout(0.5)
+        self.decoder_layers = torch.nn.ModuleList([Transformer_DecoderLayer(embed_dim, n_heads, posff_dim, device) for _ in range(n_layers)])
+
+        self.fc = torch.nn.Linear(embed_dim, vocab_size_y)
+        
+        self.scaled = torch.sqrt(torch.FloatTensor([embed_dim])).to(device)    # [1]   # sqrt([hidden_dim])
+        # self.scaled = math.sqrt(embed_dim)
+        # self.scaled = np.sqrt(embed_dim)
+    
+    def forward(self, y, X_mask, y_mask, context_matrix):
+        # y : (batch_seq, y_word)
+        # X_mask : (batch_seq, 1, ,1, X_word)
+        # y_mask : (batch_seq, 1, y_word, y_word)
+        # context_matrix : (batch_seq, X_word, emb)
+        
+        # Scaled y
+        self.y_emb_scaled = self.y_embed(y) * self.scaled   # (batch_seq, y_word, emb)
+        
+        # positional vector (decoder)
+        self.pos_y = torch.arange(0, y.shape[1]).unsqueeze(0).repeat(y.shape[0],1).to(self.device)     # [[0,1,2 ... W]...] (batch_seq, y_word)
+        self.pos_emb_y = self.pos_y_embed(self.pos_y)     # (batch_seq, y_word, emb)  
+        
+        # sum of y_emb_scaled and pos_emb_y
+        self.y_input = self.dropout(self.y_emb_scaled + self.pos_emb_y)     # (batch_seq, y_word, emb)
+        
+        self.decoder_layer_history = [(self.y_input, None, None)]
+
+        for dec_layer in self.decoder_layers:
+            dec_output, enc_att_score, self_att_score = dec_layer(self.decoder_layer_history[-1][0], X_mask, y_mask, context_matrix)
+            self.decoder_layer_history.append((dec_output, enc_att_score, self_att_score))
+
+        self.decoder_output = self.fc(self.decoder_layer_history[-1][0])
+        return self.decoder_output, self.decoder_layer_history[-1][1], self.decoder_layer_history[-1][2]
+    
+# ★ Decoder_Layer
+class Transformer_DecoderLayer(torch.nn.Module):
+    def __init__(self, embed_dim, n_heads, posff_dim, device):
+        super().__init__()
+        self.dropout = torch.nn.Dropout(0.5)
+        
+        self.self_attention = Transformer_MultiHeadAttentionLayer(embed_dim, n_heads, device)
+        self.self_attention_layer_norm = torch.nn.LayerNorm(embed_dim)
+        
+        self.encoder_attention = Transformer_MultiHeadAttentionLayer(embed_dim, n_heads, device)
+        self.encoder_attention_layer_norm = torch.nn.LayerNorm(embed_dim)
+        
+        self.pos_feedforward = Transformer_PositionalwiseFeedForwardLayer(embed_dim, posff_dim)
+        self.pos_feedforward_layer_norm = torch.nn.LayerNorm(embed_dim)
+        
+    def forward(self, y_emb, X_mask, y_mask, context_matrix):
+        # y_emb : (batch_seq, y_word, emb)
+        # X_mask : (batch_seq, 1, ,1, X_word)
+        # y_mask : (batch_seq, 1, y_word, y_word)
+        # context_matrix : (batch_seq, X_word, emb)     # encoder output
+        
+        # (Self Attention Layer) -------------------------------------------------------------------
+        self.self_att_output, self.self_att_score = self.self_attention(query=y_emb, key=y_emb, value=y_emb, mask=y_mask)
+        #  (batch_seq, y_word, fc_dim=emb), (batch_seq, n_heads, y_word, key_length=y_word)
+        self.y_add_self_att_ouput = y_emb + self.dropout(self.self_att_output)   # (batch_seq, y_word, emb)
+        # embeding+pos_input 값을 self_attention 결과와 더해준다.
+        
+        # (Layer Normalization) --------------------------------------------------------------------
+        self.layer_normed_self_att_y = self.self_attention_layer_norm(self.y_add_self_att_ouput)  # layer normalization
+        
+        # (Encoder Attention Layer) ----------------------------------------------------------------
+        self.y_enc_att_output, self.y_enc_att_score = self.encoder_attention(query=self.layer_normed_self_att_y, key=context_matrix, value=context_matrix, mask=X_mask)
+        #  (batch_seq, y_word, fc_dim=emb), (batch_seq, n_heads, y_word, key_length=y_word)
+        self.y_add_enc_att_ouput = self.layer_normed_self_att_y + self.dropout(self.y_enc_att_output)   # (batch_seq, y_word, emb)
+        # embeding+pos_input 값을 encoder_attention 결과와 더해준다.
+        
+        # (Layer Normalization) --------------------------------------------------------------------
+        self.layer_normed_enc_att_y = self.encoder_attention_layer_norm(self.y_add_enc_att_ouput)  # layer normalization
+
+        # (Positional FeedForward Layer) -----------------------------------------------------------
+        self.layer_normed_posff_output_y = self.pos_feedforward(self.layer_normed_enc_att_y)    # (batch_seq, y_word, emb)
+        
+        # (Layer Normalization) --------------------------------------------------------------------
+        self.layer_normed_posff_output_y = self.pos_feedforward_layer_norm(self.layer_normed_posff_output_y)
+        # layer_norm_X와 positional_feedforward를 통과한 결과를 더해준다.
+        
+        return self.layer_normed_posff_output_y, self.self_att_score, self.y_enc_att_score
+        # (batch_seq, y_word, emb), (batch_seq, n_heads, y_word, y_word), (batch_seq, n_heads, y_word, X_word)
+        
+#######################################################################################################################################
+
+
 
 
 import sys
@@ -632,8 +1136,11 @@ import time
 
 # training prepare * -------------------------------------------------------------------------------------------------------
 # model = Seq2Seq_Model(vocab_size_X, vocab_size_y).to(device)
-model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
-# model(X_sample.to(device), y_sample.to(device)).shape
+# model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
+# model = Transformer(vocab_size_X, vocab_size_y, 0, 0, device=device).to(device)
+model = Transformer(vocab_size_X, vocab_size_y, 0, 0, n_layers=3, n_heads=8, device=device).to(device)
+# model(X_sample.to(device), y_sample.to(device))
+
 
 # model weights parameter initialize (가중치 초기화) ***
 # def init_weights(model):
@@ -645,9 +1152,10 @@ model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
 # model.apply(init_weights)
 
 # trg_pad_idx = TRG.vocab.stoi[TRG.pad_token] ## pad에 해당하는 index는 무시합니다.
-loss_function = torch.nn.CrossEntropyLoss(ignore_index=0)     # ignore_index=trg_pad_idx
+loss_function = torch.nn.CrossEntropyLoss()     # ignore_index=trg_pad_idx
+# loss_function = torch.nn.CrossEntropyLoss(ignore_index=0)
 optimizer = torch.optim.Adam(model.parameters())
-epochs = 10
+epochs = 100
 
 es = EarlyStopping()
 
@@ -667,10 +1175,11 @@ for e in range(epochs):
     train_epoch_loss = []
     for batch_X, batch_y in train_loader:
         optimizer.zero_grad()                   # wegiht initialize
-        pred = model(batch_X.to(device), batch_y.to(device), teacher_forcing=1)                   # predict
+        pred = model(batch_X.to(device), batch_y.to(device))                   # predict
+        # pred = model(batch_X.to(device), batch_y.to(device), teacher_forcing=1)                   # predict
 
         pred_eval = pred[:,1:,:].reshape(-1, vocab_size_y)
-        real_eval = batch_y[:,1:].reshape(-1).to(device)
+        real_eval = batch_y[:,1:].reshape(-1).type(torch.int64).to(device)
         loss = loss_function(pred_eval, real_eval)     # loss
         loss.backward()                         # backward
         
@@ -688,10 +1197,11 @@ for e in range(epochs):
     with torch.no_grad():
         model.eval() 
         for batch_X, batch_y in valid_loader:
-            pred = model(batch_X.to(device), batch_y.to(device), teacher_forcing=1)                   # predict
+            pred = model(batch_X.to(device), batch_y.to(device))                   # predict
+            # pred = model(batch_X.to(device), batch_y.to(device), teacher_forcing=1)                   # predict
 
             pred_eval = pred[:,1:,:].reshape(-1, vocab_size_y)
-            real_eval = batch_y[:,1:].reshape(-1).to(device)
+            real_eval = batch_y[:,1:].reshape(-1).type(torch.int64).to(device)
             loss = loss_function(pred_eval, real_eval)     # loss
             valid_batch_loss = loss.to('cpu').detach().numpy()
             valid_epoch_loss.append( valid_batch_loss )
@@ -713,6 +1223,7 @@ for e in range(epochs):
             break
 
 
+
 # early_stopping plot
 es.plot
 
@@ -721,26 +1232,61 @@ model.load_state_dict(es.optimum[2])
 
 
 
+
 # predict * -------------------------------------------------------------------------------------------------------
+# word_index_X = word_index_X.set_index('index')['word']
+# word_index_y = word_index_y.set_index('index')['word']
+# word_index_X = word_index_X['word']
+# word_index_y = word_index_y['word']
+
 idx = 15
 sentence_input = train_X[[idx],:]
 sentence_output = train_y[[idx],:]
-model.predict(sentence.to(device))
 
-sentence_en = np.stack([[word_index_X[word] for word in sentence] for sentence in sentence_input])[0]
-sentence_kr_real = np.stack([[word_index_y[word] for word in sentence] for sentence in sentence_output])[0]
-sentence_kr_pred = np.stack([[word_index_y[word] for word in sentence] for sentence in model.predict(torch.tensor(sentence_input).to(device)).to('cpu').numpy()])[0]
+with torch.no_grad():
+    model.eval()
+    # pred_sentence = model.predict(sentence.to(device))
+    pred_sentence = model(torch.tensor(sentence_input).to(device), torch.tensor(sentence_output).to(device))
 
-sentence_en
+
+sentence_en = np.stack([[word_index_X[word] if word != 0 else '' for word in sentence] for sentence in sentence_input])[0]
+sentence_kr_real = np.stack([[word_index_y[word] if word != 0 else '' for word in sentence] for sentence in sentence_output])[0]
+sentence_kr_pred = np.stack([[word_index_y[word] if word != 0 else '' for word in sentence] for sentence in pred_sentence.to('cpu').detach().argmax(dim=2).numpy()])[0]
+
 sentence_kr_real
 sentence_kr_pred
 
 
+
 # attention map
 import seaborn as sns
-sns.heatmap(model.attention_scores.to('cpu').numpy(), cmap='jet')
+sns.heatmap(model.attention_scores.to('cpu').numpy(), cmap='bone')
 plt.xticks(np.arange(sentence_en.shape[0]), sentence_en, rotation=90)
 plt.yticks(np.arange(sentence_kr_pred.shape[0]), sentence_kr_pred, rotation=0)
+
+X_sample.shape
+y_sample.shape
+
+sns.heatmap(model.attention_scores.to('cpu').numpy(), cmap='bone')
+
+word_index_X[419]
+
+sentence_input[0][:12]
+sentence_output[0][1:11]
+
+
+model.encoder_self_attention.shape
+model.decoder_self_attention.shape
+
+f = plt.figure(figsize=(10,10))
+for h in range(model.encoder_attention.shape[1]):
+    plt.subplot(2,2,h+1)
+    sns.heatmap(model.encoder_attention[0,h,:12,1:11].to('cpu').numpy(), cmap='bone')
+    plt.xticks(np.arange(sentence_en.shape[0]), sentence_en, rotation=90)
+    plt.yticks(np.arange(sentence_kr_pred.shape[0]), sentence_kr_pred, rotation=0)
+plt.close()
+
+
 
 
 

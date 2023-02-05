@@ -696,12 +696,28 @@ class Capability():
 
 # class CapabilityGroup
 class CapabilityGroup():
+    """
+    【 Required Class 】 Capability
+     
+     . capability : ['cpk', 'observe_reject_prob', 'gaussian_reject_prob', 'cpk_plot']
+     . statistics : ['count','mean','std']
+    """
     def __init__(self, capability=['cpk', 'observe_reject_prob', 'gaussian_reject_prob', 'cpk_plot']
                 , statistics=['count','mean','std']):
         self.capability = capability
         self.statistics = statistics
 
     def analysis(self, data, criteria, target=None, value_vars=None, capability=None, statistics=None, lean=False, hist_kwargs={}, line_kwargs={}):
+        """
+          . data : DataFrame
+          . criteria : Criteria table (index: group, value: range of capability)
+          . capability : ['cpk', 'observe_reject_prob', 'gaussian_reject_prob', 'cpk_plot']
+          . statistics : ['count','mean','std']
+          . lean : if True, sign mean direction of Cpk
+          . hist_kwargs(dict) : histogram arguments
+          . line_kwargs(dict) : cpk_line arguments
+        """
+        
         if capability is None:
             capability = self.capability
         if statistics is None:
@@ -826,6 +842,7 @@ class CapabilityGroup():
         self.capability_table = capability_table
         self.capability_dict = capability_dict
         self.capability_data = capability_data
+        self.result = capability_table
         self.reset_dictgen()
 
     def reset_dictgen(self, key='all'):
@@ -848,19 +865,22 @@ class CapabilityGroup():
 # Capability Dataset from such groups
 class CapabilityData():
     """
-
-    criteria : {'YP': ['600~750'], 'TS':['980~'], 'EL':['12~']}
-    criteria_column : {'YP':'YP_보증범위', 'TS':'TS_보증범위', 'EL':'EL_보증범위'}
+    【 Required Class 】 Capability, CapabilityGroup
+     
+     . capability : ['cpk', 'observe_reject_prob', 'gaussian_reject_prob', 'cpk_plot']
+     . statistics : ['count','mean','std']
     """
-    def __init__(self, capability=['cpk', 'observe_reject_prob', 'gaussian_reject_prob', 'cpk_plot']
-            , statistics=['count','mean','std']):
+    def __init__(self, capability=['cpk', 'observe_reject_prob', 'gaussian_reject_prob', 'cpk_plot'],
+            statistics=['count','mean','std']):
         self.capability = capability
         self.statistics = statistics
     
-    def analysis(self, data, group=None, criteria=None, criteria_column=None):
+    def analysis(self, data, group=None, criteria=None, criteria_column=None, **kwargs):
         """
-        criteria : {'YP': ['600~750'], 'TS':['980~'], 'EL':['12~']}
-        criteria_column : {'YP':'YP_보증범위', 'TS':'TS_보증범위', 'EL':'EL_보증범위'}
+          . group : 'group' or ['group1', 'group2']
+          . criteria : {'YP': ['600~750'], 'TS':['980~'], 'EL':['12~']}
+          . criteria_column : {'YP':'YP_보증범위', 'TS':'TS_보증범위', 'EL':'EL_보증범위'}
+          . **kwargs : 'CapabilityGroup' class 'analysis' method initialize arguments
         """
         data_copy = data.copy()
         data_copy['dummy'] = 'dummy'
@@ -894,7 +914,7 @@ class CapabilityData():
                 cy_frame = cy_frame.set_index('dummy')
                 cy_frame = cy_frame.applymap(lambda x: x.replace(' ~ ','~'))
                 
-                cg.analysis(gv, criteria=cy_frame)
+                cg.analysis(gv, criteria=cy_frame, **kwargs)
                 capa_result = cg.capability_table.drop('dummy', axis=1)
                 if group != 'dummy':
                     if type(group) == str:
@@ -3763,4 +3783,3 @@ def calc_CEQ(C=None, Si=None, Mn=None, Cu=None, Nb=None, B=None, Ni=None, Cr=Non
     elif code == 'X': return C + Mn/6 +(Cr+Ti+Mo+Nb+V)/5 + (Ni+Cu)/15 + 15*B
     elif code == 'Y': return C + Si/6 + Mn/4.5 + Cu/15 + Ni/15 + Cr/4 + Mo/2.5 + 1.8*V
     # elif code == 'Z': return Al/N
-
