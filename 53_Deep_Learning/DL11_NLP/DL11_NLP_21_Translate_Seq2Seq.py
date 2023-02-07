@@ -38,13 +38,14 @@ df = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
 df.head(6)
 print(df.shape)
 
-
+import collections
 #################################################################################################################################
 class NLP_PreProcessor():
     def __init__(self, texts=None, num_words=None, filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n', lower=True, split=' ', char_level=False, oov_token=None, document_count=0, **kwargs):
         self.texts = texts
         self.tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=num_words, filters=filters, lower=lower,
                              split=split, char_level=char_level, oov_token=oov_token, document_count=document_count, **kwargs)
+        self.fit_token = False
     
     def input_texts(self, texts):
         self.texts = texts
@@ -94,10 +95,68 @@ class NLP_PreProcessor():
             self.texts = texts_result
         return self  
 
-    def fit_on_texts(self, texts=None):
+    def word_prob(self, texts=None, plot=True):
+        if self.fit_token is False:
+            texts = texts if texts is not None else self.texts
+            self.fit_on_texts(texts)
+
+        # 누적 희소단어 비율
+        self.word_counts = self.tokenizer.word_counts
+
+        total_cnt = len(word_counts)
+        rare_dict = {}
+        for i in sorted(np.unique(list(word_counts.values()))):
+            filtered_count = len( dict(filter(lambda e: e[1]<=i, word_counts.items())) )
+            prob =  filtered_count / total_cnt     # 특정 빈도수 이하 단어 비율
+            rare_dict[i] = prob
+
+        # 단어 수별 점유비
+        rare_cum_prob = []
+        for p in [0.7, 0.8, 0.9, 0.95, 0.99]:
+            target_cum_prob = list(tuple(filter(lambda e: e[1] < p, sorted(rare_dict.items())))[-1])
+            rare_cum_prob.append([*target_cum_prob, p] )
+        rare_cum_prob   # word_count, prob, target_prob
+
+        # 점유비 Plot
+        fig = plt.figure()
+        plt.title(f"Ratio of Rare_Word (total: {total_cnt})")
+        plt.plot(rare_dict.keys(), rare_dict.values(), 'o-')
+        plt.xscale('log')
+        for cp, p, tp in rare_cum_prob:
+            plt.axhline(p, color='red', alpha=0.1)
+            plt.text(cp, p, f"    {cp} (nw: {total_cnt +1 - cp})\n ←   ({round(p*100,1)}%, aim:{int(tp*100)}%)", color='red')
+            plt.scatter(cp, p, color='red')
+        plt.xlabel('Word_Count (log_scale)')
+        plt.ylabel('Word_Prob')
+        if plot is True:
+            plt.show()
+        else:
+            plt.close()
+
+        self.word_prob_dict = rare_dict
+        self.word_cum_prob = rare_cum_prob
+        self.word_prob_plot = fig
+
+        self.tokenizer = None
+
+    def tokenizer(self, filter_words=None, num_words=None, filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n', lower=True, split=' ', char_level=False, oov_token=None, document_count=0, **kwargs):
+        if filter_word is not None:
+            num_words = self.word_counts +1 - filter_words
+        self.tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=num_words, filters=filters, lower=lower,
+                        split=split, char_level=char_level, oov_token=oov_token, document_count=document_count, **kwargs)
+
+    def fit_on_texts(self, texts=None, filter_words=None, num_words=None, filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n', lower=True, split=' ', char_level=False, oov_token=None, document_count=0, **kwargs):
         texts = texts if texts is not None else self.texts
-        self.tokenizer.fit_on_texts(texts)
+        if self.tokenizer is None:
+            if filter_word is not None:
+                num_words = self.word_counts +1 - filter_words
+            self.tokenizer(num_words=num_words, filters=filters, lower=lower,
+                        split=split, char_level=char_level, oov_token=oov_token, document_count=document_count, **kwargs)
         
+        self.tokenizer.fit_on_texts(texts)
+        self.fit_token = True
+        
+        self.word_counts = self.tokenizer.word_counts
         self.vocab_size = len(self.tokenizer.word_index)
 
         self.tokenizer.word_index[''] = 0
@@ -157,6 +216,47 @@ class NLP_PreProcessor():
             self.texts = texts_result
         return self     
 
+    def seq_length_prob(self, texts=None, plot=True):
+        texts = texts if texts is not None else self.texts
+        
+        seq_lens = np.array([len(c) for c in texts])
+
+        seq_len_counts = {}
+        cumsum_cw = 0
+        for length in sorted(np.unique(seq_lens)): 
+            cw = np.count_nonzero(seq_lens==length)
+            cumsum_cw += cw
+            seq_len_counts[length] = (cw, cumsum_cw, cumsum_cw/len(seq_lens))   # seq_count, seq_cumsum, cumsum_prob
+        # seq_len_counts    # 
+
+        # 단어 수별 점유비
+        seq_len_prob = []
+        for p in [0.7, 0.8, 0.9, 0.95, 0.99]:
+            target_cum_prob = list(tuple(filter(lambda e: e[1][2] < p, sorted(seq_len_counts.items())))[-1])
+            seq_len_prob.append([target_cum_prob[0], *target_cum_prob[1], p] )
+        # seq_cum_prob   # seq_length, seq_count, sqe_cumsum, prob, target_prob
+
+
+        # 점유비 Plot
+        fig = plt.figure()
+        plt.title(f"Ratio of Seq_Length (max_len: {seq_lens})")
+        plt.plot(seq_len_counts.keys(), np.array(list(seq_len_counts.values()))[:,2], 'o-')
+        for seq_len, seq_count, seq_cumsum, seq_prob, target_prob in seq_len_prob:
+            plt.axhline(seq_prob, color='red', alpha=0.1)
+            plt.text(seq_len, seq_prob, f" ← {seq_len} ({round(seq_prob*100,1)}%, aim:{int(target_prob*100)}%)", color='red')
+            plt.scatter(seq_len, seq_prob, color='red')
+        plt.xlabel('Seq_Length (log_scale)')
+        plt.ylabel('Cum_Sum_Prob')
+
+        if plot is True:
+            plt.show()
+        else:
+            plt.close()
+
+        self.seq_len_counts = seq_len_counts
+        self.seq_len_prob = seq_len_prob
+        self.seq_len_prob_plot = fig
+
     def pad_sequences(self, texts=None, maxlen=None, dtype='int32', padding='post', truncating='post', value=0.0, inplace=True, verbose=1):
         texts = texts if texts is not None else self.texts
 
@@ -168,7 +268,7 @@ class NLP_PreProcessor():
         if inplace:
                 self.texts = texts_result
         return self
-    
+
     def to_categorical(self, texts=None, num_classes=None, dtype='float32', inplace=True, verbose=1):
         texts = texts if texts is not None else self.texts
         num_classes = num_classes if num_classes is not None else self.vocab_size
@@ -212,6 +312,18 @@ class NLP_PreProcessor():
         
         return texts_result
 
+
+processor_en = NLP_PreProcessor(df['english'])
+processor_en.replace().fit_on_texts().texts_to_sequences().add_sos_eos()
+
+
+
+# processor_en = NLP_PreProcessor(df['english'])
+# processor_en.replace()
+# processor_en.replace().word_prob()
+# processor_en.word_prob_dict
+# processor_en.word_cum_prob
+
 processor_en = NLP_PreProcessor(df['english'])
 processor_en.replace().fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
 processor_en.texts.shape
@@ -219,8 +331,11 @@ vocab_size_y = processor_en.vocab_size
 processor_en.sequences_to_texts(processor_en.texts, join=' ')
 
 
+from konlpy.tag import Okt
+okt = Okt()
 processor_kr = NLP_PreProcessor(df['korean'])
-processor_kr.replace().morphs_split(morphs=okt, stem=True).fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
+processor_kr.replace().morphs_split(morphs=okt, stem=True)
+processor_kr.fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
 processor_kr.texts.shape
 vocab_size_X = processor_en.vocab_size
 
@@ -414,20 +529,20 @@ max_len = None
 # max_len = 1000
 url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
 
-# word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
-# word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
-# padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
-# padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
+word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
+word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
+padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
+padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 
 # word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
 # word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
 # padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
 # padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR1_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 
-word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
-word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
-padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
-padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
+# word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
+# word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
+# padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
+# padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', encoding='utf-8-sig')
 # pd.Series(word_index_X.index, index=word_index_X)
 
 # word_index_X[0] = ''
@@ -643,6 +758,9 @@ class Seq2Seq_Decoder(torch.nn.Module):
 class Seq2Seq_Model(torch.nn.Module):
     def __init__(self, vocab_size_X, vocab_size_y):
         super().__init__()
+        self.vocab_size_X = vocab_size_X
+        self.vocab_size_y = vocab_size_y
+
         self.encoder = Seq2Seq_Encoder(vocab_size_X)
         self.decoder = Seq2Seq_Decoder(vocab_size_y)
 
@@ -937,23 +1055,23 @@ class Transformer_Encoder(torch.nn.Module):
         # sum of X_emb_scaled and pos_emb_X
         self.X_input = self.dropout(self.X_emb_scaled + self.pos_emb_X)     # (batch_seq, X_word, emb)
 
-        # ---
-        self.encoder_output = self.X_input
-        self.encoder_self_attention = None
-
-        for enc_layer in self.encoder_layers:
-            self.encoder_output, self.encoder_self_attention = enc_layer(self.encoder_output, X_mask)
-        return self.encoder_output, self.encoder_self_attention    # (batch_seq, X_word, emb), (batch_seq, n_heads, X_word, key_length)
-
         # # ---
-        # self.encoder_layer_history = [(self.X_input, None)]
+        # self.encoder_output = self.X_input
+        # self.encoder_self_attention = None
 
         # for enc_layer in self.encoder_layers:
-        #     enc_output, self_att_score = enc_layer(self.encoder_layer_history[-1][0], X_mask)
-        #     self.encoder_layer_history.append((enc_output, self_att_score))
+        #     self.encoder_output, self.encoder_self_attention = enc_layer(self.encoder_output, X_mask)
+        # return self.encoder_output, self.encoder_self_attention    # (batch_seq, X_word, emb), (batch_seq, n_heads, X_word, key_length)
+
+        # ---
+        self.encoder_layer_history = [(self.X_input, None)]
+
+        for enc_layer in self.encoder_layers:
+            enc_output, enc_self_att_score = enc_layer(self.encoder_layer_history[-1][0], X_mask)
+            self.encoder_layer_history.append((enc_output, enc_self_att_score))
             
-        # self.encoder_output = self.encoder_layer_history[-1][0]
-        # return self.encoder_output, self.encoder_layer_history[-1][1]  # (batch_seq, X_word, emb), (batch_seq, n_heads, X_word, key_length)
+        self.encoder_output = self.encoder_layer_history[-1][0]
+        return self.encoder_output, self.encoder_layer_history[-1][1]  # (batch_seq, X_word, emb), (batch_seq, n_heads, X_word, key_length)
 
 # ★ Encoder_Layer
 class Transformer_EncoderLayer(torch.nn.Module):
@@ -1096,26 +1214,26 @@ class Transformer_Decoder(torch.nn.Module):
         # sum of y_emb_scaled and pos_emb_y
         self.y_input = self.dropout(self.y_emb_scaled + self.pos_emb_y)     # (batch_seq, y_word, emb)
         
-        # ---
-        self.decoder_output = self.y_input
-        self.encoder_attention = None
-        self.decoder_self_attention = None
-
-        for dec_layer in self.decoder_layers:
-            self.decoder_output, self.decoder_self_attention, self.encoder_attention  = dec_layer(self.decoder_output, X_mask, y_mask, context_matrix)
-        
-        self.decoder_output = self.fc(self.decoder_output)
-        return self.decoder_output, self.encoder_attention, self.decoder_self_attention
-
         # # ---
-        # self.decoder_layer_history = [(self.y_input, None, None)]
+        # self.decoder_output = self.y_input
+        # self.encoder_attention = None
+        # self.decoder_self_attention = None
 
         # for dec_layer in self.decoder_layers:
-        #     dec_output, enc_att_score, self_att_score = dec_layer(self.decoder_layer_history[-1][0], X_mask, y_mask, context_matrix)
-        #     self.decoder_layer_history.append((dec_output, enc_att_score, self_att_score))
+        #     self.decoder_output, self.decoder_self_attention, self.encoder_attention  = dec_layer(self.decoder_output, X_mask, y_mask, context_matrix)
+        
+        # self.decoder_output = self.fc(self.decoder_output)
+        # return self.decoder_output, self.encoder_attention, self.decoder_self_attention
 
-        # self.decoder_output = self.fc(self.decoder_layer_history[-1][0])
-        # return self.decoder_output, self.decoder_layer_history[-1][1], self.decoder_layer_history[-1][2]
+        # ---
+        self.decoder_layer_history = [(self.y_input, None, None)]
+
+        for dec_layer in self.decoder_layers:
+            dec_output, dec_self_att_score, enc_att_score = dec_layer(self.decoder_layer_history[-1][0], X_mask, y_mask, context_matrix)
+            self.decoder_layer_history.append((dec_output, dec_self_att_score, enc_att_score))
+
+        self.decoder_output = self.fc(self.decoder_layer_history[-1][0])
+        return self.decoder_output, self.decoder_layer_history[-1][1], self.decoder_layer_history[-1][2]
     
 # ★ Decoder_Layer
 class Transformer_DecoderLayer(torch.nn.Module):
@@ -1169,8 +1287,6 @@ class Transformer_DecoderLayer(torch.nn.Module):
 #######################################################################################################################################
 
 
-
-
 import sys
 sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
 from DS_DeepLearning import EarlyStopping
@@ -1181,9 +1297,9 @@ import time
 X_sample.shape, y_sample.shape
 
 # model = Seq2Seq_Model(vocab_size_X, vocab_size_y).to(device)
-# model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
+model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
 # model = Transformer(vocab_size_X, vocab_size_y, 0, 0).to(device)
-model = Transformer(vocab_size_X, vocab_size_y, 0, 0, n_layers=3, n_heads=8, dropout=0.1).to(device)
+# model = Transformer(vocab_size_X, vocab_size_y, 0, 0, n_layers=2, n_heads=8, dropout=0.5, pos_maxlen=150).to(device)
 # model(X_sample.to(device), y_sample.to(device))
 
 
@@ -1223,7 +1339,7 @@ for e in range(epochs):
         pred = model(batch_X.to(device), batch_y.to(device))                   # predict
         # pred = model(batch_X.to(device), batch_y.to(device), teacher_forcing=1)                   # predict
 
-        pred_eval = pred[:,1:,:].reshape(-1, vocab_size_y)
+        pred_eval = pred[:,:-1,:].reshape(-1, vocab_size_y)
         real_eval = batch_y[:,1:].reshape(-1).type(torch.int64).to(device)
         loss = loss_function(pred_eval, real_eval)     # loss
         loss.backward()                         # backward
@@ -1291,6 +1407,7 @@ sentence_output = train_y[[idx],:]
 
 with torch.no_grad():
     model.eval()
+    # pred_sentence = model.predict(torch.tensor(sentence_input).to(device))
     pred_sentence, enc_attention = model.predict(torch.tensor(sentence_input).to(device))
     # pred_sentence = model(torch.tensor(sentence_input).to(device), torch.tensor(sentence_output).to(device))
 pred_sentence
@@ -1299,8 +1416,8 @@ sentence_en = np.stack([[word_index_X[word] if word != 0 else '' for word in sen
 sentence_kr_real = np.stack([[word_index_y[word] if word != 0 else '' for word in sentence] for sentence in sentence_output])[0]
 sentence_kr_pred = np.stack([[word_index_y[word] if word != 0 else '' for word in sentence] for sentence in pred_sentence.to('cpu').detach().numpy()])[0]
 
-sentence_kr_real
-sentence_kr_pred
+sentence_kr_realD
+Ssentence_kr_pred
 
 
 
@@ -1639,6 +1756,155 @@ rnn_model.fit(x=[train_X, train_input_y], y=train_output_y,
 
 
 
+####################################################################################################
+
+torch.nn.Sequential()
+# nn.Sequential은 input으로 준 module에 대해 순차적으로 forward() method를 호출해주는 역할
+torch.nn.ModuleList()
+# nn.ModuleList는 nn.Sequential과 마찬가지로 nn.Module의 list를 input으로 받는다.
+# nn.Module을 저장하는 역할을 한다. index로 접근도 할 수 있다.
+# nn.Sequential과 다르게 forward() method가 없다.
+# 안에 담긴 module 간의 connection도 없다.
+#  nn.ModuleList안에 Module들을 넣어 줌으로써 Module의 존재를 PyTorch에게 알려 주어야 한다.
+# - 만약 nn.ModuleList에 넣어 주지 않고, Python list에만 Module들을 넣어 준다면, PyTorch는 이들의 존재를 알지 못한다.
+# - 따라서 Module들을 Python list에 넣어 보관한다면, 꼭 마지막에 이들을 nn.ModuleList로 wrapping 해줘야 한다.
+
+####################################################################################################
+# https://sanghyu.tistory.com/3
+
+# view() 
+# . 원소의 수를 유지하면서 텐서의 shape를 변경하는 함수
+# . contiguous tensor에서 사용할 수 있음
+# . view 함수를 이용해서 반환된 값은 원본과 data(memory)를 공유하기 때문에 하나만 수정해도 반환 이전의 변수와 이후 변수 모두 수정된다.
+
+# reshape()
+# . contiguous하지 않는 함수에서도 작동한다.
+# . reshape() == contiguous().view()
+
+# transpose()
+# [batch_size, hidden_dim, input_dim] -> [batch_size, input_dim, hidden_dim]
+# 변환이후, contiguous한 성질을 잃어버리기 때문에 transpose().contiguous()와 같이 contiguous()함수와 같이 사용함
+
+# permute()
+# 모든 차원을 맞교환 할 수 있다. (transpose()의 일반화 버전이라고 생각한다.)
+# 차원을 교환하면서 contiguous 한 성질이 사라진다. 
+# view와 같은 contiguous한 성질이 보장될 때만 사용할 수 있는 함수를 사용해야 한다면, permute().contiguous()를 사용하자
+
+
+# contiguous()
+# 메모리상에 데이터를 contiguous 하게 배치한 값을 반환한다.
+
+####################################################################################################
+
+
+# (torch.tril)     ------------------------------------------------------------------------------------
+# torch.tril(input, diagonal=0, *, out=None) → Tensor
+# 행렬의 아래쪽 삼각형 부분 (2 차원 텐서) 또는 행렬의 배치 input 을 반환합니다 . 결과 텐서 out 의 다른 요소는 0으로 설정됩니다
+# a = torch.rand(5,5)
+# a
+# torch.tril(a)
+# torch.tril(a, diagonal=0)
+# torch.tril(a, diagonal=1)
+# torch.tril(a, diagonal=2)
+# torch.tril(a, diagonal=3)
+# torch.tril(a, diagonal=-1)
+# torch.tril(a, diagonal=-2)
+# torch.tril(a, diagonal=-3)
+
+# a = torch.rand(3,1,1,5) > 0.5
+# a_len = a.shape[-1]
+
+# b = torch.tril(torch.ones((a_len, a_len))).bool()  # (batch_seq, batch_seq)  
+# ---------------------------------------------------------------------------------------------------------
+
+
+
+# (layer Normalization)   ------------------------------------------------------------------------
+# https://wingnim.tistory.com/92
+# https://velog.io/@tjdcjffff/Normalization-trend
+# Batch-Normalization은 기존의 Batch들을 normalization했다면, Layer normalization은 Feature 차원에서 정규화를 진행한다.
+
+# ○ 도입배경 *
+# 기존 연구들은 training time을 줄이는 방법으로 batch normalization을 제안하였습니다.
+# 그러나 batch normalization은 몇 가지 단점을 가지고 있습니다.
+# batch normalization은 mini-batch size에 의존한다.
+# recurrent neural network model인 경우, 어떻게 적용이 되는지 명백하게 설명하기 어렵다.
+# 본 연구에서는 이러한 문제점을 해결하기 위해서 layer normalization을 제안하였습니다.
+# layer normalization은 batch normalization과 달리 train/test time 일 때, 같은 computation을 수행한다는 점이 큰 특징입니다.
+
+# layer normalization은 특정 layer가 가지고 있는 hidden unit에 대해 μ , σ를 공유함
+# BN과 다르게 mini-batch-size에 제약이 없음
+# RNN model에선 각각의 time-step마다 다른 BN이 학습됨
+# LN은 layer의 output을 normalize함으로써 RNN계열 모델에서 좋은 성능을 보임
+
+# ---------------------------------------------------------------------------------------------------------
+
+
+
+# (contiguous 여부와 stride 의미)  ------------------------------------------------------------------------
+# https://jimmy-ai.tistory.com/122
+# https://f-future.tistory.com/entry/Pytorch-Contiguous
+import torch
+
+a = torch.randn(3, 4)
+a.transpose_(0, 1)
+
+b = torch.randn(4, 3)
+
+# 두 tensor는 모두 (4, 3) shape
+print(a)
+print(b)
+
+# a 텐서 메모리 주소 예시
+for i in range(4):
+    for j in range(3):
+        print(a[i][j].data_ptr())
+
+# b 텐서 메모리 주소 예시
+for i in range(4):
+    for j in range(3):
+        print(b[i][j].data_ptr())
+
+
+# 각 데이터의 타입인 torch.float32 자료형은 4바이트이므로, 메모리 1칸 당 주소 값이 4씩 증가함을 알 수 있습니다.
+# 그런데 자세히 보시면 b는 한 줄에 4씩 값이 증가하고 있지만, a는 그렇지 않은 상황임을 알 수 있습니다.
+
+# 즉, b는 axis = 0인 오른쪽 방향으로 자료가 순서대로 저장됨에 비해,
+# a는 transpose 연산을 거치며 axis = 1인 아래 방향으로 자료가 저장되고 있었습니다.
+
+# 여기서, b처럼 axis 순서대로 자료가 저장된 상태를 contiguous = True 상태라고 부르며,
+# a같이 자료 저장 순서가 원래 방향과 어긋난 경우를 contiguous = False 상태라고 합니다.
+
+# 각 텐서에 stride() 메소드를 호출하여 데이터의 저장 방향을 조회할 수 있습니다.
+# 또한, is_contiguous() 메소드로 contiguous = True 여부도 쉽게 파악할 수 있습니다.
+
+a.stride() # (1, 4)
+b.stride() # (3, 1)
+# 여기에서 a.stride() 결과가 (1, 4)라는 것은
+# a[0][0] -> a[1][0]으로 증가할 때는 자료 1개 만큼의 메모리 주소가 이동되고,
+# a[0][0] -> a[0][1]로 증가할 때는 자료 4개 만큼의 메모리 주소가 바뀐다는 의미입니다.
+
+
+a.is_contiguous() # False
+b.is_contiguous() # True
+
+# 텐서의 shape을 조작하는 과정에서 메모리 저장 상태가 변경되는 경우가 있습니다.
+# 주로 narrow(), view(), expand(), transpose() 등 메소드를 사용하는 경우에 이 상태가 깨지는 것으로 알려져 있습니다.
+#   ㄴ 메모리를 따로 할당하지 않는 Tensor연산
+
+# 해당 상태의 여부를 체크하지 않더라도 텐서를 다루는데 문제가 없는 경우가 많습니다.
+# 다만, RuntimeError: input is not contiguous의 오류가 발생하는 경우에는
+# input tensor를 contiguous = True인 상태로 변경해주어야 할 수 있습니다.
+
+# 이럴 때에는 아래 예시 코드처럼 contiguous() 메소드를 텐서에 적용하여
+# contiguous 여부가 True인 상태로 메모리 상 저장 구조를 바꿔줄 수 있습니다.
+
+a.is_contiguous() # False
+
+# 텐서를 contiguous = True 상태로 변경
+a = a.contiguous()
+a.is_contiguous() # True
+# ---------------------------------------------------------------------------------------------------------
 
 
 
@@ -1828,3 +2094,4 @@ top1 = output.argmax(1)
 input_de = trg[t] if teacher_force else top1
 # return outputs
 ############################################################################################################################
+

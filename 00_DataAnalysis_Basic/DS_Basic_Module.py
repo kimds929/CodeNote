@@ -98,6 +98,19 @@ class DataColumns():
 ####### DS_DataFrame #######################################################################################################################################################
 ############################################################################################################################################################################
 
+
+# DataFrame의 Columns을 Search 해주는 함수
+def search(data, query=None):
+    # dc = np.array(list(map(lambda x: x.lower(), data.columns)))
+    dc = data.columns
+    if query is None:
+        return np.array(dc)
+    elif sum([c in query for c in ['>', '<', '==', '.isin(', '.str.contains(']]):
+        return pd.DataFrame(dc, columns=['columns']).query('columns' + query).values.ravel()
+    else:
+        return pd.DataFrame(dc, columns=['columns']).query(f"columns.str.contains('{query}')").values.ravel()
+
+
 # class Quantile
 class Quantile():
     def __init__(self, q=0.25):

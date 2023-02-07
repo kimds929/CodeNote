@@ -1,5 +1,6 @@
+# (Python) DataAnalysis_Basic03_Application
 import sys
-sys.path.append(r'D:\Python')
+sys.path.append(r'D:\Python\★★Python_POSTECH_AI\파이썬_정리자료★★\00_DataAnalysis_Basic')
 
 from DS_Basic_Module import *
 
@@ -23,6 +24,8 @@ cols = dc.cols_dict['format2_detail']
 
 data0[cols].to_clipboard(index=False)
 
+# search
+search(data0, '소둔')
 
 
 # Read_Clipboard ---------------------------------------------------------------------------------

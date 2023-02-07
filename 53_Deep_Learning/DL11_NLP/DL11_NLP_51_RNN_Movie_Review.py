@@ -26,7 +26,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 # os.getcwd()
 
 # 1) 데이터 로드하기 --------------------------------
-dataset_path = r"C:\Users\Admin\Desktop\DataBase"
+dataset_path = r"D:\작업방\업무 - 자동차 ★★★\Dataset"
 train_data = pd.read_table(f'{dataset_path}/NLP_Raw_movie_ratings_train.txt')
 test_data = pd.read_table(f'{dataset_path}/NLP_Raw_movie_ratings_test.txt')
 
@@ -103,7 +103,7 @@ for sentence in tqdm(test_data02['document']):
     X_test_all.append(stopwords_removed_sentence)
 
 ################################################
-dataset_path = r"C:\Users\Admin\Desktop\DataBase"
+dataset_path = r"D:\작업방\업무 - 자동차 ★★★\Dataset"
 
 # train_token = pd.concat([train_data02[['id','label']].reset_index(drop=True), pd.Series(X_train_all, name='tokenized')], axis=1)
 # test_token = pd.concat([test_data02[['id','label']].reset_index(drop=True), pd.Series(X_test_all, name='tokenized')], axis=1)
@@ -114,15 +114,15 @@ dataset_path = r"C:\Users\Admin\Desktop\DataBase"
 # test_token[:3000].to_csv(f"{dataset_path}/NLP_movie_review_simple_test_tokenized.csv")
 
 ################################################
-train_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_train_tokenized.csv", encoding='utf-8-sig')
-test_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_test_tokenized.csv", encoding='utf-8-sig')
+# train_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_train_tokenized.csv", encoding='utf-8-sig')
+# test_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_test_tokenized.csv", encoding='utf-8-sig')
+# train_X = list(map(lambda x: eval(x), train_token['tokenized']))
+# test_X = list(map(lambda x: eval(x), test_token['tokenized']))
+
 simple_train_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_simple_train_tokenized.csv", encoding='utf-8-sig')
 simple_test_token = pd.read_csv(f"{dataset_path}/NLP_movie_review_simple_test_tokenized.csv", encoding='utf-8-sig')
-
-train_X = list(map(lambda x: eval(x), train_token['tokenized']))
-test_X = list(map(lambda x: eval(x), test_token['tokenized']))
-# train_X = list(map(lambda x: eval(x), simple_train_token['tokenized']))
-# test_X = list(map(lambda x: eval(x), simple_test_token['tokenized']))
+train_X = list(map(lambda x: eval(x), simple_train_token['tokenized']))
+test_X = list(map(lambda x: eval(x), simple_test_token['tokenized']))
 
 # train_y = train_token['label'].values
 # test_y = test_token['label'].values
@@ -131,43 +131,44 @@ test_y = simple_test_token['label'].values
 print(len(train_X), len(train_y), len(test_X), len(test_y))
 
 
-
-
-
 # 4) 정수 인코딩 --------------------------------
 #   기계가 텍스트를 숫자로 처리할 수 있도록 훈련 데이터와 테스트 데이터에 정수 인코딩을 수행
 from tensorflow.keras.preprocessing.text import Tokenizer
 tokenizer = Tokenizer()
 tokenizer.fit_on_texts(train_X)
+
+word_numbering = pd.Series(tokenizer.word_index)
+word_numbering
 #   각 정수는 전체 훈련 데이터에서 등장 빈도수가 높은 순서대로 부여되었기 때문에, 높은 정수가 부여된 단어들은 등장 빈도수가 매우 낮다는 것을 의미
 # {'영화': 1, '보다': 2, '을': 3, '없다': 4, '이다': 5, '있다': 6, '좋다': 7, ... 중략 ... '디케이드': 43751, '수간': 43752}
 
+word_freq = pd.Series(tokenizer.word_counts)
 
 
+# 희소단어 제거
+rare_dict = {}
+total_cnt = len(word_freq)      # 전체 단어수
+for i in sorted(word_freq.reset_index(drop=True).unique()):
+    prob =  len(word_freq[word_freq <= i]) / total_cnt     # 특정 빈도수 이하 단어
+    rare_dict[i] = prob
 
-threshold = 3
-total_cnt = len(tokenizer.word_index) # 단어의 수
-rare_cnt = 0 # 등장 빈도수가 threshold보다 작은 단어의 개수를 카운트
-total_freq = 0 # 훈련 데이터의 전체 단어 빈도수 총 합
-rare_freq = 0 # 등장 빈도수가 threshold보다 작은 단어의 등장 빈도수의 총 합
+rare_vec = pd.Series(rare_dict)
+rare_vec[:20]
 
-# 단어와 빈도수의 쌍(pair)을 key와 value로 받는다.
-for key, value in tokenizer.word_counts.items():
-    total_freq = total_freq + value
+threshold_rareword = 0.7
+rare_cnt = rare_vec[rare_vec <= threshold_rareword].index[-1]
+# rare_cnt = 3
+print(f"rare_cnt: {rare_cnt}")
 
-    # 단어의 등장 빈도수가 threshold보다 작으면
-    if(value < threshold):
-        rare_cnt = rare_cnt + 1
-        rare_freq = rare_freq + value
 
-print('단어 집합(vocabulary)의 크기 :',total_cnt)
-print('등장 빈도가 %s번 이하인 희귀 단어의 수: %s'%(threshold - 1, rare_cnt))
-print("단어 집합에서 희귀 단어의 비율:", (rare_cnt / total_cnt)*100)
-print("전체 등장 빈도에서 희귀 단어 등장 빈도 비율:", (rare_freq / total_freq)*100)
-#   단어 집합(vocabulary)의 크기 : 43752
-#   등장 빈도가 2번 이하인 희귀 단어의 수: 24337
-#   단어 집합에서 희귀 단어의 비율: 55.62488571950996
-#   전체 등장 빈도에서 희귀 단어 등장 빈도 비율: 1.8715872104872904
+plt.figure()
+plt.title(f"Ratio of Rare_Word\n {rare_cnt}: {round(rare_vec[rare_cnt], 1)}% (total: {total_cnt})")
+plt.plot(rare_vec.index, rare_vec, 'o-')
+plt.xscale('log')
+plt.axhline(threshold_rareword, color='red', alpha=0.1)
+plt.text(rare_cnt, rare_vec[rare_cnt], f"  ← {rare_cnt}", color='red')
+plt.scatter(rare_cnt, rare_vec[rare_cnt], color='red')
+plt.show()
 
 
 # 등장 빈도가 threshold 값인 3회 미만. 즉, 2회 이하인 단어들은 단어 집합에서 무려 절반 이상을 차지합니다.
@@ -177,11 +178,12 @@ print("전체 등장 빈도에서 희귀 단어 등장 빈도 비율:", (rare_fr
 
 # 전체 단어 개수 중 빈도수 2이하인 단어는 제거.
 # 0번 패딩 토큰을 고려하여 + 1
-vocab_size = total_cnt - rare_cnt + 1
+# vocab_size = total_cnt - rare_cnt + 1
+vocab_size = len(word_freq[word_freq > rare_cnt]) + 1
+# vocab_size = 6679
 
-
-print('단어 집합의 크기 :',vocab_size)
-#   단어 집합의 크기 : 19416
+print(f'단어 집합의 크기 : {vocab_size} (total: {total_cnt})')
+#   단어 집합의 크기 : 6679 (total: 21329)
 
 
 
@@ -189,8 +191,27 @@ print('단어 집합의 크기 :',vocab_size)
 # 이를 케라스 토크나이저의 인자로 넘겨주고 텍스트 시퀀스를 정수 시퀀스로 변환합니다.
 
 # texts_to_sequences ★★ -----------------------------------
-tokenizer = Tokenizer(vocab_size) 
+# # ----------------------------------------
+# # tokenizer
+# AA = [['a','e','c','d'],
+#  ['a','b','c','f'],
+#  ['a','b','e','d'],
+#  ['a','b','c','d']]
+# t = Tokenizer()
+# t.fit_on_texts(AA)
+# dict(t2.word_counts)
+# t2.word_index
+
+# # tokenizer_filtering
+# t2 = Tokenizer(num_words=6-1+1)
+# t2.fit_on_texts(AA)
+# np.array(dir(t2)[-50:])
+# t2.texts_to_sequences(AA)
+# # ----------------------------------------
+
+tokenizer = Tokenizer(num_words=vocab_size)     # remove rare_word → re tokenize
 tokenizer.fit_on_texts(train_X)
+
 train_X_seq = tokenizer.texts_to_sequences(train_X)
 test_X_seq = tokenizer.texts_to_sequences(test_X)
 
@@ -212,20 +233,21 @@ test_seq_drop_df = test_seq_df[test_seq_df['token_seq'].apply(lambda x: len(x)) 
 print(train_seq_drop_df.shape, test_seq_drop_df.shape)
 
 
-# 6) 패딩 ------------------------
+# 6) 패딩 : Max_Length ------------------------
 train_len = train_seq_drop_df['token_seq'].apply(len).value_counts().sort_index()
 train_cumprob = train_len.cumsum() / train_len.sum()
 
-threshold = 0.9
-max_len = train_cumprob[train_cumprob >= threshold].index[0]
+threshold_maxlen = 0.9
+max_len = train_cumprob[train_cumprob >= threshold_maxlen].index[0]
+# max_len = 22
 print(max_len)
 
 
+plt.figure()
 plt.plot(train_cumprob.index, train_cumprob, 'o-')
-plt.axhline(0.9, color='red',ls='--')
+plt.axhline(threshold_maxlen, color='red', alpha=0.1)
+plt.text(max_len, train_cumprob[max_len], f"← {max_len}", color='red')
 plt.show()
-
-
 
 
 # pad_sequences ★★ --------------------------------------------
@@ -236,6 +258,7 @@ test_X_pad = pad_sequences(test_seq_drop_df['token_seq'].values, maxlen=max_len)
 
 train_y_pad = train_seq_drop_df['label'].values
 test_y_pad = test_seq_drop_df['label'].values
+
 print(train_X_pad.shape, train_y_pad.shape)
 print(test_X_pad.shape, test_y_pad.shape)
 
@@ -258,7 +281,9 @@ from tensorflow.python.client import device_lib
 print(device_lib.list_local_devices())
 # device_lib.list_local_devices()[0].name
 
-class TF_Model(tf.keras.Model):
+# vocab_size = 6679
+
+class NLP_Movie_TF_RNN(tf.keras.Model):
     def __init__(self):
         super().__init__()
         self.emb_layer = tf.keras.layers.Embedding(vocab_size, 100)
@@ -273,6 +298,20 @@ class TF_Model(tf.keras.Model):
         self.sigmoid = self.sigmoid_layer(self.linear)
         return self.sigmoid
 
+class NLP_Movie_TF_LSTM(tf.keras.Model):
+    def __init__(self):
+        super().__init__()
+        self.emb_layer = tf.keras.layers.Embedding(vocab_size, 100)
+        self.lstm_layer = tf.keras.layers.LSTM(128, return_state=True, return_sequences=True)
+        self.linear_layer = tf.keras.layers.Dense(1)
+        self.sigmoid_layer = tf.keras.layers.Activation('sigmoid')
+
+    def call(self, X):
+        self.emb = self.emb_layer(X)                                    # (batch, 23(word), 100(embed))
+        self.lstm_output, self.lstm_hidden, self.lstm_cell = self.lstm_layer(self.emb)     # total_seqs(batch, seq, features), last_seq (1, batch, features)
+        self.linear = self.linear_layer(self.lstm_hidden)             # (batch, 1)
+        self.sigmoid = self.sigmoid_layer(self.linear)
+        return self.sigmoid
 
 
 # sample_pad_tf = tf.constant(train_X_pad[:3,:], dtype=tf.int32)
@@ -281,7 +320,7 @@ class TF_Model(tf.keras.Model):
 train_ds = tf.data.Dataset.from_tensor_slices((train_X_pad, train_y_pad)).batch(32).shuffle(train_X_pad.shape[0])
 test_ds = tf.data.Dataset.from_tensor_slices((test_X_pad, test_y_pad)).batch(32).shuffle(test_X_pad.shape[0])
 
-tf_model = TF_Model()
+tf_model = NLP_Movie_TF_RNN()
 # tf_model(sample_pad_tf)
 
 loss_function = tf.keras.losses.BinaryCrossentropy()
@@ -320,18 +359,29 @@ with tf.device(f"{device_lib.list_local_devices()[0].name}"):       #"GPU를 사
 # es_tf.optimum
 # es_tf.optimum[2]
 
+
 # weights_save ***
-# cPickle.dump(es_tf.optimum[2], open('NLP_tf_model_weights.pkl', 'wb'))
+# from six.moves import cPickle
+# cPickle.dump(es_tf.optimum[2], open('NLP_tf_model_RNN_weights.pkl', 'wb'))
+ 
  
 # weights_load ***
 from six.moves import cPickle
 weight_path = r'D:\작업방\업무 - 자동차 ★★★\Workspace_Python\Model\weights_tensorflow'
 
-tf_model_weights = cPickle.load(open(f"{weight_path}/NLP_tf_model_weights.pkl",'rb'))
+tf_model_weights = cPickle.load(open(f"{weight_path}/NLP_tf_model_LSTM_weights.pkl",'rb'))
 
-tf_model = TF_Model()
-tf_model.build(input_shape=(3,23))
+# vocab_size = 6679
+# tf_model = NLP_Movie_TF_RNN()
+tf_model = NLP_Movie_TF_LSTM()
+tf_model.build(input_shape=(1, max_len))
 tf_model.set_weights(tf_model_weights)
+
+
+# Model Evaluate ***
+loss_function = tf.keras.losses.BinaryCrossentropy()
+t_pred = tf_model(tf.constant(test_X_pad))
+loss_function(tf.constant(test_y_pad), t_pred)
 # ------------------------------------------------------------------------------------------------------------
 
 
@@ -353,8 +403,9 @@ embedding_dim = 100
 hidden_units = 128
 # vocab_size = total_cnt - rare_cnt + 1
 # vocab_size = train_X_pad.max() + 1
+# vocab_size = 6679
 
-class NLP_Movie_RNN(torch.nn.Module):
+class NLP_Movie_Torch_RNN(torch.nn.Module):
     def __init__(self):
         super().__init__()
         
@@ -367,8 +418,142 @@ class NLP_Movie_RNN(torch.nn.Module):
         self.emb = self.emb_layer(X)                                    # (batch, 23(word), 100(embed))
         self.rnn_output, self.rnn_hidden = self.rnn_layer(self.emb)     # total_seqs(batch, seq, features), last_seq (1, batch, features)
         self.linear = self.linear_layer(self.rnn_hidden[0])             # (batch, 1)
-        # self.sigmoid = self.sigmoid_layer(self.linear)
         return self.linear
+        # self.sigmoid = self.sigmoid_layer(self.linear)
+        # return self.sigmoid
+
+class NLP_Movie_Torch_LSTM(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        self.emb_layer = torch.nn.Embedding(vocab_size, 100)
+        self.lstm_layer = torch.nn.LSTM(100, 128, batch_first=True)
+        self.linear_layer = torch.nn.Linear(128, 1)
+        self.sigmoid_layer = torch.nn.Sigmoid()
+    
+    def forward(self, X):
+        self.emb = self.emb_layer(X)                                    # (batch, 23(word), 100(embed))
+        self.lstm_output, (self.lstm_hidden, self.lstm_cell) = self.lstm_layer(self.emb)     # total_seqs(batch, seq, features), last_seq (1, batch, features)
+        self.linear = self.linear_layer(self.lstm_hidden[0])             # (batch, 1)
+        # self.sigmoid = self.sigmoid_layer(self.linear)
+        return self.linear       
+
+# with attention (concat)
+class NLP_Movie_Torch_LSTM_With_Attention(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        self.emb_layer = torch.nn.Embedding(vocab_size, 100)
+        self.lstm_layer = torch.nn.LSTM(100, 128, batch_first=True)
+        
+        self.linear_layer = torch.nn.Linear(256, 1)
+        self.sigmoid_layer = torch.nn.Sigmoid()
+    
+    def forward(self, X):
+        self.emb = self.emb_layer(X)                                    # (batch, 22(word), 100(embed))
+        self.lstm_output, (self.lstm_hidden, self.lstm_cell) = self.lstm_layer(self.emb)     # total_seqs(batch, seq, features), last_seq (1, batch, features)
+        # (B, 22(word), C), ((1, B, C), (1, B, C))
+        
+        # Attention_layer
+        self.query = self.lstm_hidden.transpose(0,1)               # sT: (batch, 1, C)
+        self.key = self.lstm_output                                 # hi:  (batch, 22(word), C)
+        self.score = torch.sum(self.query * self.key, axis=2)               # et: (batch, 22(word)) : sum(query(batch, 1, C) * key(batch, 22(word), C), axis=2)
+        self.score_softmax = torch.nn.functional.softmax(self.score, dim=1)             # et: (batch, 22(word))
+        self.attention_value = torch.sum(torch.unsqueeze(self.score_softmax, 2) * self.lstm_output, axis=1)  # at: (batch, C) : sum((batch, 22(word), 1) * (batch, 1, C), axis=1)
+        self.concat = torch.cat((self.attention_value, self.lstm_hidden[0]),axis=1)     # (batch, 2*C)
+        
+        self.linear = self.linear_layer(self.concat)             # (batch, 1)
+        return self.linear
+
+# with attention (product)
+class NLP_Movie_Torch_LSTM_With_Attention2(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        self.emb_layer = torch.nn.Embedding(vocab_size, 100)
+        self.lstm_layer = torch.nn.LSTM(100, 128, batch_first=True)
+        
+        self.linear_layer = torch.nn.Linear(128, 1)
+        self.sigmoid_layer = torch.nn.Sigmoid()
+    
+    def forward(self, X):
+        self.emb = self.emb_layer(X)                                    # (batch, 22(word), 100(embed))
+        self.lstm_output, (self.lstm_hidden, self.lstm_cell) = self.lstm_layer(self.emb)     # total_seqs(batch, seq, features), last_seq (1, batch, features)
+        # (B, 22(word), C), ((1, B, C), (1, B, C))
+        
+        # Attention_layer
+        self.query = self.lstm_hidden.transpose(0,1)               # sT: (batch, 1, C)
+        self.key = self.lstm_output                                 # hi:  (batch, 22(word), C)
+        self.score = torch.sum(self.query * self.key, axis=2)               # et: (batch, 22(word)) : sum(query(batch, 1, C) * key(batch, 22(word), C), axis=2)
+        self.score_softmax = torch.nn.functional.softmax(self.score, dim=1)             # et: (batch, 22(word))
+        self.attention_value = torch.sum(torch.unsqueeze(self.score_softmax, 2) * self.lstm_output, axis=1)  # at: (batch, C) : sum((batch, 22(word), 1) * (batch, 1, C), axis=1)
+        self.product = self.attention_value * self.lstm_hidden[0]     # (batch, C)
+        
+        self.linear = self.linear_layer(self.product)             # (batch, 1)
+        return self.linear
+
+# with attention concentrated_dot product
+class NLP_Movie_Torch_LSTM_With_Attention3(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        self.emb_layer = torch.nn.Embedding(vocab_size, 100)
+        self.lstm_layer = torch.nn.LSTM(100, 128, batch_first=True)
+        
+        self.linear_layer = torch.nn.Linear(128, 1)
+        self.sigmoid_layer = torch.nn.Sigmoid()
+    
+    def forward(self, X):
+        self.emb = self.emb_layer(X)                                    # (batch, 22(word), 100(embed))
+        self.lstm_output, (self.lstm_hidden, self.lstm_cell) = self.lstm_layer(self.emb)     # total_seqs(batch, seq, features), last_seq (1, batch, features)
+        # (B, 22(word), C), ((1, B, C), (1, B, C))
+        
+        # Attention_layer
+        self.query = self.lstm_hidden.transpose(0,1)               # sT: (batch, 1, C)
+        self.key = self.lstm_output                     # hi: (batch, 22(word), C)
+        
+        self.score = torch.sum(self.query * self.key, axis=2)      # et: (batch, 22(word))
+        with torch.no_grad():
+            self.score_softmax = torch.nn.functional.softmax(self.score, dim=1)                             # et: (batch, 22(word))
+        self.attention_value = torch.unsqueeze(torch.sum(self.score, axis=1), dim=1)
+        self.product = self.attention_value * self.lstm_hidden[0]
+        
+        self.linear = self.linear_layer(self.product)             # (batch, 1)
+        return self.linear
+
+# with attention ,weigts, concentrated_dot product
+class NLP_Movie_Torch_LSTM_With_Attention4(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        self.emb_layer = torch.nn.Embedding(vocab_size, 100)
+        self.lstm_layer = torch.nn.LSTM(100, 128, batch_first=True)
+        
+        self.att_wv = torch.rand(128,1).requires_grad_(True).to(device)
+        # self.att_wv = torch.nn.init.xavier_normal_(torch.empty(128,1)).requires_grad_(True).to(device)
+        
+        self.linear_layer = torch.nn.Linear(128, 1)
+        self.sigmoid_layer = torch.nn.Sigmoid()
+    
+    def forward(self, X):
+        self.emb = self.emb_layer(X)                                    # (batch, 22(word), 100(embed))
+        self.lstm_output, (self.lstm_hidden, self.lstm_cell) = self.lstm_layer(self.emb)     # total_seqs(batch, seq, features), last_seq (1, batch, features)
+        # (B, 22(word), C), ((1, B, C), (1, B, C))
+        
+        # Attention_layer
+        self.query = self.lstm_hidden.transpose(0,1)               # sT: (batch, 1, C)
+        self.key = self.lstm_output                     # hi: (batch, 22(word), C)
+        
+        self.score_hidden = self.query * self.key      # et: (batch, 22(word), C)
+        self.score = torch.matmul(self.score_hidden, self.att_wv)[:,:,0]     # v_hi: (batch, 22(word), 1) : (batch, 22(word), C) @ (C, 1)
+        with torch.no_grad():
+            self.score_softmax = torch.nn.functional.softmax(self.score, dim=1)                             # et: (batch, 22(word))
+        self.attention_value = torch.unsqueeze(torch.sum(self.score, axis=1), dim=1)
+        self.product = self.attention_value * self.lstm_hidden[0]
+        
+        self.linear = self.linear_layer(self.product)             # (batch, 1)
+        return self.linear
+
 
 # Dataset
 train_ds = torch.utils.data.TensorDataset(torch.tensor(train_X_pad, dtype=torch.int32)
@@ -379,10 +564,13 @@ test_ds = torch.utils.data.TensorDataset(torch.tensor(test_X_pad, dtype=torch.in
                                ,torch.tensor(test_y_pad.reshape(-1,1), dtype=torch.float32) )
 test_loader = torch.utils.data.DataLoader(test_ds, batch_size=32, shuffle=True)
 
-sample_pad_torch = torch.tensor(train_X_pad[:3,:], dtype=torch.int32)
+# sample_pad_torch = torch.tensor(train_X_pad[:3,:], dtype=torch.int32)
+# sample_pad_torch.shape
 
 # Prepare_Modeling
-torch_model = NLP_Movie_RNN().to(device)
+# torch_model = NLP_Movie_Torch_RNN().to(device)
+# torch_model = NLP_Movie_Torch_LSTM().to(device)
+torch_model = NLP_Movie_Torch_LSTM_With_Attention().to(device)
 loss_function = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.RMSprop(torch_model.parameters())
 epochs = 100
@@ -424,18 +612,37 @@ es_torch.plot
 es_torch.optimum
 es_torch.optimum[2]
 
+
 # weights_save ***
-cPickle.dump(es.optimum[2], open('NLP_torch_model_weights.pkl', 'wb'))
+# from six.moves import cPickle
+# cPickle.dump(es_torch.optimum[2], open('NLP_torch_model_RNN_weights.pkl', 'wb'))
+
 
 # weights_load ***
 from six.moves import cPickle
 weight_path = r'D:\작업방\업무 - 자동차 ★★★\Workspace_Python\Model\weights_torch'
-torch_model_weights = cPickle.load(open(f"{weight_path}/221209_NLP_torch_model_weights.pkl",'rb'))
+# torch_model_weights = cPickle.load(open(f"{weight_path}/NLP_torch_model_LSTM_weights.pkl",'rb'))
+torch_model_weights = cPickle.load(open(f"{weight_path}/NLP_torch_model_LSTM_Attention4_weights.pkl",'rb'))
+# torch_model_weights
 
+# vocab_size = 6679
+# torch_model = NLP_Movie_RNN().to(device)
+# torch_model = NLP_Movie_Torch_LSTM().to(device)
+torch_model = NLP_Movie_Torch_LSTM_With_Attention4().to(device)
 torch_model.load_state_dict(torch_model_weights)
 
-# ------------------------------------------------------------------------------------------------------------
 
+# Model Evaluate ***
+torch_model.eval()
+with torch.no_grad():
+    t_pred = torch_model(torch.tensor(test_X_pad, dtype=torch.int32))
+
+# loss_function = torch.nn.BCELoss()
+# loss_function(t_pred, torch.Tensor(test_y_pad.reshape(-1,1)))
+
+loss_function = torch.nn.BCEWithLogitsLoss()
+loss_function(t_pred, torch.Tensor(test_y_pad.reshape(-1,1)))
+# ------------------------------------------------------------------------------------------------------------
 
 
 
@@ -450,6 +657,9 @@ okt = Okt()
 # new_sentence = '이 영화 핵노잼 ㅠㅠ'
 # new_sentence = '이딴게 영화냐 ㅉㅉ'
 # new_sentence = '와 개쩐다 정말 세계관 최강자들의 영화다'
+# new_sentence = '최고'
+# new_sentence = '이 돈내고 볼만한 영화는 아님'
+# new_sentence = '인생작 인듯'
 
 new_sentence_filter = re.sub(r'[^ㄱ-ㅎㅏ-ㅣ가-힣 ]','', new_sentence)
 new_sentence_okt = okt.morphs(new_sentence_filter, stem=True)
@@ -459,11 +669,11 @@ new_sentence_pad = pad_sequences(new_sentence_encode, maxlen=max_len) # 패딩
 
 
 
-# tensorflow prediction ***
-new_sentence_tfX = tf.constant(new_sentence_pad)
+# # tensorflow prediction ***
+# new_sentence_tfX = tf.constant(new_sentence_pad)
 
-score = tf_model.predict(new_sentence_pad)[0][0]
-print(f"긍정확률: {np.round(score*100,1)}%")
+# score = tf_model.predict(new_sentence_pad)[0][0]
+# print(f"긍정확률: {np.round(score*100,1)}%")
 
 
 # torch prediction ***
@@ -475,15 +685,38 @@ with torch.no_grad():
 print(f"긍정확률: {np.round(score*100,1)}%")
 
 
+plt.bar(range(torch_model.score_softmax.shape[1]), torch_model.score_softmax[0])
 
 
+
+
+
+# class NLP_Movie_TF_LSTM(tf.keras.Model):
+#     def __init__(self):
+#         super().__init__()
+#         self.emb_layer = tf.keras.layers.Embedding(vocab_size, 100)
+#         self.lstm_layer = tf.keras.layers.LSTM(128, return_state=True, return_sequences=True)
         
+#         self.att_wk = self.add_weight(shape=(128,8), initializer='random_normal', trainable=True)
+#         self.att_wq = self.add_weight(shape=(8,1), initializer='random_normal', trainable=True)
         
+#         self.linear_layer = tf.keras.layers.Dense(1)
+#         self.sigmoid_layer = tf.keras.layers.Activation('sigmoid')
+
+#     def call(self, X):
+#         self.emb = self.emb_layer(X)                                    # (batch, 23(word), 100(embed))
+#         self.lstm_output, self.lstm_hidden, self.lstm_cell = self.lstm_layer(self.emb)     # total_seqs(batch, seq, features), last_seq (1, batch, features)
         
+#         # Attention_Layer
+#         self.value = self.lstm_output
+#         self.key = tf.matmul(self.value, self.att_wk)
+#         self.score = tf.matmul(self.key, self.att_wq)
+#         self.score_prob = tf.nn.softmax(self.score, axis=1)
+#         self.attention_value = tf.
         
-
-
-
+#         self.linear = self.linear_layer(self.lstm_hidden)             # (batch, 1)
+#         self.sigmoid = self.sigmoid_layer(self.linear)
+#         return self.sigmoid
 
 
 
