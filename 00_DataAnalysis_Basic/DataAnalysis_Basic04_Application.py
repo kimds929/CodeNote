@@ -14,7 +14,11 @@ from scipy import stats
 
 
 # 주로쓰는 항목 -------------------------
+from DS_Basic_Module import DataColumns, search
+
 data0 = pd.read_clipboard(sep='\t')
+data0.shape
+
 dc = DataColumns()
 cols = dc.cols_dict['format0']
 cols = dc.cols_dict['format1']
@@ -22,13 +26,20 @@ cols = dc.cols_dict['format1_detail']
 cols = dc.cols_dict['format2']
 cols = dc.cols_dict['format2_detail']
 
+data0[cols]
 data0[cols].to_clipboard(index=False)
 
 # search
 search(data0, '소둔')
+search(data0, '일자')
+search(data0, '열연')
+search(data0, 'PCM')
+search(data0, 'YP')
 
 
 # Read_Clipboard ---------------------------------------------------------------------------------
+from DS_Basic_Module import read_clipboard
+
 read_clipboard(copy=True, cut_string=7, return_type='list')
 read_clipboard(copy=True, cut_string=7, return_type='str')
 read_clipboard(copy=True, cut_string=7, return_type='series')
@@ -48,6 +59,7 @@ from DS_Basic_Module import micro_plot, img_to_clipboard
 
 df_sql = pd.read_clipboard(sep='\t')
 df_sql
+
 # df_sql = DB.result.copy()
 df_sql['ZONE'] = pd.Categorical(df_sql['ZONE'], ['CT','LS','HS','SS','SCS','RCS','OAS','RHS','FCS','GA_Furnace', 'GA_IH', 'GI_ACE','SPM_EL','SPM_RF', 'SPM_RF_ST1','SPM_RF_ST2'], ordered=True)
 df_sql.sort_values(['MTL_NO','ZONE','LEN_POS'], axis=0, inplace=True)
@@ -64,18 +76,33 @@ img_to_clipboard( micro_plot(df_sql.query("MTL_NO == 'CQNB173'")
 # 비교분석 (ttest, graph) ---------------------------------------------------------------------------
 from DS_Basic_Module import ttest_each, distbox, violin_box_plot, hist_compare
 
-data0 = pd.read_clipboard(sep='\t')
+# data0 = pd.read_clipboard(sep='\t')
+# data0.shape
+
+data0 = data0[~data0['YP'].isna()]
 
 # t-test
+ttest_each(data=data0, x='YP', group='열연공장')
 result = ttest_each(data=data0, x='YP', group='열연공장')
+result
 result['plot'].iloc[0]
 
-ttest_each(data=data0, x='YP', group='규격약호')
+result = ttest_each(data=data0, x='YP', group='규격약호')
+
+result['plot'].iloc[0]
+result['plot'].iloc[1]
+result['plot'].iloc[2]
+result['plot'].iloc[3]
+result['plot'].iloc[4]
+# result['plot'][('PAT980D-M', 'SCGA980DUB')]
 
 # distbox, violin_plot
 distbox(data=data0, on='YP', group='열연공장')
+distbox(data=data0, on='YP', group='규격약호')
 
 violin_box_plot(data=data0, x='열연공장', y='YP')
+violin_box_plot(data=data0, x='규격약호', y='YP')
+
 
 # compare_hist 
 col = 'YP'
@@ -89,8 +116,8 @@ hist_compare(data_g1, data_g2, label=['3열연', '4열연'], bins=30)
 # 공정능력 Graph --------------------------------------------------------------------------------
 from DS_Basic_Module import Capability
 
-data0 = pd.read_clipboard(sep='\t')
-
+# data0 = pd.read_clipboard(sep='\t')
+# data0
 
 col = 'YP'
 cpk_object = Capability(lsl=600, usl=740)
@@ -108,6 +135,7 @@ cpk_object(data0[col], display=True)
 
 
 # Plot
+cpk_object.plot(data0[col], bins=30)
 fig = cpk_object.plot(data0[col], bins=30)
 fig
 img_to_clipboard(fig)
@@ -127,6 +155,11 @@ cpk_object.capability_analysis(data0[col], cpk=[0.3, 0.5, 0.7, 1.0])
 
 # pandas 적용
 data0[col].agg(cpk_object)
+
+data0.groupby(['규격약호'])['YP'].mean()
+data0.groupby(['규격약호'])['YP'].agg(['mean','std'])
+data0.groupby(['규격약호'])['YP'].agg(cpk_object)
+data0.groupby(['규격약호'])['YP'].agg(['mean','std', cpk_object])
 # ---------------------------------------------------------------------------------------------
 
 
@@ -137,25 +170,38 @@ data0[col].agg(cpk_object)
 # Modeling 분석 -------------------------------------------------------------------------------
 from DS_Basic_Module import FittedModel
 
-data0 = pd.read_clipboard(sep='\t')
+# data0 = pd.read_clipboard(sep='\t')
+# data0.shape
 
-y_col = 'YP'
 x_col = 'SS_POS'
+y_col = 'YP'
+
 FittedModel(data0[x_col], data0[y_col]).plot()
 FittedModel(data0[x_col], data0[y_col]).fitted_data
 
 fm =FittedModel(data0[x_col], data0[y_col])
 fm.linear       # Linear 정보
 fm.linear.formula       # 선형식
+fm.fitted_data      # 선형 graph data
 fm.metrics      # 모델성능
 fm.plot()       # graph
-fm.predict(data0[x_col])      # graph
+fm.model
+fm.model.predict(data0[[x_col]].dropna())      # predict
 
 
 
 from sklearn.ensemble import RandomForestRegressor
 RF = RandomForestRegressor()
 FittedModel(data0[x_col], data0[y_col], model=RF).plot()
+
+fm_rf = FittedModel(data0[x_col], data0[y_col], model=RF)
+
+# fm_rf.linear  # error
+fm_rf.fitted_data
+fm_rf.metrics
+fm_rf.plot()
+fm_rf.model
+fm_rf.model.predict(data0[[x_col]].dropna())      # predict
 # ---------------------------------------------------------------------------------------------
 
 
@@ -165,7 +211,8 @@ FittedModel(data0[x_col], data0[y_col], model=RF).plot()
 # 빈도분석 -------------------------------------------------------------------------------------
 from DS_Basic_Module import Mode
 
-data0 = pd.read_clipboard(sep='\t')
+# data0 = pd.read_clipboard(sep='\t')
+# data0.shape
 
 data0[['주문두께','주문폭']]   # 숫자형 Data → 통계값 추출가능
 
@@ -175,11 +222,15 @@ data0.groupby('규격약호')[['주문두께','주문폭']].agg(['mean','std'])
 
 data0['고객사_국가']   # 문자형 Data → ??? (빈도수 추출)
 # data0.groupby('규격약호')['고객사_국가'].mean()
+data0['고객사_국가'].value_counts()
+plt.barh(data0['고객사_국가'].value_counts().index, data0['고객사_국가'].value_counts())
 
+# 전체
 md = Mode(seq='all', return_type='list')
 data0.groupby('규격약호')['고객사_국가'].agg(md)
 data0.groupby('규격약호')['고객사_국가'].agg(md).apply(len)
 
+# top3
 md3 = Mode(seq=3, return_type='list')    # 갯수 점유비 기반 상위 3개고객사 
 data0.groupby('규격약호')['고객사_국가'].agg(md3)
 
@@ -187,8 +238,8 @@ md3_str = Mode(seq=3, return_type=', ')    # 출력 type을 string으로 (구분
 data0.groupby('규격약호')['고객사_국가'].agg(md3_str)
 
 md3_str = Mode(seq=3, return_format='{i} ({c}, {round(p*100,1)}%)', return_type=', ')    # 출력 type을 string으로 (구분자를 입력)
+#  {i} index, {c} counts, {cs} count_cumsum, {p} proportional, {ps} proportional_cumsum
 data0.groupby('규격약호')['고객사_국가'].agg(md3_str)
-
 
 # ---------------------------------------------------------------------------------------------
 
@@ -223,14 +274,18 @@ special_test(data=data9, mode='HER', reverse=False).to_clipboard()
 # 생산이력 Size Plot ---------------------------------------------------------------------------
 from DS_Basic_Module import cummax_summary
 
-data_size = pd.read_clipboard(sep='\t')
-cs_object = cummax_summary(data=data_size,x='주문폭',group='주문두께')
+# data0 = pd.read_clipboard(sep='\t')
+# data0.shape
+data0 = data0[data0['냉연코일번호'].apply(lambda x: x[:2] != 'CW')]
+
+cs_object = cummax_summary(data=data0,x='주문폭',group='주문두께')
+cs_object
 
 cs_object['data_agg'].to_clipboard()
 # cs_object.keys()
 
 fig = plt.figure()
-for gi, gv in data_size.groupby("소둔공장"):
+for gi, gv in data0.groupby("소둔공장"):
     plt.scatter(gv['주문두께'], gv['주문폭'], label=gi, alpha=0.3, color='skyblue')
 plt.legend(loc='upper right')
 plt.plot(cs_object['data_group_melt']['주문두께'], cs_object['data_group_melt']['value'])
@@ -242,8 +297,11 @@ plt.show()
 img_to_clipboard(fig)
 # ---------------------------------------------------------------------------------------------
 
-# 
-# hr_reduction_plot
+
+
+
+
+
 
 # 공정능력 Group
 # Group Capability ===========================================================
@@ -293,6 +351,8 @@ cpk_data.analysis(data=data0, group=['열연공장','규격약호'], criteria={'
 
 # select column
 cpk_data.analysis(data=data0, group='열연공장', criteria_column= {'YP':'YP_보증범위', 'TS':'TS_보증범위', 'EL':'EL_보증범위'})
+
+
 
 
 
