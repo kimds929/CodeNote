@@ -48,17 +48,17 @@ cifar10_train = torchvision.datasets.CIFAR10(root=imageset_path, train=True,
 cifar10_test = torchvision.datasets.CIFAR10(root=imageset_path, train=False,
                                        download=True, transform=transform)
 
-# batch_size = 4
-# trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
-#                                           shuffle=True, num_workers=2)
-# testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
-#                                          shuffle=False, num_workers=2)
 # classes = ('plane', 'car', 'bird', 'cat',
 #            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
 
 # STL10 (2.9 GB) -------------------------------------------------------------
 stl10_train = torchvision.datasets.STL10(root=path2data, split='train', download=True, transform=transforms.ToTensor())
 stl10_test = torchvision.datasets.STL10(root=path2data, split='test', download=True, transform=transforms.ToTensor())
 
+
+# batch_size = 4
+# train_loader = torch.utils.data.DataLoader(cifar10_train, batch_size=batch_size,
+#                                           shuffle=True, num_workers=2)
+# test_loader = torch.utils.data.DataLoader(cifar10_test, batch_size=batch_size,
+#                                          shuffle=False, num_workers=2)
 
