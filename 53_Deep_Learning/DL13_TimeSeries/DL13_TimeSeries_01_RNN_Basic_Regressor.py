@@ -1,80 +1,4 @@
 
-################################################################################################
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# 시계열Data 
-database_path = r'C:\Users\Admin\Desktop\DataBase'
-df_fred = pd.read_csv(f"{database_path}/230210_FRED_Data.csv", encoding='utf-8-sig')
-df_fred['DATE'] = pd.to_datetime(df_fred['DATE'])
-df_fred = df_fred.set_index('DATE')
-# df_target.index = pd.date_range('1995-01-01','2023-03-31')    # Error
-
-import missingno as msno
-msno.matrix(df_fred)
-
-# # (Date Index Reset)
-# df_fred0 = df_fred.reset_index()
-# date_range = pd.date_range(df_fred.index[0], df_fred.index[-1]).to_frame()
-# date_range.columns = ['DATE']
-# df_fred1 = pd.merge(left=df_fred0, right=date_range, how='outer', on='DATE').set_index('DATE').sort_index()
-# df_fred1.to_csv(f"{database_path}/230210_FRED_Data.csv", encoding='utf-8-sig')
-df_target = df_fred.copy()
-import missingno as msno
-msno.matrix(df_target)
-
-pandas_interpolate_methods =  ['linear', 'time', 'index', 'values', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic', 
- 'barycentric', 'krogh', 'spline', 'polynomial', 'from_derivatives', 'piecewise_polynomial', 
- 'pchip', 'akima', 'cubicspline']
-interpolate = {
-'US_M1': 'quadratic'
-,'US_M2': 'quadratic'
-,'USD/KRW': 'linear'
-,'KOPSPI': 'quadratic'
-,'KOSDAQ': 'quadratic'
-,'S&P500': 'quadratic'
-,'DOW': 'quadratic'
-,'NASDAQ': 'quadratic'
-,'QQQ': 'quadratic'
-,'US_BASE_RATE': 'ffill'
-,'US_GDP': 'quadratic'
-,'VIX': 'linear'
-,'TED_SPREAD': 'linear'
-}
-for c in df_target.columns:
-    print(c)
-    if interpolate[c] in pandas_interpolate_methods:
-        df_target[c] = df_target[c].interpolate(method=interpolate[c])
-    elif interpolate[c] == 'ffill':
-        df_target[c] = df_target[c].ffill()
-
-not_na_index = df_target[~df_target.isna().any(1)].index
-df_target1 = df_target[not_na_index[0]:not_na_index[-1]]
-df_target1
-df_target1.to_csv(f"{database_path}/230210_FRED_Data_interpolate_fillna.csv", encoding='utf-8-sig')
-
-msno.matrix(df_target1)
-
-
-for c in df_target1.columns:
-    # c = 'US_BASE_RATE'
-    plt.plot(df_target1.index, df_target1[c], label=c)
-plt.legend(bbox_to_anchor=(1,1))
-
-
-# ---------------------------------------------------------------------------------------------------------
-# df.interpolate(method='quadratic')
-# df = pd.DataFrame(np.array([[1,np.nan,np.nan,4,np.nan,np.nan,-2],[100,np.nan,300,np.nan,200,np.nan,600]]).T,columns=['A','B'])
-# df.interpolate()
-# df.interpolate(method='polynomial', order=2)
-# df.interpolate(method='spline', order=2)
-#  ['linear', 'time', 'index', 'values', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic', 
-#  'barycentric', 'krogh', 'spline', 'polynomial', 'from_derivatives', 'piecewise_polynomial', 
-#  'pchip', 'akima', 'cubicspline']
-# ---------------------------------------------------------------------------------------------------------
-
-
 ####################################################################################################################
 ## 【 Temperature Dataset 】  ----------------------------------------------------------------------------------------------------
 import numpy as np
@@ -116,7 +40,8 @@ import copy
 
 # database_path = r'C:\Users\Admin\Desktop\DataBase'
 url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/99_DataSet'
-df_weather = pd.read_csv(f'{database_path}/TimeSeries_AUS_Weather_DataSet.csv', encoding='utf-8-sig')
+df_weather = pd.read_csv(f'{url_path}/TimeSeries_AUS_Weather_DataSet.csv', encoding='utf-8-sig')
+
 
 df_weather['Date'] = pd.to_datetime(df_weather['Date'], format='%Y-%m-%d')
 df_weather = df_weather.set_index('Date')
@@ -146,6 +71,81 @@ df_target = df_weather1[[y_col] + X_cols]
 
 
 ## 【 FRED Dataset 】 ----------------------------------------------------------------------------------------------------
+# import numpy as np
+# import pandas as pd
+# import matplotlib.pyplot as plt
+
+# # 시계열Data 
+# database_path = r'C:\Users\Admin\Desktop\DataBase'
+# df_fred = pd.read_csv(f"{database_path}/230210_FRED_Data.csv", encoding='utf-8-sig')
+# df_fred['DATE'] = pd.to_datetime(df_fred['DATE'])
+# df_fred = df_fred.set_index('DATE')
+# # df_target.index = pd.date_range('1995-01-01','2023-03-31')    # Error
+
+# import missingno as msno
+# msno.matrix(df_fred)
+
+# # # (Date Index Reset)
+# # df_fred0 = df_fred.reset_index()
+# # date_range = pd.date_range(df_fred.index[0], df_fred.index[-1]).to_frame()
+# # date_range.columns = ['DATE']
+# # df_fred1 = pd.merge(left=df_fred0, right=date_range, how='outer', on='DATE').set_index('DATE').sort_index()
+# # df_fred1.to_csv(f"{database_path}/230210_FRED_Data.csv", encoding='utf-8-sig')
+# df_target = df_fred.copy()
+# import missingno as msno
+# msno.matrix(df_target)
+
+# pandas_interpolate_methods =  ['linear', 'time', 'index', 'values', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic', 
+#  'barycentric', 'krogh', 'spline', 'polynomial', 'from_derivatives', 'piecewise_polynomial', 
+#  'pchip', 'akima', 'cubicspline']
+# interpolate = {
+# 'US_M1': 'quadratic'
+# ,'US_M2': 'quadratic'
+# ,'USD/KRW': 'linear'
+# ,'KOPSPI': 'quadratic'
+# ,'KOSDAQ': 'quadratic'
+# ,'S&P500': 'quadratic'
+# ,'DOW': 'quadratic'
+# ,'NASDAQ': 'quadratic'
+# ,'QQQ': 'quadratic'
+# ,'US_BASE_RATE': 'ffill'
+# ,'US_GDP': 'quadratic'
+# ,'VIX': 'linear'
+# ,'TED_SPREAD': 'linear'
+# }
+# for c in df_target.columns:
+#     print(c)
+#     if interpolate[c] in pandas_interpolate_methods:
+#         df_target[c] = df_target[c].interpolate(method=interpolate[c])
+#     elif interpolate[c] == 'ffill':
+#         df_target[c] = df_target[c].ffill()
+
+# not_na_index = df_target[~df_target.isna().any(1)].index
+# df_target1 = df_target[not_na_index[0]:not_na_index[-1]]
+# df_target1
+# df_target1.to_csv(f"{database_path}/230210_FRED_Data_interpolate_fillna.csv", encoding='utf-8-sig')
+
+# msno.matrix(df_target1)
+
+
+# for c in df_target1.columns:
+#     # c = 'US_BASE_RATE'
+#     plt.plot(df_target1.index, df_target1[c], label=c)
+# plt.legend(bbox_to_anchor=(1,1))
+
+
+# # ---------------------------------------------------------------------------------------------------------
+# # df.interpolate(method='quadratic')
+# # df = pd.DataFrame(np.array([[1,np.nan,np.nan,4,np.nan,np.nan,-2],[100,np.nan,300,np.nan,200,np.nan,600]]).T,columns=['A','B'])
+# # df.interpolate()
+# # df.interpolate(method='polynomial', order=2)
+# # df.interpolate(method='spline', order=2)
+# #  ['linear', 'time', 'index', 'values', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic', 
+# #  'barycentric', 'krogh', 'spline', 'polynomial', 'from_derivatives', 'piecewise_polynomial', 
+# #  'pchip', 'akima', 'cubicspline']
+# # ---------------------------------------------------------------------------------------------------------
+
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
