@@ -76,6 +76,75 @@ plt.legend(bbox_to_anchor=(1,1))
 
 
 ####################################################################################################################
+## 【 Temperature Dataset 】  ----------------------------------------------------------------------------------------------------
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import copy
+
+# database_path = r'C:\Users\Admin\Desktop\DataBase'
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/99_DataSet'
+
+df_temp = pd.read_csv(f'{url_path}/12-TimeSeries_12-22YR_Seoul_Temperature.csv', encoding='utf-8-sig')
+
+df_temp['일시'] = pd.to_datetime(df_temp['일시'], format='%Y-%m-%d')
+
+y_col = '평균기온(℃)'
+X_cols = []
+cols = [y_col] + X_cols
+
+df_temp_5D = df_temp.set_index('일시').resample('5D')[cols].mean()
+df_temp_10D = df_temp.set_index('일시').resample('10D')[cols].mean()
+df_temp_20D = df_temp.set_index('일시').resample('20D')[cols].mean()
+
+
+# df_target = df_temp.set_index('일시')[[cols]]
+df_target = df_temp_10D.to_frame()
+# # show graph
+# plt.figure(figsize=(15,3))
+# plt.plot(df_temp_5D['일시'], df_temp_5D[cols])
+# plt.show()
+
+
+
+
+## 【 AUC Weather Dataset 】   ----------------------------------------------------------------------------------------------------
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import copy
+
+# database_path = r'C:\Users\Admin\Desktop\DataBase'
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/99_DataSet'
+df_weather = pd.read_csv(f'{database_path}/TimeSeries_AUS_Weather_DataSet.csv', encoding='utf-8-sig')
+
+df_weather['Date'] = pd.to_datetime(df_weather['Date'], format='%Y-%m-%d')
+df_weather = df_weather.set_index('Date')
+df_weather0 = df_weather.interpolate()
+
+# X_cols = [
+#     # 'Date',
+#         'Location', 'lat', 'lng', 'Rainfall', 
+#  'MinTemp','MaxTemp', 'WindDir3pm',
+#  'Evaporation', 'Sunshine', 'WindGustDir', 'WindGustSpeed',
+#  'WindSpeed3pm', 'Humidity3pm', 'Pressure3pm', 'Cloud3pm', 'Temp3pm',
+#  'RainToday']
+X_cols = [
+    # 'Date',
+    'lat', 'lng', 'Humidity3pm', 'Pressure3pm', 'Temp3pm']
+
+# y_cols = ['Temp9am', 'RainToday']
+y_col = 'Temp9am'
+
+
+df_weather1 = df_weather0[df_weather0['Location'] == 'Canberra']
+print(df_weather1.index[0], df_weather1.index[-1])
+
+df_target = df_weather1[[y_col] + X_cols]
+
+
+
+
 ## 【 FRED Dataset 】 ----------------------------------------------------------------------------------------------------
 import numpy as np
 import pandas as pd
@@ -83,8 +152,8 @@ import matplotlib.pyplot as plt
 import copy
 
 # database_path = r'C:\Users\Admin\Desktop\DataBase'
-
-df_fred_ = pd.read_csv(f"{database_path}/230210_FRED_Data_interpolate_fillna.csv", encoding='utf-8-sig')
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/99_DataSet'
+df_fred_ = pd.read_csv(f"{url_path}/TimeSeries_230210_FRED_Data_interpolate_fillna.csv", encoding='utf-8-sig')
 df_fred_['DATE'] = pd.to_datetime(df_fred_['DATE'])
 df_fred_ = df_fred_.set_index('DATE')
 print(df_fred_.index[0], df_fred_.index[-1])
@@ -112,76 +181,12 @@ df_target = df_fred_2['2010-01-01':'2022-12-31']
 
 
 df_target[f"{y_col}_shift"] = (df_target[y_col].shift(-1) - df_target[y_col])/df_target[y_col]
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 
 
 
-
-
-## 【 Temperature Dataset 】  ----------------------------------------------------------------------------------------------------
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import copy
-
-# database_path = r'C:\Users\Admin\Desktop\DataBase'
-url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL04_RNN'
-
-df_temp = pd.read_csv(f'{url_path}/12-22YR_Seoul_Temperature.csv', encoding='utf-8-sig')
-
-df_temp['일시'] = pd.to_datetime(df_temp['일시'], format='%Y-%m-%d')
-
-y_col = '평균기온(℃)'
-X_cols = []
-cols = [y_col] + X_cols
-
-df_temp_5D = df_temp.set_index('일시').resample('5D')[cols].mean()
-df_temp_10D = df_temp.set_index('일시').resample('10D')[cols].mean()
-df_temp_20D = df_temp.set_index('일시').resample('20D')[cols].mean()
-
-
-# df_target = df_temp.set_index('일시')[[cols]]
-df_target = df_temp_10D.to_frame()
-# # show graph
-# plt.figure(figsize=(15,3))
-# plt.plot(df_temp_5D['일시'], df_temp_5D[cols])
-# plt.show()
-
-
-## 【 AUC Weather Dataset 】   ----------------------------------------------------------------------------------------------------
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import copy
-
-# database_path = r'C:\Users\Admin\Desktop\DataBase'
-url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL04_RNN'
-df_weather = pd.read_csv(f'{database_path}/AUS_Weather_DataSet.csv', encoding='utf-8-sig')
-
-df_weather['Date'] = pd.to_datetime(df_weather['Date'], format='%Y-%m-%d')
-df_weather = df_weather.set_index('Date')
-df_weather0 = df_weather.interpolate()
-
-# X_cols = [
-#     # 'Date',
-#         'Location', 'lat', 'lng', 'Rainfall', 
-#  'MinTemp','MaxTemp', 'WindDir3pm',
-#  'Evaporation', 'Sunshine', 'WindGustDir', 'WindGustSpeed',
-#  'WindSpeed3pm', 'Humidity3pm', 'Pressure3pm', 'Cloud3pm', 'Temp3pm',
-#  'RainToday']
-X_cols = [
-    # 'Date',
-    'lat', 'lng', 'Humidity3pm', 'Pressure3pm', 'Temp3pm']
-
-# y_cols = ['Temp9am', 'RainToday']
-y_col = 'Temp9am'
-
-
-df_weather1 = df_weather0[df_weather0['Location'] == 'Canberra']
-print(df_weather1.index[0], df_weather1.index[-1])
-
-df_target = df_weather1[[y_col] + X_cols]
 
 
 ## 【 PreProcessing 】----------------------------------------------------------------------------------------------------
