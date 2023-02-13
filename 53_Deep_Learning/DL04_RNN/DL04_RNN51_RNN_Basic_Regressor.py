@@ -5,10 +5,11 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 
 # RNN Regressor (Weather Forcast)
-url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL04_RNN/'
-data = pd.read_table(f'{dataset_path}/12-22년_서울시_일단위_기온.csv', encoding='cp949')
-data = pd.read_clipboard(sep='\t')
-data.to_csv(f'{dataset_path}/12-22년_서울시_일단위_기온.csv', encoding='utf-8-sig',index=False)
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL04_RNN'
+data = pd.read_csv(f'{url_path}/12-22YR_Seoul_Temperature.csv', encoding='utf-8-sig')
+
+# data = pd.read_clipboard(sep='\t')
+# data.to_csv(f'{dataset_path}/12-22YR_Seoul_Temperature.csv', encoding='utf-8-sig',index=False)
 
 data['일시'] = pd.to_datetime(data['일시'], format='%Y-%m-%d')
 
@@ -26,6 +27,8 @@ plt.show()
 # train_set
 train_set = data_target[data_target['일시'] < '2022-01-01']
 test_set = data_target[data_target['일시'] >= '2022-01-01']
+# train_set.shape, test_set.shape
+
 
 # 결측치 확인
 train_set['평균기온(℃)'].isna().sum()
