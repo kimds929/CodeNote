@@ -189,3 +189,36 @@ print()
  # -------------------------------------------------------------------------
 
 
+
+## Gaussian Mixture
+def display_plot(x, dist1, pi1, dist2, pi2, return_plot=True):
+    if return_plot is True:
+        fig = plt.figure()
+    bins = 30 if len(x) >= 30 else None
+    plt.hist(x, bins=bins, edgecolor='gray', density=True, color='skyblue')
+    plt.plot(x, dist1.pdf(x) * pi1, color='mediumseagreen', label='group1_PDF')
+    plt.plot(x, dist2.pdf(x) * pi2, color='coral', label='group2_PDF')
+    plt.legend(loc='upper right')
+    if return_plot is True:
+        plt.close()
+        return fig
+from sklearn.mixture import GaussianMixture
+from scipy import stats
+gmm=GaussianMixture(n_components=2)
+
+
+
+df = pd.read_clipboard()
+
+x_col = 'Aroma'
+gmm.fit(df[[x_col]])
+
+pi = gmm.weights_.ravel()
+mu = gmm.means_.ravel()
+sigma = np.sqrt(gmm.covariances_).ravel()
+
+gaussian1 = stats.norm(mu[0], sigma[0])
+gaussian2 = stats.norm(mu[1], sigma[1])
+
+display_plot(df[x_col].sort_values(), gaussian1, pi[0], gaussian2, pi[1])
+
