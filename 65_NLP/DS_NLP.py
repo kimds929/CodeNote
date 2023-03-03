@@ -19,6 +19,7 @@ class NLP_Preprocessor():
         self.tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=num_words, filters=filters, lower=lower,
                              split=split, char_level=char_level, oov_token=oov_token, document_count=document_count, **kwargs)
         self.fit_token = False
+        self.use_morphs = False
     
     def input_texts(self, texts):
         self.texts = texts
@@ -62,6 +63,8 @@ class NLP_Preprocessor():
                 texts_result.append(morphs.morphs(sentence, **kwargs))
         
         self.texts_morphs = texts_result
+        self.morphs = morphs
+        self.use_morphs = True
         if verbose > 0:
             print("→ self.texts_morphs")
         if inplace:
@@ -149,7 +152,9 @@ class NLP_Preprocessor():
             print("→ self.texts_texts_to_seq")
         if inplace:
             self.texts = texts_result
-        return self    
+            return self    
+        else:
+            return texts_result
 
     def add_sos_eos(self, texts=None, sos='<SOS>', eos='<EOS>', inplace=True, verbose=1):
         texts = texts if texts is not None else self.texts
@@ -254,7 +259,7 @@ class NLP_Preprocessor():
         if inplace:
             self.texts = texts_result
         return self
-
+    
     def sequences_to_texts(self, texts, index_word=None, join=None, 
                                 sos_text=False, eos_text=False, padding_text=False, sos=None, eos=None):
         index_word = index_word if index_word is not None else self.index_word
@@ -285,6 +290,13 @@ class NLP_Preprocessor():
         
         return texts_result
 
+    def texts_to_sequence_transform(self, texts, with_morphs=True):
+        if with_morphs is True and self.use_morphs is True:
+            target_texts = self.morphs.morphs(texts)
+        else:
+            target_texts = texts
+        
+        return self.texts_to_sequences(target_texts, inplace=False, verbose=0)
 
 
 # (Load Data) -------------------------------------------
@@ -323,3 +335,5 @@ class NLP_Preprocessor():
 # vocab_size_X = processor_en.vocab_size
 
 # processor_kr.sequences_to_texts(processor_kr.texts, join=' ')
+
+# processor_kr.texts_to_sequence_transform('저는 사과를 좋아합니다')
