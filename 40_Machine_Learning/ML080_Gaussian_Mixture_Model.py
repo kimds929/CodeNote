@@ -202,11 +202,11 @@ def display_plot(x, dist1, pi1, dist2, pi2, return_plot=True):
     if return_plot is True:
         plt.close()
         return fig
+
+
 from sklearn.mixture import GaussianMixture
 from scipy import stats
 gmm=GaussianMixture(n_components=2)
-
-
 
 df = pd.read_clipboard()
 

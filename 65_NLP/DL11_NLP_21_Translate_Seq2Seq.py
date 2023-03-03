@@ -1,7 +1,3 @@
-# https://wikidocs.net/106259
-# https://wikidocs.net/106254
-# https://codetorial.net/tensorflow/natural_language_processing_in_tensorflow_01.html
-
 import os
 
 import numpy as np
@@ -11,507 +7,80 @@ import matplotlib.pyplot as plt
 import torch
 import tensorflow as tf
 
-import datetime
-
-# (Load Data) -------------------------------------------
-# english_df = pd.read_fwf('https://raw.githubusercontent.com/jungyeul/korean-parallel-corpora/master/korean-english-jhe/jhe-koen-dev.en', header=None)
-# korean_df = pd.read_fwf('https://raw.githubusercontent.com/jungyeul/korean-parallel-corpora/master/korean-english-jhe/jhe-koen-dev.ko', header=None)
-
+# Data Load ------------------------------------------------------------------------------------------
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/99_DataSet/'
+# url_path = r'C:\Users\Admin\Desktop\DataBase'
+df = pd.read_csv(f"{url_path}/NLP_EN_to_KR_0_Data.csv", encoding='utf-8-sig')
 # path = r'C:\Users\Admin\Desktop\DataBase'
-# english_df.columns = ['english']
-# english = english_df['english'].to_numpy()
-# korean_df.columns = ['korean', 'etc']
-# korean = korean_df['korean'].to_numpy()
-# df = pd.concat([english_df, korean_df], axis=1).drop('etc',axis=1)
-
-
-path = r'C:\Users\Admin\Desktop\DataBase'
-
 # df01 = pd.read_csv(f"{path}/NLP_EN_to_KR1_Data.csv", encoding='utf-8-sig')
 # df02 = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
 # df = pd.concat([df02, df01],axis=0).reset_index(drop=True)
 
 
-df = pd.read_csv(f"{path}/NLP_EN_to_KR1_Data.csv", encoding='utf-8-sig')
-df = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
-
-df.head(6)
+df.sample(6)
 print(df.shape)
 
-import collections
-#################################################################################################################################
-class NLP_PreProcessor():
-    def __init__(self, texts=None, num_words=None, filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n', lower=True, split=' ', char_level=False, oov_token=None, document_count=0, **kwargs):
-        self.texts = texts
-        self.tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=num_words, filters=filters, lower=lower,
-                             split=split, char_level=char_level, oov_token=oov_token, document_count=document_count, **kwargs)
-        self.fit_token = False
-    
-    def input_texts(self, texts):
-        self.texts = texts
-    
-    def replace(self, texts=None, re="[^ㄱ-ㅎㅏ-ㅣ가-힣A-Za-z ]", replace="", inplace=True, verbose=1):
-        texts = texts if texts is not None else self.texts
+# Preprocessing --------------------------------------------------------------------------------------
+from DS_NLP import NLP_Preprocessor
 
-        texts_result = []
-        for sentence in texts:
-            texts_result.append(sentence.replace(re, replace))
+processor_en = NLP_Preprocessor(df['english'])
+processor_en.replace().fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
 
-        self.texts_replace = texts_result.copy()
-        if verbose > 0:
-            print("self.texts_replace")
-        if inplace:
-            self.texts = texts_result
-        return self
-
-    def remove_stopword(self, texts=None, stopword=[], inplace=True, verbose=1):
-        texts = texts if texts is not None else self.texts
-
-        if stopword:
-            texts_result = []
-            for sentence in texts:
-                sentence = [word for word in sentence if word != stopword]
-                texts_result.append(sentence)
-        
-        self.texts_remove_stopword = texts_result
-        if verbose > 0:
-            print("self.texts_replace")
-        if inplace:
-            self.texts = texts_result
-        return self
-
-    def morphs_split(self, texts=None, morphs=None, inplace=True, verbose=1, **kwargs):
-        texts = texts if texts is not None else self.texts
-
-        texts_result = []
-        for sentence in texts:
-            if 'okt' in str(morphs):
-                texts_result.append(morphs.morphs(sentence, **kwargs))
-        
-        self.texts_morphs = texts_result
-        if verbose > 0:
-            print("self.texts_morphs")
-        if inplace:
-            self.texts = texts_result
-        return self  
-
-    def word_prob(self, texts=None, plot=True):
-        if self.fit_token is False:
-            texts = texts if texts is not None else self.texts
-            self.fit_on_texts(texts)
-
-        # 누적 희소단어 비율
-        self.word_counts = self.tokenizer.word_counts
-
-        total_cnt = len(word_counts)
-        rare_dict = {}
-        for i in sorted(np.unique(list(word_counts.values()))):
-            filtered_count = len( dict(filter(lambda e: e[1]<=i, word_counts.items())) )
-            prob =  filtered_count / total_cnt     # 특정 빈도수 이하 단어 비율
-            rare_dict[i] = prob
-
-        # 단어 수별 점유비
-        rare_cum_prob = []
-        for p in [0.7, 0.8, 0.9, 0.95, 0.99]:
-            target_cum_prob = list(tuple(filter(lambda e: e[1] < p, sorted(rare_dict.items())))[-1])
-            rare_cum_prob.append([*target_cum_prob, p] )
-        rare_cum_prob   # word_count, prob, target_prob
-
-        # 점유비 Plot
-        fig = plt.figure()
-        plt.title(f"Ratio of Rare_Word (total: {total_cnt})")
-        plt.plot(rare_dict.keys(), rare_dict.values(), 'o-')
-        plt.xscale('log')
-        for cp, p, tp in rare_cum_prob:
-            plt.axhline(p, color='red', alpha=0.1)
-            plt.text(cp, p, f"    {cp} (nw: {total_cnt +1 - cp})\n ←   ({round(p*100,1)}%, aim:{int(tp*100)}%)", color='red')
-            plt.scatter(cp, p, color='red')
-        plt.xlabel('Word_Count (log_scale)')
-        plt.ylabel('Word_Prob')
-        if plot is True:
-            plt.show()
-        else:
-            plt.close()
-
-        self.word_prob_dict = rare_dict
-        self.word_cum_prob = rare_cum_prob
-        self.word_prob_plot = fig
-
-        self.tokenizer = None
-
-    def tokenizer(self, filter_words=None, num_words=None, filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n', lower=True, split=' ', char_level=False, oov_token=None, document_count=0, **kwargs):
-        if filter_word is not None:
-            num_words = self.word_counts +1 - filter_words
-        self.tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=num_words, filters=filters, lower=lower,
-                        split=split, char_level=char_level, oov_token=oov_token, document_count=document_count, **kwargs)
-
-    def fit_on_texts(self, texts=None, filter_words=None, num_words=None, filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n', lower=True, split=' ', char_level=False, oov_token=None, document_count=0, **kwargs):
-        texts = texts if texts is not None else self.texts
-        if self.tokenizer is None:
-            if filter_word is not None:
-                num_words = self.word_counts +1 - filter_words
-            self.tokenizer(num_words=num_words, filters=filters, lower=lower,
-                        split=split, char_level=char_level, oov_token=oov_token, document_count=document_count, **kwargs)
-        
-        self.tokenizer.fit_on_texts(texts)
-        self.fit_token = True
-        
-        self.word_counts = self.tokenizer.word_counts
-        self.vocab_size = len(self.tokenizer.word_index)
-
-        self.tokenizer.word_index[''] = 0
-        self.tokenizer.index_word[0] = ''
-
-        self.word_index = self.tokenizer.word_index
-        self.index_word = self.tokenizer.index_word
-        return self
-
-    def texts_to_sequences(self, texts=None, inplace=True, verbose=1):
-        texts = texts if texts is not None else self.texts
-
-        texts_result = self.tokenizer.texts_to_sequences(texts)
-
-        self.texts_texts_to_seq = texts_result
-        if verbose > 0:
-            print("self.texts_texts_to_seq")
-        if inplace:
-            self.texts = texts_result
-        return self    
-
-    def add_sos_eos(self, texts=None, sos='<SOS>', eos='<EOS>', inplace=True, verbose=1):
-        texts = texts if texts is not None else self.texts
-
-        self.sos = sos
-        self.eos = eos
-
-        if bool(sos):
-            self.vocab_size += 1
-            self.tokenizer.word_index[sos] =  self.vocab_size
-            self.tokenizer.index_word[self.tokenizer.word_index[sos]] = sos
-        
-        if bool(eos):
-            self.vocab_size += 1
-            self.tokenizer.word_index[eos] =  self.vocab_size
-            self.tokenizer.index_word[self.tokenizer.word_index[eos]] = eos
-
-        self.word_index = self.tokenizer.word_index
-        self.index_word = self.tokenizer.index_word
-        # return self
-        if bool(sos) + bool(eos) > 0:
-            texts_result = []
-            for sentence in texts:
-                if bool(sos) is True and bool(eos) is True:
-                    texts_result.append([self.word_index[sos]] + sentence + [self.word_index[eos]])
-                elif bool(sos) is True:
-                    texts_result.append([self.word_index[sos]] + sentence)
-                elif bool(eos) is True:
-                    texts_result.append(sentence + [self.word_index[eos]])
-        else:
-            texts_result = list(texts)
-        
-        self.texts_add_sos_eos = texts_result
-        if verbose > 0:
-            print("self.texts_add_sos_eos")
-        if inplace:
-            self.texts = texts_result
-        return self     
-
-    def seq_length_prob(self, texts=None, plot=True):
-        texts = texts if texts is not None else self.texts
-        
-        seq_lens = np.array([len(c) for c in texts])
-
-        seq_len_counts = {}
-        cumsum_cw = 0
-        for length in sorted(np.unique(seq_lens)): 
-            cw = np.count_nonzero(seq_lens==length)
-            cumsum_cw += cw
-            seq_len_counts[length] = (cw, cumsum_cw, cumsum_cw/len(seq_lens))   # seq_count, seq_cumsum, cumsum_prob
-        # seq_len_counts    # 
-
-        # 단어 수별 점유비
-        seq_len_prob = []
-        for p in [0.7, 0.8, 0.9, 0.95, 0.99]:
-            target_cum_prob = list(tuple(filter(lambda e: e[1][2] < p, sorted(seq_len_counts.items())))[-1])
-            seq_len_prob.append([target_cum_prob[0], *target_cum_prob[1], p] )
-        # seq_cum_prob   # seq_length, seq_count, sqe_cumsum, prob, target_prob
-
-
-        # 점유비 Plot
-        fig = plt.figure()
-        plt.title(f"Ratio of Seq_Length (max_len: {seq_lens})")
-        plt.plot(seq_len_counts.keys(), np.array(list(seq_len_counts.values()))[:,2], 'o-')
-        for seq_len, seq_count, seq_cumsum, seq_prob, target_prob in seq_len_prob:
-            plt.axhline(seq_prob, color='red', alpha=0.1)
-            plt.text(seq_len, seq_prob, f" ← {seq_len} ({round(seq_prob*100,1)}%, aim:{int(target_prob*100)}%)", color='red')
-            plt.scatter(seq_len, seq_prob, color='red')
-        plt.xlabel('Seq_Length (log_scale)')
-        plt.ylabel('Cum_Sum_Prob')
-
-        if plot is True:
-            plt.show()
-        else:
-            plt.close()
-
-        self.seq_len_counts = seq_len_counts
-        self.seq_len_prob = seq_len_prob
-        self.seq_len_prob_plot = fig
-
-    def pad_sequences(self, texts=None, maxlen=None, dtype='int32', padding='post', truncating='post', value=0.0, inplace=True, verbose=1):
-        texts = texts if texts is not None else self.texts
-
-        texts_result = tf.keras.preprocessing.sequence.pad_sequences(sequences=texts, maxlen=maxlen, dtype=dtype, padding=padding, truncating=truncating, value=value)
-        
-        self.texts_pad_seq = texts_result
-        if verbose > 0:
-            print("self.texts_pad_seq")
-        if inplace:
-                self.texts = texts_result
-        return self
-
-    def to_categorical(self, texts=None, num_classes=None, dtype='float32', inplace=True, verbose=1):
-        texts = texts if texts is not None else self.texts
-        num_classes = num_classes if num_classes is not None else self.vocab_size
-
-        texts_result = tf.keras.utils.to_categorical(y=texts, num_classes=num_classes, dtype=dtype)
-        
-        self.texts_categorical = texts_categorical
-        if verbose > 0:
-            print("self.texts_categorical")
-        if inplace:
-            self.texts = texts_result
-        return self
-
-    def sequences_to_texts(self, texts, index_word=None, join=None, 
-                                sos_text=False, eos_text=False, padding_text=False, sos=None, eos=None):
-        index_word = index_word if index_word is not None else self.index_word
-        sos = sos if sos is not None else self.sos
-        eos = eos if eos is not None else self.eos
-        padding = ''
-        indexes = index_word.keys()
-        
-        texts_result = []
-        for sentence in texts:
-            sentence_result = []
-            for word in sentence:
-                if word in indexes:
-                    word_text = index_word[word]
-                    if sos_text is False and word_text == sos:
-                        pass
-                    elif index_word is False and word_text == eos:
-                        pass
-                    elif padding_text is False and word_text == padding:
-                        pass
-                    else:
-                        sentence_result.append(word_text)
-                else:
-                    sentence_result.append('')
-            if join is not None:
-                sentence_result = join.join(sentence_result)
-            texts_result.append(sentence_result)
-        
-        return texts_result
-
-
-processor_en = NLP_PreProcessor(df['english'])
-processor_en.replace().fit_on_texts().texts_to_sequences().add_sos_eos()
-
-
-
-# processor_en = NLP_PreProcessor(df['english'])
-# processor_en.replace()
 # processor_en.replace().word_prob()
 # processor_en.word_prob_dict
 # processor_en.word_cum_prob
 
-processor_en = NLP_PreProcessor(df['english'])
-processor_en.replace().fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
-processor_en.texts.shape
+processor_en.texts          # transformed data
+processor_en.vocab_size     # vocab_size
+processor_en.word_index     # word_index
+processor_en.index_word     # index_word
+processor_en.sequences_to_texts(processor_en.texts, join=' ')   # inverse_transform
+
+print(f"y_data_shape: {processor_en.texts.shape}, y_vocab_size: {processor_en.vocab_size}" )
 vocab_size_y = processor_en.vocab_size
-processor_en.sequences_to_texts(processor_en.texts, join=' ')
+
 
 
 from konlpy.tag import Okt
 okt = Okt()
-processor_kr = NLP_PreProcessor(df['korean'])
+processor_kr = NLP_Preprocessor(df['korean'])
 processor_kr.replace().morphs_split(morphs=okt, stem=True)
 processor_kr.fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
-processor_kr.texts.shape
-vocab_size_X = processor_en.vocab_size
 
-processor_kr.sequences_to_texts(processor_kr.texts, join=' ')
+processor_kr.texts          # transformed data
+processor_kr.vocab_size     # vocab_size
+processor_kr.word_index     # word_index
+processor_kr.index_word     # index_word
+processor_kr.sequences_to_texts(processor_kr.texts, join=' ')   # inverse_transform
 
-#################################################################################################################################
-
-
-
-# (Preprocessing) -------------------------------------------
-# english *
-df1_en = df1['english']
-df1_en = df1_en.str.replace("[^ㄱ-ㅎㅏ-ㅣ가-힣A-Za-z ]","")
-# df1_en = df1_en.str.replace('^ +', "")
-df1_en = df1_en.apply(lambda x: np.nan if x =='' else x)
-df1_en
-
-# korean *
-df1_kor = df1['korean']
-df1_kor = df1_kor.str.replace("[^ㄱ-ㅎㅏ-ㅣ가-힣A-Za-z]","")
-# df1_kor = df1_kor.str.replace('^ +', "")
-df1_kor = df1_kor.apply(lambda x: np.nan if x =='' else x)
-
-
-# concat *
-df2 = pd.concat([df1_en, df1_kor], axis=1).dropna()
-print(df2.shape)
-
-
-# (Tokenize) -----------------------------------------------------------------------
-# pad_sequences *
-# https://wikidocs.net/83544
-# sample_seq= [[1,2,3], [1,2], [3]]
-# tf.keras.preprocessing.sequence.pad_sequences(sample_seq, padding='post', maxlen=2, truncating='post')
-#   . maxlen : (default) None                # 최대길이 지정
-#   . dtype : (default) 'int32' / 'float32'  # data_type
-#   . padding : (default) 'pre' / 'post'      # padding을 어디에 할 것인지?
-#   . truncated : (default) 'pre' / 'post'      # maxlen때문에 데이터가 잘릴때 어느부분을 자를것인지?
-# ----------------------------------------------------------------------------------
-
-# add_tokens = pd.DataFrame([['<sos>', '<sos>'], ['<eos>', '<eos>']], columns=df2.columns)
-# df2_add_tokens = pd.concat([add_tokens, df2], axis=0)
-
-
-# (english) *
-df2_en = df2['english']
-# tokenizer_en = tf.keras.preprocessing.text.Tokenizer(filters='!"#$%&()*+,-./:;=?@[\\]^_`{|}~\t\n') 
-# tokenizer_en.fit_on_texts(df2_add_tokens['english'])
-tokenizer_en = tf.keras.preprocessing.text.Tokenizer() 
-tokenizer_en.fit_on_texts(df2_en)
+print(f"X_data_shape: {processor_kr.texts.shape}, X_vocab_size: {processor_kr.vocab_size}" )
+vocab_size_X = processor_kr.vocab_size
 
 
 
-# tokenizer_en.word_counts
-vocab_size_en = len(tokenizer_en.word_index) + 1 #어휘수
-print(f"vocab_size_en : {vocab_size_en}")
+# # Save Data ----------------------------------------------------------------------------------------------------------------------------
+# data_base_url = r''
+
+# word_index_y = pd.Series(processor_en.index_word).to_frame()
+# word_index_y.index.name = 'index'
+# word_index_y.columns = ['word']
+
+# pd.DataFrame(processor_en.texts).to_csv(f"{data_base_url}/NLP_EN_to_KR_0_pad_seq_sentences(EN).csv", encoding='utf-8-sig', index=False)
+# word_index_y.to_csv(f"{data_base_url}/NLP_EN_to_KR_0_index_word(EN).csv", encoding='utf-8-sig')
 
 
-# (text_to_sequence / pad_sequence) *
-seq_en = tokenizer_en.texts_to_sequences(df2_en)
+# word_index_X = pd.Series(processor_kr.index_word).to_frame()
+# word_index_X.index.name = 'index'
+# word_index_X.columns = ['word']
+
+# pd.DataFrame(processor_kr.texts).to_csv(f"{data_base_url}/NLP_EN_to_KR_0_pad_seq_sentences(KR).csv", encoding='utf-8-sig', index=False)
+# word_index_X.to_csv(f"{data_base_url}/NLP_EN_to_KR_0_index_word(KR).csv", encoding='utf-8-sig')
+# ----------------------------------------------------------------------------------------------------------------------------------------
 
 
-# SOS / EOS
-seq_en_inout = []
-for sentence in seq_en:
-    seq_en_inout.append([tokenizer_en.word_index['<sos>']] + sentence + [tokenizer_en.word_index['<eos>']])
-padseq_en = tf.keras.preprocessing.sequence.pad_sequences(seq_en_inout, padding='post')
-# padseq_en = tf.keras.preprocessing.sequence.pad_sequences(seq_en, padding='post')
-
-padseq_en[:3,:]
-print(padseq_en.shape)
-
-
-
-# (korean) *
-# from konlpy.tag import Mecab
-# mecab = Mecab()
-# !git clone https://github.com/SOMJANG/Mecab-ko-for-Google-Colab.git
-# %cd Mecab-ko-for-Google-Colab
-# !bash install_mecab-ko_on_colab190912.sh
-from konlpy.tag import Okt
-okt = Okt()
-
-df2_kor = df2['korean']
-
-tokened_kr = []
-for sentence in df2_kor:
-    sen_token = okt.morphs(sentence, stem=False)
-    # sen_token = okt.morphs(sentence, stem=True)
-    tokened_kr.append(sen_token)
-
-# okt.morphs(df2_kor[5], norm=False, stem=False)  
-#   . norm: 문장을 정규화
-#   . stem: 은 각 단어에서 어간을 추출하는 기능 (True: 동사의 원형을 찾아줌)
-tokenizer_kr = tf.keras.preprocessing.text.Tokenizer()
-tokenizer_kr.fit_on_texts([['<sos>'],['<eos>']] + tokened_kr)
-
-tokenizer_kr.word_index
-# tokenizer_kor.index_word = {v:k for k, v in tokenizer_kor.word_index.items()}
-vocab_size_kr = len(tokenizer_kor.word_index) + 1 #어휘수
-print(f"vocab_size_kr : {vocab_size_kr}")
-
-
-# (text_to_sequence / pad_sequence) *
-seq_kr = tokenizer_kor.texts_to_sequences(tokened_kr)
-
-# SOS / EOS
-seq_kr_inout = []
-for sentence in seq_kr:
-    seq_kr_inout.append([tokenizer_kor.word_index['<sos>']] + sentence + [tokenizer_kor.word_index['<eos>']])
-padseq_kr = tf.keras.preprocessing.sequence.pad_sequences(seq_kr_inout, padding='post')
-
-padseq_kr[:3,:]
-print(padseq_kr.shape)
-
-
-print(padseq_en.shape, padseq_kr.shape)
-
-
-
-#################################################################################################################################
-# df01 = pd.read_csv(f"{path}/NLP_EN_to_KR1_Data.csv", encoding='utf-8-sig')
-# df02 = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
-# df = pd.concat([df02, df01],axis=0).reset_index(drop=True)
-
-df = pd.read_csv(f"{path}/NLP_EN_to_KR1_Data.csv", encoding='utf-8-sig')
-df = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
-
-processor_en = NLP_PreProcessor(df['english'])
-processor_en.replace().fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
-processor_en.texts.shape
-vocab_size_y = processor_en.vocab_size
-# processor_en.sequences_to_texts(processor_en.texts, join=' ')
-
-tokenizer_en = processor_en.tokenizer
-padseq_en = processor_en.texts
-
-
-processor_kr = NLP_PreProcessor(df['korean'])
-processor_kr.replace().morphs_split(morphs=okt, stem=True).fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
-processor_kr.texts.shape
-vocab_size_X = processor_en.vocab_size
-
-# processor_kr.sequences_to_texts(processor_kr.texts, join=' ')
-tokenizer_kr = processor_kr.tokenizer
-padseq_kr = processor_kr.texts
-
-
-
-path = r'C:\Users\Admin\Desktop\DataBase'
-# Save_to_csv ***
-word_index_X = pd.Series(tokenizer_en.word_index).reset_index()
-word_index_y = pd.Series(tokenizer_kr.word_index).reset_index()
-word_index_X.columns = ['word', 'index']
-word_index_y.columns = ['word', 'index']
-
-padseq_X = pd.DataFrame(padseq_en.copy())
-padseq_y = pd.DataFrame(padseq_kr.copy())
-
-
-# word_index_X.to_csv(f'{path}/NLP_EN_to_KR_word_index(EN).csv', index=False, encoding='utf-8-sig')
-# word_index_y.to_csv(f'{path}/NLP_EN_to_KR_word_index(KR).csv', index=False, encoding='utf-8-sig')
-# padseq_X.to_csv(f'{path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
-# padseq_y.to_csv(f'{path}/NLP_EN_to_KR_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
-
-# word_index_X.to_csv(f'{path}/NLP_EN_to_KR1_word_index(EN).csv', index=False, encoding='utf-8-sig')
-# word_index_y.to_csv(f'{path}/NLP_EN_to_KR1_word_index(KR).csv', index=False, encoding='utf-8-sig')
-# padseq_X.to_csv(f'{path}/NLP_EN_to_KR1_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
-# padseq_y.to_csv(f'{path}/NLP_EN_to_KR1_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
-
-# word_index_X.to_csv(f'{path}/NLP_EN_to_KR2_word_index(EN).csv', index=False, encoding='utf-8-sig')
-# word_index_y.to_csv(f'{path}/NLP_EN_to_KR2_word_index(KR).csv', index=False, encoding='utf-8-sig')
-# padseq_X.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(EN).csv', index=False, encoding='utf-8-sig')
-# padseq_y.to_csv(f'{path}/NLP_EN_to_KR2_pad_seq_sentences(KR).csv', index=False, encoding='utf-8-sig')
-
-
+#####################################################################################################
+# Load Preprocessed  Data from GIT ##################################################################
+#####################################################################################################
 # Read_from_csv *** ---------------------------------------------------------------------------------
 import os
 
@@ -522,13 +91,13 @@ import matplotlib.pyplot as plt
 import torch
 import tensorflow as tf
 
-import datetime
 
 
 max_len = None
 # max_len = 1000
-url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/53_Deep_Learning/DL11_NLP/'
+url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/99_DataSet/'
 
+padseq_X.shape
 word_index_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(EN).csv', index_col='index', encoding='utf-8-sig')['word']
 word_index_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_word_index(KR).csv', index_col='index', encoding='utf-8-sig')['word']
 padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_pad_seq_sentences(EN).csv', encoding='utf-8-sig')
@@ -558,6 +127,9 @@ print(f"data_size: {X.shape}, {y.shape}")
 # X_oh = tf.keras.utils.to_categorical(X, vocab_size_X)
 # y_oh = tf.keras.utils.to_categorical(y, vocab_size_y)
 ################################################################################################
+
+
+
 
 # (Train_Test_Split) -------------------------------------------
 from sklearn.model_selection import train_test_split
@@ -700,6 +272,15 @@ for batch in train_iterator:
 np.stack([[index_dict_src[word] for word in seq] for seq in batch.src[:5,:].to('cpu').numpy()])
 np.stack([[index_dict_src[word] for word in seq] for seq in batch.trg[:5,:].to('cpu').numpy()])
 ################################################################################################
+
+
+
+
+
+
+
+
+
 
 
 
