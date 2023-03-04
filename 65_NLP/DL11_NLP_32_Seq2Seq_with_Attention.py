@@ -358,7 +358,7 @@ import sys
 sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
 from DS_DeepLearning import EarlyStopping
 
-es = EarlyStopping()    
+es = EarlyStopping()
 # # ------------------------------------------
 import time
 

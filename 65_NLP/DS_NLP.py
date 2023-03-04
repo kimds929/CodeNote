@@ -337,3 +337,19 @@ class NLP_Preprocessor():
 # processor_kr.sequences_to_texts(processor_kr.texts, join=' ')
 
 # processor_kr.texts_to_sequence_transform('저는 사과를 좋아합니다')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

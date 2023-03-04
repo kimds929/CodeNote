@@ -107,10 +107,10 @@ padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_0_pad_seq_sentences(EN).csv', e
 padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_0_pad_seq_sentences(KR).csv', encoding='utf-8-sig').to_numpy()
 
 
-# index_word_y = dict(pd.read_csv(f'{url_path}/NLP_EN_to_KR_1_index_word(EN).csv', index_col='index', encoding='utf-8-sig')['word'])
-# index_word_X = dict(pd.read_csv(f'{url_path}/NLP_EN_to_KR_1_index_word(KR).csv', index_col='index', encoding='utf-8-sig')['word'])
-# padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_1_pad_seq_sentences(EN).csv', encoding='utf-8-sig').to_numpy()
-# padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_1_pad_seq_sentences(KR).csv', encoding='utf-8-sig').to_numpy()
+index_word_y = dict(pd.read_csv(f'{url_path}/NLP_EN_to_KR_1_index_word(EN).csv', index_col='index', encoding='utf-8-sig')['word'])
+index_word_X = dict(pd.read_csv(f'{url_path}/NLP_EN_to_KR_1_index_word(KR).csv', index_col='index', encoding='utf-8-sig')['word'])
+padseq_y = pd.read_csv(f'{url_path}/NLP_EN_to_KR_1_pad_seq_sentences(EN).csv', encoding='utf-8-sig').to_numpy()
+padseq_X = pd.read_csv(f'{url_path}/NLP_EN_to_KR_1_pad_seq_sentences(KR).csv', encoding='utf-8-sig').to_numpy()
 
 # index_word_y = dict(pd.read_csv(f'{url_path}/NLP_EN_to_KR_2_index_word(EN).csv', index_col='index', encoding='utf-8-sig')['word'])
 # index_word_X = dict(pd.read_csv(f'{url_path}/NLP_EN_to_KR_2_index_word(KR).csv', index_col='index', encoding='utf-8-sig')['word'])
@@ -207,13 +207,13 @@ print(device)
 # ★★★ Transformer
 class Transformer(torch.nn.Module):
     def __init__(self, vocab_size_X, vocab_size_y, X_pad_idx, y_pad_idx,
-                 embed_dim=256, n_layers=1, dropout=0.5, n_heads=4, pos_maxlen=100, posff_dim=512):
+                 embed_dim=256, n_layers=1, dropout=0.5, n_heads=4, pos_maxlen=300, posff_dim=512):
         super().__init__()
         self.X_pad_idx = X_pad_idx
         self.y_pad_idx = y_pad_idx
         
-        self.encoder = Transformer_Encoder(vocab_size_X, embed_dim, n_layers, n_heads, pos_maxlen, posff_dim, dropout)
-        self.decoder = Transformer_Decoder(vocab_size_y, embed_dim, n_layers, n_heads, pos_maxlen, posff_dim, dropout)
+        self.encoder = Encoder(vocab_size_X, embed_dim, n_layers, n_heads, pos_maxlen, posff_dim, dropout)
+        self.decoder = Decoder(vocab_size_y, embed_dim, n_layers, n_heads, pos_maxlen, posff_dim, dropout)
     
     def make_X_mask(self, X):
         # X : (batch_seq, X_word)
@@ -272,60 +272,83 @@ class Transformer(torch.nn.Module):
 
 
 # ★★ Encoder
-class Transformer_Encoder(torch.nn.Module):
-    def __init__(self, vocab_size_X, embed_dim=256, n_layers=1, n_heads=4, pos_maxlen=100, posff_dim=512, dropout=0.5):
+class Encoder(torch.nn.Module):
+    def __init__(self, vocab_size_X, embed_dim=256, n_layers=1, n_heads=4, pos_maxlen=300, posff_dim=512, dropout=0.5):
         super().__init__()
-        self.X_embed = torch.nn.Embedding(vocab_size_X, embed_dim)
-        self.pos_X_embed = torch.nn.Embedding(pos_maxlen, embed_dim)
-
+        self.X_embed = EmbeddingLayer(vocab_size_X, embed_dim)
+        self.pos_X_embed = PositionalEmbeddingLayer(pos_maxlen, embed_dim)
         self.dropout = torch.nn.Dropout(dropout)
-        self.encoder_layers = torch.nn.ModuleList([Transformer_EncoderLayer(embed_dim, n_heads, posff_dim, dropout) for _ in range(n_layers)])
 
-        self.scaled = torch.sqrt(torch.FloatTensor([embed_dim]))    # [1]   # sqrt([hidden_dim])
-        # self.scaled = math.sqrt(embed_dim)
-        # self.scaled = np.sqrt(embed_dim)
+        self.encoder_layers = torch.nn.ModuleList([EncoderLayer(embed_dim, n_heads, posff_dim, dropout) for _ in range(n_layers)])
 
     def forward(self, X, X_mask=None):
         # X : (batch_Seq, X_word)
         
-        # Scaled X
-        self.X_emb_scaled = self.X_embed(X) * self.scaled.to(X.device)   # (batch_seq, X_word, emb)
-        
-        # positional vector (encoder)
-        self.pos_X = torch.arange(0, X.shape[1]).unsqueeze(0).repeat(X.shape[0],1).to(X.device)     # [[0,1,2 ... W]...] (batch_seq, X_word)
-        self.pos_emb_X = self.pos_X_embed(self.pos_X)     # (batch_seq, X_word, emb)
-
-        # sum of X_emb_scaled and pos_emb_X
+        # embedding layer -------------------------------------------------------------------------------
+        self.X_emb_scaled = self.X_embed(X)  # (batch_seq, X_word, emb)
+        # positional encoding ---------------------------------------------------------------------------
+        self.pos_emb_X = self.pos_X_embed(self.X_emb_scaled)     # (batch_seq, X_word, emb)
+        # sum of X_emb_scaled and pos_emb_X ------------------------------------------------------------
         self.X_input = self.dropout(self.X_emb_scaled + self.pos_emb_X)     # (batch_seq, X_word, emb)
 
-        # # ---
-        # self.encoder_output = self.X_input
-        # self.encoder_self_attention = None
-
-        # for enc_layer in self.encoder_layers:
-        #     self.encoder_output, self.encoder_self_attention = enc_layer(self.encoder_output, X_mask)
-        # return self.encoder_output, self.encoder_self_attention    # (batch_seq, X_word, emb), (batch_seq, n_heads, X_word, key_length)
-
-        # ---
+        # encoder layer ---------------------------------------------------------------------------------
         self.encoder_layer_history = [(self.X_input, None)]
-
         for enc_layer in self.encoder_layers:
             enc_output, enc_self_att_score = enc_layer(self.encoder_layer_history[-1][0], X_mask)
             self.encoder_layer_history.append((enc_output, enc_self_att_score))
-            
         self.encoder_output = self.encoder_layer_history[-1][0]
+
         return self.encoder_output, self.encoder_layer_history[-1][1]  # (batch_seq, X_word, emb), (batch_seq, n_heads, X_word, key_length)
 
+# ★ EmbeddingLayer
+class EmbeddingLayer(torch.nn.Module):
+    def __init__(self, vocab_size, embed_dim=256):
+        super().__init__()
+        self.embed_layer = torch.nn.Embedding(vocab_size, embed_dim)
+
+        self.scaled = torch.sqrt(torch.FloatTensor([embed_dim]))    # [1]   # sqrt([hidden_dim])
+        # self.scaled = math.sqrt(embed_dim)
+        # self.scaled = np.sqrt(embed_dim)
+    
+    def forward(self, X):
+        self.emb_scaled = self.embed_layer(X) * self.scaled.to(X.device)   # (batch_seq, X_word, emb)
+
+        return self.emb_scaled
+
+# ★ PositionalEmbeddingLayer
+# https://velog.io/@sjinu/Transformer-in-Pytorch#3-positional-encoding
+class PositionalEmbeddingLayer(torch.nn.Module):
+    def __init__(self, max_len=300, embed_dim=256):
+        super().__init__()
+
+        pos_embed = torch.zeros(max_len, embed_dim)         # (max_len, emb)
+        pos_inform = torch.arange(0, max_len).unsqueeze(1)  # (max_len, 1)
+        index_2i = torch.arange(0, embed_dim, step=2)       # (emb)
+        pos_embed[:, ::2] = torch.sin(pos_inform/(10000**(index_2i/embed_dim)))       # (max_len, emb)
+
+        if embed_dim % 2 == 0:
+            pos_embed[:, 1::2] = torch.cos(pos_inform/(10000**(index_2i/embed_dim)))
+        else:
+            pos_embed[:, 1::2] = torch.cos(pos_inform/(10000**(index_2i[:-1]/embed_dim)))
+
+        # self.pos_embed = pos_embed    # (max_len, emb)
+        self.register_buffer('pos_embed', pos_embed)      # 학습되지 않는 변수로 등록
+
+    def forward(self, X):
+        # X : (batch_Seq, X_word, emb)
+        self.pos_embed_output = torch.autograd.Variable(self.pos_embed[:X.shape[1]], requires_grad=False)
+        return self.pos_embed_output       # (X_word, emb)
+
 # ★ Encoder_Layer
-class Transformer_EncoderLayer(torch.nn.Module):
-    def __init__(self, embed_dim, n_heads, posff_dim, dropout):
+class EncoderLayer(torch.nn.Module):
+    def __init__(self, embed_dim=256, n_heads=4, posff_dim=512, dropout=0.5):
         super().__init__()
         self.dropout = torch.nn.Dropout(dropout)
 
-        self.self_attention = Transformer_MultiHeadAttentionLayer(embed_dim, n_heads, dropout)
+        self.self_attention = MultiHeadAttentionLayer(embed_dim, n_heads, dropout)
         self.self_attention_layer_norm = torch.nn.LayerNorm(embed_dim)
         
-        self.pos_feedforward = Transformer_PositionwiseFeedForwardLayer(embed_dim, posff_dim, dropout)
+        self.pos_feedforward = PositionwiseFeedForwardLayer(embed_dim, posff_dim, dropout)
         self.pos_feedforward_layer_norm = torch.nn.LayerNorm(embed_dim)
         
     def forward(self, X_emb, X_mask):
@@ -351,8 +374,74 @@ class Transformer_EncoderLayer(torch.nn.Module):
 
         return self.layer_normed_posff_output_X, self.enc_self_att_score    # (batch_seq, X_word, emb), (batch_seq, n_heads, X_word, key_length)
 
-# ★ Positionalwise_FeedForward_Layer
-class Transformer_PositionwiseFeedForwardLayer(torch.nn.Module):
+# ☆ MultiHeadAttentionLayer
+class MultiHeadAttentionLayer(torch.nn.Module):
+    def __init__(self, embed_dim=256, n_heads=4, dropout=0.5):
+        super().__init__()
+        assert embed_dim % n_heads == 0, 'embed_dim은 n_head의 배수값 이어야만 합니다.'
+
+        self.embed_dim = embed_dim
+        self.n_heads = n_heads
+        self.head_dim = embed_dim // n_heads
+
+        self.query_layer = torch.nn.Linear(embed_dim, embed_dim)
+        self.key_layer = torch.nn.Linear(embed_dim, embed_dim)
+        self.value_layer = torch.nn.Linear(embed_dim, embed_dim)
+
+        self.attention_layer = ScaleDotProductAttention(embed_dim, dropout)
+        self.fc = torch.nn.Linear(embed_dim, embed_dim)
+
+    def forward(self, query, key, value, mask=None):
+        # query, key, value : (batch_seq, len, emb)
+        with torch.no_grad():
+            batch_size = query.shape[0]
+
+        self.query = self.query_layer(query)    # (batch_seq, query_len, emb)
+        self.key   = self.key_layer(key)        # (batch_seq, key_len, emb)
+        self.value = self.value_layer(value)    # (batch_seq, value_len, emb)
+
+        self.query_multihead = self.query.view(batch_size, -1, self.n_heads, self.head_dim).permute(0,2,1,3)     # (batch_seq, n_heads, query_len, head_emb_dim)   ←permute←  (batch_seq, query_len, n_heads, head_emb_dim)
+        self.key_multihead   =   self.key.view(batch_size, -1, self.n_heads, self.head_dim).permute(0,2,1,3)     # (batch_seq, n_heads, key_len, head_emb_dim)   ←permute←  (batch_seq, key_len, n_heads, head_emb_dim)
+        self.value_multihead = self.value.view(batch_size, -1, self.n_heads, self.head_dim).permute(0,2,1,3)     # (batch_seq, n_heads, value_len, head_emb_dim)   ←permute←  (batch_seq, value_len, n_heads, head_emb_dim)
+
+        self.weighted, self.attention_score = self.attention_layer(self.query_multihead, self.key_multihead, self.value_multihead, mask=mask)
+        # self.weightd          # (B, H, QL, HE)
+        # self.attention_score  # (B, H, QL, QL)
+
+        self.weighted_arange = self.weighted.permute(0,2,1,3).contiguous()        # (B, QL, H, HE) ← (B, H, QL, HE)
+        self.weighted_flatten = self.weighted_arange.view(batch_size, -1, self.embed_dim)   # (B, QL, E) ← (B, H, E)
+
+        self.multihead_output = self.fc(self.weighted_flatten)       # (B, QL, FC)
+        return self.multihead_output, self.attention_score        #  (batch_seq, query_length, fc_dim), (batch_seq, n_heads, query_length, key_length)
+
+# * ScaleDotProductAttention
+class ScaleDotProductAttention(torch.nn.Module):
+    def __init__(self, embed_dim=256, dropout=0.5):
+        super().__init__()
+        self.scaled = torch.sqrt(torch.FloatTensor([embed_dim]))    # [1]   # sqrt([hidden_dim])
+        self.dropout_layer = torch.nn.Dropout(dropout)
+
+    def forward(self, query, key, value, mask=None, epsilon=1e-10):
+        with torch.no_grad():
+            kdim_idx = range(key.ndim)
+            k_permute = [*kdim_idx[:-2], kdim_idx[-1], kdim_idx[-2]]
+        
+        self.energy = torch.matmul(query, key.permute(*k_permute)) / self.scaled.to(query.device)    # (B, ..., S, S) ← (B, ..., S, W), (B, ..., W, S)
+        # * summation of muliply between embedding vectors : Query에 해당하는 각 Length(단어) embedding이 어떤 key의 Length(단어) embedding과 연관(내적)되는지?
+
+        if mask is not None:
+            # masking 영역(==0)에 대해 -epsilon 으로 채우기 (softmax → 0)
+            self.energy = self.energy.masked_fill(mask==0, -epsilon)
+
+        self.attention_score = torch.softmax(self.energy, dim=-1)
+
+        self.weighted = torch.matmul(self.dropout_layer(self.attention_score), value)    # (B, ..., S, W) ← (B, ..., S, S), (B, ..., S, W)
+        # * summation of muliply between softmax_score and embeding of value
+
+        return self.weighted, self.attention_score
+
+# ☆ Positionalwise_FeedForward_Layer
+class PositionwiseFeedForwardLayer(torch.nn.Module):
     def __init__(self, embed_dim, pf_dim, dropout):
         super().__init__()
         self.dropout = torch.nn.Dropout(dropout)
@@ -366,131 +455,58 @@ class Transformer_PositionwiseFeedForwardLayer(torch.nn.Module):
         self.output_ff2 = self.fc2(self.output_ff1)    # (batch_seq, X_word, emb)
         return self.output_ff2  # (batch_seq, X_word, emb)
 
-# ★ Multihead_Attention_Layer
-class Transformer_MultiHeadAttentionLayer(torch.nn.Module):
-    def __init__(self, embed_dim, n_heads, dropout):
-        super().__init__()
-        assert embed_dim % n_heads == 0, 'embed_dim은 n_head의 배수값 이어야만 합니다.'
-        
-        self.embed_dim = embed_dim
-        self.n_heads = n_heads
-        self.head_dim = embed_dim // n_heads
-
-        self.query_layer = torch.nn.Linear(embed_dim, embed_dim)
-        self.key_layer = torch.nn.Linear(embed_dim, embed_dim)
-        self.value_layer = torch.nn.Linear(embed_dim, embed_dim)
-
-        self.dropout = torch.nn.Dropout(dropout)
-        self.fc = torch.nn.Linear(embed_dim, embed_dim)
-        
-        self.scaled = torch.sqrt(torch.FloatTensor([embed_dim]))    # [1]   # sqrt([hidden_dim])
-        # self.scaled = math.sqrt(embed_dim)
-        # self.scaled = np.sqrt(embed_dim)
-
-    def forward(self, query, key, value, mask=None):
-        # query, key, value : (batch_seq, len, emb)
-        batch_size = query.shape[0] 
-
-        self.query = self.query_layer(query)    # (batch_seq, query_len, emb)
-        self.key = self.query_layer(key)        # (batch_seq, key_len, emb)
-        self.value = self.query_layer(value)    # (batch_seq, value_len, emb)
-
-        self.query_multihead = self.query.view(batch_size, -1, self.n_heads, self.head_dim).permute(0,2,1,3)     # (batch_seq, n_heads, query_len, head_emb_dim)   ←permute←  (batch_seq, query_len, n_heads, head_emb_dim)
-        self.key_multihead = self.key.view(batch_size, -1, self.n_heads, self.head_dim).permute(0,2,1,3)         # (batch_seq, n_heads, key_len, head_emb_dim)   ←permute←  (batch_seq, key_len, n_heads, head_emb_dim)
-        self.value_multihead = self.value.view(batch_size, -1, self.n_heads, self.head_dim).permute(0,2,1,3)     # (batch_seq, n_heads, value_len, head_emb_dim)   ←permute←  (batch_seq, value_len, n_heads, head_emb_dim)
-
-        self.energy = torch.matmul(self.query_multihead, self.key_multihead.permute(0,1,3,2)) / self.scaled.to(query.device)        # (B, H, QL, KL) ← (B, H, QL, HE), (B, H, HE, KL) 
-        # self.energy = (self.query_multihead @ self.key_multihead.permute(0,1,3,2)) / scaled        # (B, H, QL, KL) ← (B, H, QL, HE), (B, H, HE, KL) 
-        # np.matmul(A,B)[i,j,k] == np.sum(A[i,j,:] * B[i,:,k]) → i, j, k
-        # * summation of muliply between embedding vectors : Query에 해당하는 각 Length(단어) embedding이 어떤 key의 Length(단어) embedding과 연관(내적)되는지?
-        # (B, H, QL, KL) : (QL) query의 length(word),   (KL) queyr의 length(word) 대한 key의 length(word) 내적값
-
-        if mask is not None:
-            # masking 영역(==0)에 대해 -1e10으로 채우기 (softmax → 0)
-            self.energy = self.energy.masked_fill(mask==0, -1e10)
-        
-        self.att_score = torch.softmax(self.energy, dim=-1)
-        self.att_score_dropout = self.dropout(self.att_score)    
-
-        self.weigted = torch.matmul(self.att_score_dropout, self.value_multihead)       # (B, H, QL, HE) ← (B, H, QL, KL), (B, H, VL, HE) 
-        # self.weigted = self.att_score, @ self.value_multihead       # (B, H, QL, HE) ← (B, H, QL, KL), (B, H, VL, HE) 
-        # * summation of muliply between softmax_score and embeding of value
-        # (B, H, QL, HE) : (QL) query의 length(word)   (HE) attention의 softmax_socre에 대한 value embeding 의 내적값 (어떤 value의 embedding과 연관성이 있는지?)
-
-        self.weighted_arange = self.weigted.permute(0,2,1,3).contiguous()        # (B, QL, H, HE) ← (B, H, QL, HE)
-        self.weighted_flatten = self.weighted_arange.view(batch_size, -1, self.embed_dim)   # (B, QL, E) ← (B, H, E)
-
-        self.multihead_output = self.fc(self.weighted_flatten)       # (B, QL, FC)
-        return self.multihead_output, self.att_score        #  (batch_seq, query_length, fc_dim), (batch_seq, n_heads, query_length, key_length)
-
 
 # ★★ Decoder 
-class Transformer_Decoder(torch.nn.Module):
-    def __init__(self, vocab_size_y, embed_dim=256, n_layers=1, n_heads=4, pos_maxlen=100, posff_dim=512, dropout=0.5):
+class Decoder(torch.nn.Module):
+    def __init__(self, vocab_size_y, embed_dim=256, n_layers=1, n_heads=4, pos_maxlen=300, posff_dim=512, dropout=0.5):
         super().__init__()
         
-        self.y_embed = torch.nn.Embedding(vocab_size_y, embed_dim)
-        self.pos_y_embed = torch.nn.Embedding(pos_maxlen, embed_dim)
-
+        self.y_embed = EmbeddingLayer(vocab_size_y, embed_dim)
+        self.pos_y_embed = PositionalEmbeddingLayer(pos_maxlen, embed_dim)
         self.dropout = torch.nn.Dropout(dropout)
-        self.decoder_layers = torch.nn.ModuleList([Transformer_DecoderLayer(embed_dim, n_heads, posff_dim, dropout) for _ in range(n_layers)])
+
+        self.decoder_layers = torch.nn.ModuleList([DecoderLayer(embed_dim, n_heads, posff_dim, dropout) for _ in range(n_layers)])
 
         self.fc = torch.nn.Linear(embed_dim, vocab_size_y)
         
-        self.scaled = torch.sqrt(torch.FloatTensor([embed_dim]))    # [1]   # sqrt([hidden_dim])
-        # self.scaled = math.sqrt(embed_dim)
-        # self.scaled = np.sqrt(embed_dim)
-    
     def forward(self, y, X_mask, y_mask, context_matrix):
         # y : (batch_seq, y_word)
         # X_mask : (batch_seq, 1, ,1, X_word)
         # y_mask : (batch_seq, 1, y_word, y_word)
         # context_matrix : (batch_seq, X_word, emb)
         
-        # Scaled y
-        self.y_emb_scaled = self.y_embed(y) * self.scaled.to(y.device)   # (batch_seq, y_word, emb)
-        
-        # positional vector (decoder)
-        self.pos_y = torch.arange(0, y.shape[1]).unsqueeze(0).repeat(y.shape[0],1).to(y.device)     # [[0,1,2 ... W]...] (batch_seq, y_word)
-        self.pos_emb_y = self.pos_y_embed(self.pos_y)     # (batch_seq, y_word, emb)  
-        
-        # sum of y_emb_scaled and pos_emb_y
-        self.y_input = self.dropout(self.y_emb_scaled + self.pos_emb_y)     # (batch_seq, y_word, emb)
-        
-        # # ---
-        # self.decoder_output = self.y_input
-        # self.encoder_attention = None
-        # self.decoder_self_attention = None
 
-        # for dec_layer in self.decoder_layers:
-        #     self.decoder_output, self.decoder_self_attention, self.encoder_attention  = dec_layer(self.decoder_output, X_mask, y_mask, context_matrix)
-        
-        # self.decoder_output = self.fc(self.decoder_output)
-        # return self.decoder_output, self.encoder_attention, self.decoder_self_attention
+        # embedding layer -------------------------------------------------------------------------------
+        self.y_emb_scaled = self.y_embed(y)  # (batch_seq, X_word, emb)
+        # positional encoding ---------------------------------------------------------------------------
+        self.pos_emb_y = self.pos_y_embed(self.y_emb_scaled)     # (batch_seq, X_word, emb)
+        # sum of X_emb_scaled and pos_emb_X ------------------------------------------------------------
+        self.y_input = self.dropout(self.y_emb_scaled + self.pos_emb_y)     # (batch_seq, X_word, emb)
 
-        # ---
+        # decoder layer ---------------------------------------------------------------------------------
         self.decoder_layer_history = [(self.y_input, None, None)]
-
         for dec_layer in self.decoder_layers:
             dec_output, dec_self_att_score, enc_att_score = dec_layer(self.decoder_layer_history[-1][0], X_mask, y_mask, context_matrix)
             self.decoder_layer_history.append((dec_output, dec_self_att_score, enc_att_score))
 
+        # fully connected layer ----------------------------------------------------------------------------------
         self.decoder_output = self.fc(self.decoder_layer_history[-1][0])
+
         return self.decoder_output, self.decoder_layer_history[-1][1], self.decoder_layer_history[-1][2]
     
 # ★ Decoder_Layer
-class Transformer_DecoderLayer(torch.nn.Module):
-    def __init__(self, embed_dim, n_heads, posff_dim, dropout):
+class DecoderLayer(torch.nn.Module):
+    def __init__(self, embed_dim=256, n_heads=4, posff_dim=512, dropout=0.5):
         super().__init__()
         self.dropout = torch.nn.Dropout(dropout)
         
-        self.self_attention = Transformer_MultiHeadAttentionLayer(embed_dim, n_heads, dropout)
+        self.self_attention = MultiHeadAttentionLayer(embed_dim, n_heads, dropout)
         self.self_attention_layer_norm = torch.nn.LayerNorm(embed_dim)
         
-        self.encoder_attention = Transformer_MultiHeadAttentionLayer(embed_dim, n_heads, dropout)
+        self.encoder_attention = MultiHeadAttentionLayer(embed_dim, n_heads, dropout)
         self.encoder_attention_layer_norm = torch.nn.LayerNorm(embed_dim)
         
-        self.pos_feedforward = Transformer_PositionwiseFeedForwardLayer(embed_dim, posff_dim, dropout)
+        self.pos_feedforward = PositionwiseFeedForwardLayer(embed_dim, posff_dim, dropout)
         self.pos_feedforward_layer_norm = torch.nn.LayerNorm(embed_dim)
         
     def forward(self, y_emb, X_mask, y_mask, context_matrix):
@@ -526,27 +542,26 @@ class Transformer_DecoderLayer(torch.nn.Module):
         
         return self.layer_normed_posff_output_y, self.dec_self_att_score, self.y_enc_att_score
         # (batch_seq, y_word, emb), (batch_seq, n_heads, y_word, y_word), (batch_seq, n_heads, y_word, X_word)
-        
 #######################################################################################################################################
 
 
 
 
-
 # # customize library ***---------------------
-# import sys
-# sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
-# from DS_DeepLearning import EarlyStopping
+import sys
+sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
+from DS_DeepLearning import EarlyStopping
+
+es = EarlyStopping(patience=100)
 # # ------------------------------------------
 import time
 
 
 # training prepare * -------------------------------------------------------------------------------------------------------
-X_sample.shape, y_sample.shape
+# X_sample.shape, y_sample.shape
 
-model = Seq2Seq(vocab_size_X, vocab_size_y).to(device)
-# model = AttSeq2Seq(vocab_size_X, vocab_size_y).to(device)
-# model = Transformer(vocab_size_X, vocab_size_y, 0, 0).to(device)
+model = Transformer(vocab_size_X, vocab_size_y, 0, 0).to(device)
+# model = Transformer(vocab_size_X, vocab_size_y, 0, 0, n_layers=3, n_heads=8, dropout=0.5, pos_maxlen=150).to(device)
 # model = Transformer(vocab_size_X, vocab_size_y, 0, 0, n_layers=2, n_heads=8, dropout=0.5, pos_maxlen=150).to(device)
 # model(X_sample.to(device), y_sample.to(device))
 
@@ -565,7 +580,7 @@ model.apply(init_weights)
 # loss_function = torch.nn.CrossEntropyLoss()     # ignore_index=trg_pad_idx
 loss_function = torch.nn.CrossEntropyLoss(ignore_index=0)
 optimizer = torch.optim.Adam(model.parameters())
-epochs = 20
+epochs = 100
 
 def epoch_time(start_time, end_time):
     elapsed_time = end_time - start_time
@@ -583,8 +598,8 @@ for e in range(epochs):
     train_epoch_loss = []
     for batch_X, batch_y in train_loader:
         optimizer.zero_grad()                   # wegiht initialize
-        # pred = model(batch_X.to(device), batch_y.to(device))                   # predict
-        pred = model(batch_X.to(device), batch_y.to(device), teacher_forcing=1)                   # predict
+        pred = model(batch_X.to(device), batch_y.to(device))                   # predict
+        # pred = model(batch_X.to(device), batch_y.to(device), teacher_forcing=1)                   # predict
 
         pred_eval = pred[:,:-1,:].reshape(-1, vocab_size_y)
         real_eval = batch_y[:,1:].reshape(-1).type(torch.int64).to(device)
@@ -659,10 +674,12 @@ sentence_output = train_y[[idx],:]
 
 with torch.no_grad():
     model.eval()
-    pred_sentence = model.predict(torch.tensor(sentence_input).to(device))
+    pred_sentence, attention_scores = model.predict(torch.tensor(sentence_input).to(device))
     # pred_sentence_ = model(torch.tensor(sentence_input).to(device), torch.tensor(sentence_output).to(device))
-    pred_sentence = torch.argmax(pred_sentence_, dim=2)
+    # pred_sentence = torch.argmax(pred_sentence_, dim=2)
 print(pred_sentence)
+
+
 
 sentence_en = np.stack([[index_word_X[word] if word != 0 else '' for word in sentence] for sentence in sentence_input])[0]
 sentence_kr_real = np.stack([[index_word_y[word] if word != 0 else '' for word in sentence] for sentence in sentence_output])[0]
@@ -678,18 +695,6 @@ import seaborn as sns
 pred_slice_end = np.where(sentence_kr_pred=='<EOS>')[0][0]
 trg_slice_end = np.where(sentence_en=='<EOS>')[0][0]
 
-plt.figure()
-plt.title('attention_map')
-sns.heatmap(model.attention_scores.to('cpu').numpy()[1:pred_slice_end, 1:trg_slice_end], cmap='bone')
-plt.xticks(np.arange(1,trg_slice_end), sentence_en[1:trg_slice_end], rotation=90)
-plt.yticks(np.arange(1,pred_slice_end), sentence_kr_pred[1:pred_slice_end,], rotation=0)
-plt.show()
-
-# ------------------------------------------------------------------------------------------------------------------
-
-model.encoder_self_attention.shape
-model.decoder_self_attention.shape
-
 f = plt.figure(figsize=(10,10))
 for h in range(model.encoder_attention.shape[1]):
     plt.subplot(3,3,h+1)
@@ -697,9 +702,7 @@ for h in range(model.encoder_attention.shape[1]):
     plt.xticks(np.arange(sentence_en.shape[0])[:13], sentence_en[:13], rotation=90)
     plt.yticks(np.arange(sentence_kr_pred.shape[0])[1:12], sentence_kr_pred[1:12], rotation=0)
 plt.close()
-f
-sentence_en.shape[0][:]
-sentence_en[:12]
+
 
 
 
