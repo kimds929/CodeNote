@@ -361,3 +361,196 @@ plt.show()
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+################################################################################################################################
+
+import numpy as np
+import pandas as pd
+
+import matplotlib.pyplot as plt
+import tensorflow as tf
+# from tensorflow.python.client import device_lib
+# device_lib.list_local_devices()
+
+import time
+from IPython.display import clear_output
+
+
+tf.__version__
+# tf.config.experimental.list_physical_devices('GPU')
+# tf.debugging.set_log_device_placement(True)     # 해당 연산이 어떤 장치에 할당 되었는지 알려줌
+# tf.debugging.set_log_device_placement(False)     # 해당 연산이 어떤 장치에 할당 되었는지 알려줌
+
+
+wine_dict = {'Mo': [0.044, 0.16 , 0.146, 0.191, 0.363, 0.106, 0.479, 0.234, 0.058,
+        0.074, 0.071, 0.147, 0.116, 0.166, 0.261, 0.191, 0.009, 0.027,
+        0.05 , 0.268, 0.245, 0.161, 0.146, 0.155, 0.126],
+ 'Ba': [0.387, 0.312, 0.308, 0.165, 0.38 , 0.275, 0.164, 0.271, 0.225,
+        0.329, 0.105, 0.301, 0.166, 0.132, 0.078, 0.085, 0.072, 0.094,
+        0.294, 0.099, 0.071, 0.181, 0.328, 0.081, 0.299],
+ 'Cr': [0.029, 0.038, 0.035, 0.036, 0.059, 0.019, 0.062, 0.044, 0.022,
+        0.03 , 0.028, 0.087, 0.041, 0.026, 0.063, 0.063, 0.021, 0.021,
+        0.006, 0.045, 0.053, 0.06 , 0.1  , 0.037, 0.054],
+ 'Sr': [1.23 , 0.975, 1.14 , 0.927, 1.13 , 1.05 , 0.823, 0.963, 1.13 ,
+        1.07 , 0.491, 2.14 , 0.578, 0.229, 0.156, 0.192, 0.172, 0.358,
+        1.12 , 0.36 , 0.186, 0.898, 1.32 , 0.164, 0.995],
+ 'Pb': [0.561, 0.697, 0.73 , 0.796, 1.73 , 0.491, 2.06 , 1.09 , 0.048,
+        0.552, 0.31 , 0.546, 0.518, 0.699, 1.02 , 0.777, 0.232, 0.025,
+        0.206, 1.28 , 1.19 , 0.747, 0.604, 0.767, 0.686],
+ 'B': [2.63, 6.21, 3.05, 2.57, 3.07, 6.56, 4.57, 3.18, 6.13, 3.3 , 6.56,
+        3.5 , 6.43, 7.27, 5.04, 5.56, 3.79, 4.24, 2.71, 5.68, 4.42, 8.11,
+        6.42, 4.91, 6.94],
+ 'Mg': [128. , 193. , 127. , 112. , 138. , 172. , 179. , 145. , 113. ,
+        140. , 103. , 199. , 111. , 107. ,  94.6, 110. ,  75.9,  80.9,
+        120. ,  98.4,  87.6, 160. , 134. ,  86.5, 129. ],
+ 'Ca': [ 80.5,  75. ,  91. ,  93.6,  84.6, 112. , 122. ,  91.9,  70.2,
+         74.7,  67.9,  66.3,  83.8,  44.9,  54.9,  64.1,  48.1,  57.6,
+         64.8,  64.3,  70.6,  82.1,  83.2,  53.9,  85.9],
+ 'K': [1130, 1010, 1160,  924, 1090, 1290, 1170, 1020, 1240, 1100, 1090,
+        1470, 1120,  854,  899,  976,  995,  876, 1050,  945,  820, 1220,
+        1810, 1020, 1330],
+ 'Aroma': [3.3, 4.4, 3.9, 3.9, 5.6, 4.6, 4.8, 5.3, 4.3, 4.3, 5.1, 3.3, 5.9,
+        7.7, 7.1, 5.5, 6.3, 5. , 4.6, 6.4, 5.5, 4.7, 4.1, 6. , 4.3]}
+
+data = pd.DataFrame(wine_dict)
+
+
+x_cols = ['Mo', 'Ba', 'Cr','B','K']
+Y_col = ['Aroma']
+
+
+
+
+from sklearn.model_selection import train_test_split
+df_train, df_test = train_test_split(data, test_size=0.3)
+
+df_train_X = tf.constant(df_train[x_cols], dtype=tf.float32)
+df_train_Y = tf.constant(df_train[Y_col], dtype=tf.float32)
+
+df_test_X = tf.constant(df_test[x_cols], dtype=tf.float32)
+df_test_Y = tf.constant(df_test[Y_col], dtype=tf.float32)
+# np.random.permutation(len(data)) # shuffle index
+
+
+n_batch=8
+train_set = tf.data.Dataset.from_tensor_slices((df_train_X, df_train_Y)).batch(n_batch).shuffle(len(df_train))
+test_set = tf.data.Dataset.from_tensor_slices((df_test_X, df_test_Y)).batch(n_batch).shuffle(len(df_test))
+
+
+# Tensorflow Model Class
+class TF_Model(tf.keras.Model):
+    def __init__(self):
+        super().__init__()
+        self.dense1 = tf.keras.layers.Dense(8, name='layer1')
+        self.dense2 = tf.keras.layers.Dense(64, name='layer2')
+        self.dense3 = tf.keras.layers.Dense(1, name='layer3')
+
+    def call(self, X, training=False):
+        self.i = X
+        self.h1 = tf.keras.activations.relu(self.dense1(self.i))
+        self.h2 = tf.keras.activations.relu(self.dense2(self.h1))
+        self.o = self.dense3(self.h2)
+        
+        # self.h1 = tf.keras.activations.relu(self.dense1(self.i))
+        # self.o = self.dense3(self.h1)
+        return self.o
+
+
+
+# Tensorflow Step Function
+@tf.function
+def tf_step(model, X, Y, loss_function, optimizer, training=False):
+    result = {'pred':None, 'loss':None}
+    
+    if training:
+        with tf.GradientTape() as Tape:
+            y_pred = model(X, training=training)  # forward
+            loss = loss_function(Y, y_pred)   # loss
+        gradients = Tape.gradient(loss, model.trainable_variables)  # backward
+        optimizer.apply_gradients(zip(gradients, model.trainable_variables))    # update weight
+        
+        result['gradients'] = [t.numpy() for t in gradients]
+        result['weights'] = [t.numpy() for t in model.trainable_variables]
+    else:
+        y_pred = model(X, training=training)  # forward
+        loss = loss_function(Y, y_pred)   # loss
+
+    result['pred'] = y_pred.numpy()
+    result['loss'] = loss.numpy()
+    return result
+
+
+# Model Learning
+model = TF_Model()
+model.summary()
+
+# 5*8+8
+# 8*64+64
+# 64*1+1
+# pd.DataFrame( model.i.numpy() @ model.dense1.get_weights()[0]  + model.dense1.get_weights()[1].reshape(1,-1) )
+# pd.DataFrame(model.dense1(model.i).numpy())
+# pd.DataFrame(model.h1.numpy())
+# pd.DataFrame(model.h2.numpy())
+# pd.DataFrame(model.o.numpy())
+
+
+
+
+
+loss_function = tf.keras.losses.MeanSquaredError()
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
+# rmse(test_X_tf, test_result['pred'])
+
+loss_train = []
+loss_test = []
+EPOCHS = 10
+for epoch in range(EPOCHS):
+    # train
+    loss_train_batch = []
+    for train_batch_X, train_batch_Y in train_set: 
+        train_result = tf_step(model, train_batch_X, train_batch_Y, loss_function, optimizer, training=True)
+        loss_train_batch.append(train_result['loss'])
+    loss_train.append(np.mean(loss_train_batch))
+    
+    # valid
+    loss_test_batch = []
+    for test_batch_X, test_batch_Y in test_set:
+        test_result = tf_step(model, test_batch_X, test_batch_Y, loss_function, optimizer)
+        loss_test_batch.append(train_result['loss'])
+    loss_test.append(np.mean(loss_test_batch))
+        
+    clear_output(wait=True)
+    plt.figure()
+    plt.plot(loss_train, 'o-', label='train')
+    plt.plot(loss_test, 'o-', label='test')
+    plt.legend(loc='upper right')
+    plt.show()
+    time.sleep(0.1)
+
+# 【 parameter 저장 】
+# np.savez_compressed('abcd.npz', input=np.array([1,2,3,4]), aaa=np.array(['a','b']))
+# a = np.load('abcd.npz')
+# list(a.keys())
+
