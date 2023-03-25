@@ -13,6 +13,7 @@ import numpy as np
 embed_dim = 5
 rng = np.random.RandomState(1)
 
+# embedding_matrix = np.arange(vocab_size).reshape(-1,1).repeat(embed_dim,1).astype(float)
 embedding_matrix = rng.uniform(-1, 1, (vocab_size, embed_dim))    # -1~1, shape: (vocab_size, embed_dim)
 embedding_matrix.shape  # (10,5) → (word, embeding)
 embedding_matrix
