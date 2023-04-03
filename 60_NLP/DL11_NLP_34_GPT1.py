@@ -10,15 +10,29 @@ import torch
 
 
 # url_path ='/home/kimds929/DataSet/'
+url_path = r'C:\Users\Admin\Desktop\DataBase'
 
-# train_df = pd.read_csv(f'{url_path}/NLP_movie_review_simple_train_tokenized.csv', encoding='utf-8-sig')
+train_df = pd.read_csv(f'{url_path}/NLP_movie_review_train_tokenized.csv', encoding='utf-8-sig')
+print(train_df.shape)
 
-# from DS_NLP import NLP_Preprocessor
+train_X = train_df['tokenized']
+train_y = train_df['label'].to_numpy()
 
-# processor = NLP_Preprocessor(texts=train_df['tokenized'])
-# processor.fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
+from DS_NLP import NLP_Preprocessor
+processor = NLP_Preprocessor(texts=train_X)
+# processor.word_prob()
+processor.fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
+
 # processor.sequences_to_texts()
-# vocab_size = processor.vocab_size
+vocab_size = processor.vocab_size
+print(vocab_size)
+
+
+pretrain_X = processor.texts[:-10000]
+pretrain_y = train_y[:-10000]
+cls_X = processor.texts[-10000:]
+cls_y = train_y[-10000:]
+
 
 # train_X = processor.texts
 # train_y = train_df['label'].to_numpy()
@@ -75,8 +89,92 @@ class TextPreprocessor():
 tp = TextPreprocessor(index_word)
 tp.seq_to_text(pretrain_seq, text=True)
 vocab_size = tp.vocab_size
+# pretrain_seq.shape    # 4573, 132
 
 
+
+# DataSet ########################################################################
+# import numpy as np
+# import torch
+from sklearn.model_selection import train_test_split
+class TorchDataLoader():
+    def __init__(self, *args, split_size=(0.7, 0.1, 0.2), random_state=None, **kwargs):
+        self.args = args
+        assert (np.array(list(map(len, self.args)))/len(self.args[0])).all() == True, 'Arguments must have same length'
+        self.idx = np.arange(len(self.args[0]))
+        
+        self.split_size = [s/np.sum(split_size) for s in split_size]
+        
+        self.train_test_split_size = None
+        self.train_valid_split_size = None
+        
+        if len(self.split_size) == 2:
+            self.train_test_split_size = self.split_size
+        elif len(self.split_size) == 3:
+            self.train_test_split_size = [self.split_size[0]+self.split_size[1], self.split_size[2]]
+            self.train_valid_split_size = [s/self.train_test_split_size[0] for s in self.split_size[:2]]
+        
+        self.random_state = random_state
+        self.kwargs = kwargs
+        
+        self.torch_data = None
+        self.dataset = None
+        self.dataloader = None
+        
+    def split(self, dtypes=None, random_state=None):
+        random_state = self.random_state if random_state is None else random_state
+        self.train_idx, self.test_idx = train_test_split(self.idx, test_size=self.train_test_split_size[-1], random_state=random_state)
+        self.index = (self.train_idx, self.test_idx)
+        if self.train_valid_split_size is not None:
+            self.train_idx, self.valid_idx = train_test_split(self.train_idx, test_size=self.train_valid_split_size[-1], random_state=random_state)
+            self.index = (self.train_idx, self.valid_idx, self.test_idx)
+        
+        [print(len(index), end=', ') for index in self.index]
+        if dtypes is None:
+            self.torch_data = tuple([tuple([torch.tensor(arg[idx]) for idx in self.index]) for arg in self.args])
+        else:
+            self.torch_data = tuple([tuple([torch.tensor(arg[idx]).type(dtype) for idx in self.index]) for arg, dtype in zip(self.args, dtypes)])
+    
+    def make_dataset(self, dtypes=None, random_state=None):
+        if self.torch_data is None:
+            self.split(dtypes, random_state)
+            
+        self.dataset = tuple([torch.utils.data.TensorDataset(*data) for data in zip(*self.torch_data)])
+
+    def make_dataloader(self, dtypes=None, random_state=None, **kwargs):
+        if self.dataset is None:
+            self.make_dataset(dtypes, random_state)
+        if len(kwargs) > 0:
+            self.kwargs = kwargs
+            
+        self.dataloader = tuple([torch.utils.data.DataLoader(dataset, **self.kwargs) for dataset in self.dataset])
+        
+        for sample in self.dataloader[0]:
+            break
+        self.sample = sample
+
+# X = np.random.rand(100,3)
+# y = np.random.rand(100)
+# loader =  TorchDataLoader(X, y, split_size=(0.7, 0.1, 0.2), random_state=1)
+# loader.make_dataloader()
+# loader.dataloader
+# loader.sample
+# train_loader, valid_loader, test_loader = loader.dataloader
+
+
+
+
+pretrain_loader = TorchDataLoader(pretrain_X, pretrain_y, split_size=(0.8,0.1,0.1), random_state=1)
+pretrain_loader.make_dataloader(batch_size=64, shuffle=True)
+pretrain_loader.dataloader
+pretrain_train_loader, pretrain_valid_loader, pretrain_test_loader = pretrain_loader.dataloader
+pretrain_sample_X, pretrain_sample_y = pretrain_loader.sample
+
+cls_loader = TorchDataLoader(cls_X, cls_y, split_size=(0.8,0.1,0.1), random_state=1)
+cls_loader.make_dataloader(batch_size=64, shuffle=True)
+cls_loader.dataloader
+cls_train_loader, cls_valid_loader, cls_test_loader = cls_loader.dataloader
+cls_sample_X, cls_sample_y = cls_loader.sample
 
 # # sample data
 # sample_df = pd.read_csv(f'{dataset_path}/Sample_Sequence_Data_1000.csv', encoding='utf-8-sig')
@@ -84,7 +182,11 @@ vocab_size = tp.vocab_size
 # vocab_size = 7
 # sample_X.shape  # 3,5, 7
 
+gpt_pretrain = GPT1_Pretrain(vocab_size)
+gpt_pretrain(cls_sample_X).shape
 
+gpt_cls = GPT1_Classifier(vocab_size)
+gpt_cls(cls_sample_X)
 
 # torch -----------------------------------------------------------------------
 # self.register_buffer('pos_embed', pos_embed)      # 학습되지 않는 변수로 등록
@@ -98,6 +200,18 @@ from DS_TorchModule import EmbeddingLayer, PositionalEncodingLayer, Positionwise
 #######################################################################################################################################
 # https://paul-hyun.github.io/gpt-01/
 # https://paul-hyun.github.io/transformer-02/
+class GPT1_Classifier(torch.nn.Module):
+    def __init__(self, vocab_size, embed_dim=256, n_layers=1, n_heads=4, posff_dim=512, dropout=0.1, pos_encoding='sinusoid'):
+        super().__init__()
+        self.gpt_pretrain = GPT1_Pretrain(vocab_size, embed_dim, n_layers, n_heads, 
+                                   posff_dim, dropout, pos_encoding)
+        self.classifier_lm = torch.nn.Linear(vocab_size, 2)
+    
+    def forward(self, x):
+        self.pretrain_output = self.gpt_pretrain(x)
+        self.output = self.classifier_lm(self.pretrain_output[:,-1, :])
+        return self.output
+
 
 # ★★ GPT1_Pretrain
 #   gpt_pt = GPT1_Pretrain(vocab_size, 2, n_heads=1)
@@ -120,9 +234,8 @@ class GPT1_Pretrain(torch.nn.Module):
             self.self_attention_score = self.gpt_decoder.decoder_layers[-1].self_attention_score
 
         self.projection_output = self.projection_layer(self.decoder_output)
-        self.output = self.projection_output[:,:-1,:]
         # 입력에 다한 다음 단어를 예측하는 것이므로 결과의 마지막을 제외한 나머지를 리턴 합니다. 
-        return self.output
+        return self.projection_output
     
 # ★★ GPT1_Decoder 
 #   gpt = GPT1_Decoder(vocab_size, embed_dim=2, n_heads=1)
@@ -205,80 +318,6 @@ class GPT1_DecoderLayer(torch.nn.Module):
 
 
 
-# DataSet ########################################################################
-# import numpy as np
-# import torch
-from sklearn.model_selection import train_test_split
-class TorchDataLoader():
-    def __init__(self, *args, split_size=(0.7, 0.1, 0.2), random_state=None, **kwargs):
-        self.args = args
-        assert (np.array(list(map(len, self.args)))/len(self.args[0])).all() == True, 'Arguments must have same length'
-        self.idx = np.arange(len(self.args[0]))
-        
-        self.split_size = [s/np.sum(split_size) for s in split_size]
-        
-        self.train_test_split_size = None
-        self.train_valid_split_size = None
-        
-        if len(self.split_size) == 2:
-            self.train_test_split_size = self.split_size
-        elif len(self.split_size) == 3:
-            self.train_test_split_size = [self.split_size[0]+self.split_size[1], self.split_size[2]]
-            self.train_valid_split_size = [s/self.train_test_split_size[0] for s in self.split_size[:2]]
-        
-        self.random_state = random_state
-        self.kwargs = kwargs
-        
-        self.torch_data = None
-        self.dataset = None
-        self.dataloader = None
-        
-    def split(self, dtypes=None, random_state=None):
-        random_state = self.random_state if random_state is None else random_state
-        self.train_idx, self.test_idx = train_test_split(self.idx, test_size=self.train_test_split_size[-1], random_state=random_state)
-        self.index = (self.train_idx, self.test_idx)
-        if self.train_valid_split_size is not None:
-            self.train_idx, self.valid_idx = train_test_split(self.train_idx, test_size=self.train_valid_split_size[-1], random_state=random_state)
-            self.index = (self.train_idx, self.valid_idx, self.test_idx)
-        
-        [print(len(index), end=', ') for index in self.index]
-        if dtypes is None:
-            self.torch_data = tuple([tuple([torch.tensor(arg[idx]) for idx in self.index]) for arg in self.args])
-        else:
-            self.torch_data = tuple([tuple([torch.tensor(arg[idx]).type(dtype) for idx in self.index]) for arg, dtype in zip(self.args, dtypes)])
-    
-    def make_dataset(self, dtypes=None, random_state=None):
-        if self.torch_data is None:
-            self.split(dtypes, random_state)
-            
-        self.dataset = tuple([torch.utils.data.TensorDataset(*data) for data in zip(*self.torch_data)])
-
-    def make_dataloader(self, dtypes=None, random_state=None, **kwargs):
-        if self.dataset is None:
-            self.make_dataset(dtypes, random_state)
-        if len(kwargs) > 0:
-            self.kwargs = kwargs
-            
-        self.dataloader = tuple([torch.utils.data.DataLoader(dataset, **self.kwargs) for dataset in self.dataset])
-        
-        for sample in self.dataloader[0]:
-            break
-        self.sample = sample
-
-# X = np.random.rand(100,3)
-# y = np.random.rand(100)
-# loader =  TorchDataLoader(X, y, split_size=(0.7, 0.1, 0.2), random_state=1)
-# loader.make_dataloader()
-# loader.dataloader
-# loader.sample
-# train_loader, valid_loader, test_loader = loader.dataloader
-
-loader = TorchDataLoader(pretrain_seq, split_size=(0.8,0.1,0.1), random_state=1)
-loader.make_dataloader(batch_size=64, shuffle=True)
-loader.dataloader
-train_loader, valid_loader, test_loader = loader.dataloader
-sample_X = loader.sample[0]
-
 
 
 
@@ -343,7 +382,7 @@ for e in range(epochs):
         batch_data = batch[0]
         optimizer.zero_grad()                   # wegiht initialize
         pred = model(batch_data.to(device))                   # predict
-        pred_eval = pred.reshape(-1, vocab_size)
+        pred_eval = pred[:,:-1,:].reshape(-1, vocab_size)
         real_eval = batch_data[:,1:].reshape(-1).to(device)
          
         loss = loss_function(pred_eval, real_eval)     # loss
@@ -365,7 +404,7 @@ for e in range(epochs):
         for batch in valid_loader:
             batch_data = batch[0]
             pred = model(batch_data.to(device))                   # predict
-            pred_eval = pred.reshape(-1, vocab_size)
+            pred_eval = pred[:,:-1,:].reshape(-1, vocab_size)
             real_eval = batch_data[:,1:].reshape(-1).to(device)              # predict
 
             loss = loss_function(pred_eval, real_eval)     # loss
