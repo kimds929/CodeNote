@@ -18,12 +18,19 @@ print(train_df.shape)
 
 train_X = train_df['tokenized']
 
-from DS_NLP import NLP_Preprocessor
+
+# from DS_NLP import NLP_Preprocessor
+import httpimport
+remote_url = 'https://raw.githubusercontent.com/kimds929/'
+with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
+    from DS_NLP import NLP_Preprocessor
+
+
 processor = NLP_Preprocessor(texts=train_X)
-# processor.word_prob()
+processor.word_prob()
 # processor.fit_on_texts().texts_to_sequences()
 
-num_words = 2157
+num_words = 4380
 processor.fit_on_texts(num_words=num_words).texts_to_sequences().add_sos_eos().pad_sequences()
 processor.vocab_size
 processor.word_index
@@ -98,66 +105,9 @@ print(pretrain_X.shape, pretrain_y.shape, cls_X.shape, cls_y.shape)
 # # pretrain_seq.shape    # 4573, 132
 
 
-# DataSet ########################################################################
-# import numpy as np
-# import torch
-from sklearn.model_selection import train_test_split
-class TorchDataLoader():
-    def __init__(self, *args, split_size=(0.7, 0.1, 0.2), random_state=None, **kwargs):
-        self.args = args
-        assert (np.array(list(map(len, self.args)))/len(self.args[0])).all() == True, 'Arguments must have same length'
-        self.idx = np.arange(len(self.args[0]))
-        
-        self.split_size = [s/np.sum(split_size) for s in split_size]
-        
-        self.train_test_split_size = None
-        self.train_valid_split_size = None
-        
-        if len(self.split_size) == 2:
-            self.train_test_split_size = self.split_size
-        elif len(self.split_size) == 3:
-            self.train_test_split_size = [self.split_size[0]+self.split_size[1], self.split_size[2]]
-            self.train_valid_split_size = [s/self.train_test_split_size[0] for s in self.split_size[:2]]
-        
-        self.random_state = random_state
-        self.kwargs = kwargs
-        
-        self.torch_data = None
-        self.dataset = None
-        self.dataloader = None
-        
-    def split(self, dtypes=None, random_state=None):
-        random_state = self.random_state if random_state is None else random_state
-        self.train_idx, self.test_idx = train_test_split(self.idx, test_size=self.train_test_split_size[-1], random_state=random_state)
-        self.index = (self.train_idx, self.test_idx)
-        if self.train_valid_split_size is not None:
-            self.train_idx, self.valid_idx = train_test_split(self.train_idx, test_size=self.train_valid_split_size[-1], random_state=random_state)
-            self.index = (self.train_idx, self.valid_idx, self.test_idx)
-        
-        [print(len(index), end=', ') for index in self.index]
-        print()
-        if dtypes is None:
-            self.torch_data = tuple([tuple([torch.tensor(arg[idx]) for idx in self.index]) for arg in self.args])
-        else:
-            self.torch_data = tuple([tuple([torch.tensor(arg[idx]).type(dtype) for idx in self.index]) for arg, dtype in zip(self.args, dtypes)])
-    
-    def make_dataset(self, dtypes=None, random_state=None):
-        if self.torch_data is None:
-            self.split(dtypes, random_state)
-            
-        self.dataset = tuple([torch.utils.data.TensorDataset(*data) for data in zip(*self.torch_data)])
-
-    def make_dataloader(self, dtypes=None, random_state=None, **kwargs):
-        if self.dataset is None:
-            self.make_dataset(dtypes, random_state)
-        if len(kwargs) > 0:
-            self.kwargs = kwargs
-            
-        self.dataloader = tuple([torch.utils.data.DataLoader(dataset, **self.kwargs) for dataset in self.dataset])
-        
-        for sample in self.dataloader[0]:
-            break
-        self.sample = sample
+# from DS_Torch import TorchDataLoader
+with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
+    from DS_Torch import TorchDataLoader
 
 # X = np.random.rand(100,3)
 # y = np.random.rand(100)
@@ -169,13 +119,14 @@ class TorchDataLoader():
 
 
 
-
+# pretrain_dataset
 pretrain_loader = TorchDataLoader(pretrain_X, pretrain_y, split_size=(0.8,0.1,0.1), random_state=1)
 pretrain_loader.make_dataloader(batch_size=64, shuffle=True)
 pretrain_loader.dataloader
 pretrain_train_loader, pretrain_valid_loader, pretrain_test_loader = pretrain_loader.dataloader
 pretrain_sample_X, pretrain_sample_y = pretrain_loader.sample
 
+# classification_dataset
 cls_loader = TorchDataLoader(cls_X, cls_y, split_size=(0.8,0.1,0.1), random_state=1)
 cls_loader.make_dataloader(batch_size=64, shuffle=True)
 cls_loader.dataloader
@@ -196,7 +147,9 @@ cls_sample_X, cls_sample_y = cls_loader.sample
 # .masked_fill((sample_X == 0), 0)      # apply
 # .masked_fill_((sample_X == 0), 0)     # inplace
 # -----------------------------------------------------------------------------
-from DS_TorchModule import EmbeddingLayer, PositionalEncodingLayer, PositionwiseFeedForwardLayer, MultiHeadAttentionLayer, make_tril_mask
+# from DS_TorchModule import EmbeddingLayer, PositionalEncodingLayer, PositionwiseFeedForwardLayer, MultiHeadAttentionLayer, make_tril_mask
+with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
+    from DS_TorchModule import EmbeddingLayer, PositionalEncodingLayer, PositionwiseFeedForwardLayer, MultiHeadAttentionLayer, make_tril_mask
 
 #######################################################################################################################################
 # https://paul-hyun.github.io/gpt-01/
@@ -411,10 +364,11 @@ else:
 print(device)
 
 # # customize library ***---------------------
-import sys
-sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
-from DS_DeepLearning import EarlyStopping
-
+# import sys
+# sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
+# from DS_DeepLearning import EarlyStopping
+with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
+    from DS_DeepLearning import EarlyStopping
 # # ------------------------------------------
 import time
 import copy
@@ -549,9 +503,10 @@ for e in range(epochs):
 
 # customize library ***---------------------
 es.plot     # early_stopping plot
+# ------------------------------------------
 
 gpt_cls.load_state_dict(es.optimum[2])    # optimum model (load weights)
-# ------------------------------------------
+
 
 
 # Performance Evaluate (Accuracy_score)
@@ -745,9 +700,7 @@ for e in range(epochs):
     # train_set learning*
     model.train()
     train_epoch_loss = []
-    print(f"{e} epoch) ", end=' ')
     for ei, batch  in enumerate(train_loader):
-        print(f"{ei}", end=' ')
         batch_X = batch[0].type(torch.long).to(device)
         batch_y = batch[1].to(device)
         
@@ -825,7 +778,7 @@ gpt_cls_with_pretrain.load_state_dict(es.optimum[2])    # optimum model (load we
 
 # Performance Evaluate (Accuracy_score)
 gpt_cls_with_pretrain.downstream()
-torch_accuracy_score(cls_test_loader, gpt_cls_with_pretrain)
+torch_accuracy_score(cls_test_loader, gpt_cls_with_pretrain, device)
 
 
 
