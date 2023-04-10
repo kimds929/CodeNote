@@ -1,4 +1,6 @@
 # (DataSet 소개하는 url) #############################
+# https://littlefoxdiary.tistory.com/42
+
 # https://github.com/niderhoff/nlp-datasets
 # https://machinelearningmastery.com/datasets-natural-language-processing/
 # https://conll.org/2019-shared-task

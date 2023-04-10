@@ -8,7 +8,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import torch
-import tensorflow as tf
+# import tensorflow as tf
 
 
 
@@ -20,13 +20,17 @@ df = pd.read_csv(f"{url_path}/NLP_EN_to_KR_0_Data.csv", encoding='utf-8-sig')
 # df01 = pd.read_csv(f"{path}/NLP_EN_to_KR1_Data.csv", encoding='utf-8-sig')
 # df02 = pd.read_csv(f"{path}/NLP_EN_to_KR2_Data.csv", encoding='utf-8-sig')
 # df = pd.concat([df02, df01],axis=0).reset_index(drop=True)
-
-
-df.sample(6)
 print(df.shape)
 
+df.sample(6)
+
+
 # Preprocessing --------------------------------------------------------------------------------------
-from DS_NLP import NLP_Preprocessor
+# from DS_NLP import NLP_Preprocessor
+import httpimport
+remote_url = 'https://raw.githubusercontent.com/kimds929/'
+with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
+    from DS_NLP import NLP_Preprocessor
 
 processor_en = NLP_Preprocessor(df['english'])
 processor_en.replace().fit_on_texts().texts_to_sequences().add_sos_eos().pad_sequences()
@@ -42,6 +46,7 @@ processor_en.index_word     # index_word
 processor_en.sequences_to_texts(processor_en.texts, join=' ')   # inverse_transform
 
 print(f"y_data_shape: {processor_en.texts.shape}, y_vocab_size: {processor_en.vocab_size}" )
+
 vocab_size_y = processor_en.vocab_size
 index_word_y = processor_en.index_word
 padseq_y = processor_en.texts
@@ -61,6 +66,7 @@ processor_kr.index_word     # index_word
 processor_kr.sequences_to_texts(processor_kr.texts, join=' ')   # inverse_transform
 
 print(f"X_data_shape: {processor_kr.texts.shape}, X_vocab_size: {processor_kr.vocab_size}" )
+
 vocab_size_X = processor_kr.vocab_size
 index_word_X = processor_kr.index_word
 padseq_X = processor_kr.texts
@@ -99,7 +105,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import torch
-import tensorflow as tf
+# import tensorflow as tf
 
 max_len = None
 # max_len = 1000
@@ -685,9 +691,14 @@ class DecoderLayer(torch.nn.Module):
 
 
 # # customize library ***---------------------
-import sys
-sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
-from DS_DeepLearning import EarlyStopping
+# import sys
+# sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
+# from DS_DeepLearning import EarlyStopping
+
+import httpimport
+remote_url = 'https://raw.githubusercontent.com/kimds929/'
+with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
+    from DS_DeepLearning import EarlyStopping
 
 es = EarlyStopping(patience=100)
 # # ------------------------------------------
