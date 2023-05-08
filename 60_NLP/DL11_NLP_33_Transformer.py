@@ -235,6 +235,26 @@ print(device)
 # tr = Transformer(7, 100, 0, 0)
 
 
+# (layer Normalization)   ------------------------------------------------------------------------
+# https://wingnim.tistory.com/92
+# https://velog.io/@tjdcjffff/Normalization-trend
+# Batch-Normalization은 기존의 Batch들을 normalization했다면, Layer normalization은 Feature 차원에서 정규화를 진행한다.
+
+# ○ 도입배경 *
+# 기존 연구들은 training time을 줄이는 방법으로 batch normalization을 제안하였습니다.
+# 그러나 batch normalization은 몇 가지 단점을 가지고 있습니다.
+# batch normalization은 mini-batch size에 의존한다.
+# recurrent neural network model인 경우, 어떻게 적용이 되는지 명백하게 설명하기 어렵다.
+# 본 연구에서는 이러한 문제점을 해결하기 위해서 layer normalization을 제안하였습니다.
+# layer normalization은 batch normalization과 달리 train/test time 일 때, 같은 computation을 수행한다는 점이 큰 특징입니다.
+
+# layer normalization은 특정 layer가 가지고 있는 hidden unit에 대해 μ , σ를 공유함
+# BN과 다르게 mini-batch-size에 제약이 없음
+# RNN model에선 각각의 time-step마다 다른 BN이 학습됨
+# LN은 layer의 output을 normalize함으로써 RNN계열 모델에서 좋은 성능을 보임
+# ---------------------------------------------------------------------------------------------------------
+
+
 ####################################################################################################################################
 # ★★★ Transformer
 class Transformer(torch.nn.Module):
