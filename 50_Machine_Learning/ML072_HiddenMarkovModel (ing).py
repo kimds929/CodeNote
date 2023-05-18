@@ -83,3 +83,81 @@ emit_p = {
    }
    
 viterbi(obs,states,start_p,trans_p,emit_p)
+
+
+
+
+
+
+
+
+
+
+
+# --------------------------------------------------------------------------------------------------------------
+
+
+
+# https://datascienceschool.net/03%20machine%20learning/20.01%20%ED%9E%88%EB%93%A0%20%EB%A7%88%EC%BD%94%ED%94%84%20%EB%AA%A8%ED%98%95.html
+# https://github.com/hmmlearn/hmmlearn
+# pip install hmmlearn --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org
+
+from hmmlearn.hmm import GaussianHMM, CategoricalHMM, MultinomialHMM
+from hmmlearn import hmm
+import sklearn
+np.array(dir(sklearn.decomposition))
+np.array(dir(sklearn.gaussian_process))
+
+np.random.seed(3)
+
+model = hmm.GaussianHMM(n_components=2, covariance_type="diag")
+model.startprob_ = np.array([0.9, 0.1])
+model.transmat_ = np.array([[0.95, 0.05], [0.15, 0.85]])
+model.means_ = np.array([[1.0], [-3.0]])
+model.covars_ = np.array([[15.0], [40.0]])
+X, Z = model.sample(500)
+
+plt.figure(figsize=(10,10))
+plt.subplot(311)
+plt.plot(X)
+plt.title("random variable")
+plt.subplot(312)
+plt.plot(Z)
+plt.title("discrete state")
+plt.subplot(313)
+plt.plot((1 + 0.01*X).cumprod())
+plt.title("X cumulated")
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+
+states = ["Rainy", "Sunny"]
+n_states = len(states)
+
+observations = ["walk", "shop", "clean"]
+n_observations = len(observations)
+
+# parameter
+start_probability = np.array([0.6, 0.4])
+transition_probability = np.array([
+  [0.7, 0.3],
+  [0.4, 0.6]
+])
+emission_probability = np.array([
+  [0.1, 0.4, 0.5],
+  [0.6, 0.3, 0.1]
+])
+
+model = hmm.MultinomialHMM(n_components=n_states)
+model.startprob = start_probability
+model.transmat = transition_probability
+model.emissionprob = emission_probability
+
+# predict a sequence of hidden states based on visible states
+bob_says = [0, 2, 1, 1, 2, 0]
+model = model.fit(bob_says)
+logprob, alice_hears = model.decode(bob_says, algorithm="viterbi")
