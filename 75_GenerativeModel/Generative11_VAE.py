@@ -9,7 +9,7 @@ import torch
 import torchvision
 
 # Dataset ---------------------------------------------------------------------------
-url_path = r'C:\Users\Admin\Desktop\DataScience\★★ Python_정리자료(Git)\99_DataSet\Data_Image/'
+url_path = '../99_DataSet/Data_Image/'
 train_valid_data = torchvision.datasets.MNIST(root = url_path,
                             train=True,
                             download=True,
@@ -149,7 +149,7 @@ vae = VAE()
 
 # # customize library ***---------------------
 # import sys
-# sys.path.append(r'C:\Users\Admin\Desktop\DataScience\★★ DS_Library')
+# sys.path.append(r'../../★★ DS_Library')
 # from DS_DeepLearning import EarlyStopping
 
 import httpimport
