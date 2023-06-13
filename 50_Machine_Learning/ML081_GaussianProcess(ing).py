@@ -197,6 +197,46 @@ print(X_train.shape, y_train.shape)
 
 
 
+
+## [ Polynomial Kernel (1st Order)] ########################################################################
+X_data = X_all.copy()
+y_data = y_all.copy()
+
+# Polynomial Kernel (1st Order) ***
+sigma_f = None
+beta = 1e-1
+kernel = Polynomial_Kernel(1, sigma_f)
+
+train_cov = kernel(X_train, X_train) + beta*np.eye(len(X_train))
+traintest_cov = kernel(X_train, X_data)
+test_cov = kernel(X_data, X_data) + 1e-10
+
+mu = traintest_cov.T @ np.linalg.inv(train_cov) @ y_train
+cov = test_cov - traintest_cov.T @ np.linalg.inv(train_cov) @ traintest_cov
+std = np.sqrt(np.diag(cov).reshape(-1,1))
+
+
+# (Visualization)
+f = plt.figure(figsize=(8,4))
+# Observation
+plt.scatter(X_train, y_train, color='red')
+
+# RBF_Kernel
+plt.plot(X_data, mu, color='purple', alpha=0.5, label='rbf_kernel')
+plt.fill_between(X_data.ravel() ,( mu - 1.96*std ).ravel(), ( mu + 1.96*std ).ravel()
+                ,alpha=0.05, color='purple')
+for _ in range(100):
+    sample_function = np.random.multivariate_normal(mu.ravel(), cov)
+    plt.plot(X_data, sample_function, color='purple', alpha=0.02)
+
+# Ground Truth
+plt.scatter(X_truth, y_truth, edgecolor='black', s=10, facecolor='None', alpha=0.3, label='ground_truth')
+plt.legend(bbox_to_anchor=(1,1))
+plt.show()
+
+
+
+
 ## [ Gaussian Process ] ########################################################################
 # https://greeksharifa.github.io/bayesian_statistics/2020/07/12/Gaussian-Process/
 # https://aistory4u.tistory.com/entry/%EA%B0%80%EC%9A%B0%EC%8B%9C%EC%95%88-%ED%94%84%EB%A1%9C%EC%84%B8%EC%8A%A4-%ED%9A%8C%EA%B7%80
@@ -336,6 +376,7 @@ idx_permuted = list(rng.permutation(idx))
 sampled_idx = []
 train_cov=None
 
+plots = []
 for i in range(10):
     sample = idx_permuted.pop()
     sampled_idx.append(sample)
@@ -384,7 +425,8 @@ for i in range(10):
     plt.scatter(X_truth, y_truth, edgecolor='black', s=10, facecolor='None', alpha=0.3, label='ground_truth')
     plt.legend(bbox_to_anchor=(1,1))
     plt.show()
-
+    plots.append(f)
+    
     clear_output(wait=True)
     time.sleep(0.2)
 
