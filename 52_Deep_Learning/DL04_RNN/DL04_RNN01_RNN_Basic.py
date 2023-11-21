@@ -2,10 +2,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# import torch
+import torch
 import tensorflow as tf
 import tensorflow.keras as keras
-import torch
+
 import math
 # absolute_path = r'D:\Python\★★Python_POSTECH_AI\Dataset'
 
@@ -17,22 +17,36 @@ batch_size = 2      # batch
 rows = 3      # timesteps
 cols = 4            # features
 
-X = np.random.random((batch_size, rows, cols)).astype('float32')
+X = np.random.random((batch_size, rows, cols)).astype('float32')    # (Batch, Seq, Embedding)
 print(f'X_shape: {X.shape}')
 print(X)
 
 
-units = 2
+units = 2       # Dim
 activation_fuc = lambda x: np.tanh(x)
 
-# Weight Initailize
-Wx = np.random.normal(size=(X.shape[-1], units)).astype('float32')
-Wh = np.random.normal(size=(units, units)).astype('float32')
-b = np.zeros((units,), dtype='float32')
+Xi = X[0,0]
+Xi.shape    # (Embedding)
 
+# Weight Initailize
+Wx = np.random.normal(size=(X.shape[-1], units)).astype('float32')  # (Embedding, Dim)
+Wh = np.random.normal(size=(units, units)).astype('float32')    # *(Dim, Dim)
+b = np.zeros((units,), dtype='float32')       # bias: (1, Dim)
+h0 = np.zeros((units,), dtype='float32')      # h0 = hidden state : (1, Dim)
+
+
+# RNN forward for each input element
+h1 = activation_fuc(h0 @ Wh +  Xi @ Wx + b)
+
+# RNN forward for entire input
+activation_fuc(h0 @ Wh +  X @ Wx + b)
+
+
+
+# RNN all steps -----------------------------------------------------------------------------
 # Hidden State Initialize
 stateful = True
-hidden_state = np.zeros((units,), dtype='float32')
+
 print(f'hidden_state: {hidden_state.shape}, Wx: {Wx.shape}, Wh: {Wh.shape}, b: {b.shape}')
 
 outputs = []
@@ -711,15 +725,3 @@ hidden_state_t = np.zeros((hidden_size,)) # 초기 은닉 상태는 0(벡터)로
 # 은닉 상태의 크기 hidden_size로 은닉 상태를 만듬.
 
 # --------------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
