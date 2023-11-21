@@ -46,7 +46,7 @@ activation_fuc(h0 @ Wh +  X @ Wx + b)
 # RNN all steps -----------------------------------------------------------------------------
 # Hidden State Initialize
 stateful = True
-
+hidden_state = np.zeros((units,), dtype='float32')
 print(f'hidden_state: {hidden_state.shape}, Wx: {Wx.shape}, Wh: {Wh.shape}, b: {b.shape}')
 
 outputs = []
