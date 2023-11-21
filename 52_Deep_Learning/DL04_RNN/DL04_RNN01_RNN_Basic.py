@@ -45,6 +45,9 @@ h1
 h2 = activation_fuc(h1 @ Wh +  X1 @ Wx + b)     # (1, Dim)
 h2
 
+Wx
+
+activation_fuc(h0 @ Wh +  X0 @ Wx + b) 
 # # RNN forward for entire input
 # h_output = activation_fuc(h0 @ Wh +  X @ Wx + b)   # (Batch, Seq, Dim)
 # h_output.shape
@@ -54,19 +57,19 @@ h2
 # RNN all steps -----------------------------------------------------------------------------
 # Hidden State Initialize
 stateful = False
-hidden_state = np.zeros((units,), dtype='float32')
-print(f'hidden_state: {hidden_state.shape}, Wx: {Wx.shape}, Wh: {Wh.shape}, b: {b.shape}')
+h0 = np.zeros((units,), dtype='float32')      # h0 = hidden state : (1, Dim)
+print(f'hidden_state: {h0.shape}, Wx: {Wx.shape}, Wh: {Wh.shape}, b: {b.shape}')
 
 outputs = []
 for batch in X:
-    if not stateful:
-        hidden_state = np.zeros((units,), dtype='float32')
+    if not stateful:        # strightful == False → 매 loop
+        h0 = np.zeros((units,), dtype='float32')
     batch_output = []
     
     for sequence in batch:
-        output_seq = activation_fuc(sequence[np.newaxis,...] @ Wx + hidden_state @ Wh + b).ravel()
+        output_seq = activation_fuc(sequence[np.newaxis,...] @ Wx + h0 @ Wh + b).ravel()
         batch_output.append(output_seq)
-        hidden_state = output_seq
+        h0 = output_seq
     outputs.append(batch_output)
 
 sequence_outputs = np.array(outputs)
@@ -81,7 +84,7 @@ sequence_outputs[:,-1,:]   # last_output
 rnn = torch.nn.RNN(embed_dim, units, batch_first=True)
 
 state_dict = rnn.state_dict()
-weight_dict = [torch.tensor(e, requires_grad=True) for e in [Wx.T, Wh.T, b, h0]]
+weight_dict = [torch.tensor(e, requires_grad=True) for e in [Wx.T, Wh.T, b, b]]
 for k, vn in zip(state_dict, weight_dict):
     state_dict[k] = vn
 rnn.load_state_dict(state_dict)
