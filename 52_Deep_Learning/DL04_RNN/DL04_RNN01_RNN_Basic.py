@@ -13,11 +13,13 @@ import math
 
 # RNN by Numpy **** ------------------------------------------------------------------
 
-batch_size = 2      # batch  
-rows = 3      # timesteps
-cols = 4            # features
+batch_size = 5      # batch  
+seq = 3      # timesteps
+embed_dim = 4            # features
 
-X = np.random.random((batch_size, rows, cols)).astype('float32')    # (Batch, Seq, Embedding)
+rng = np.random.RandomState(1)
+
+X = rng.random((batch_size, seq, embed_dim)).astype('float32')    # (Batch, Seq, Embedding)
 print(f'X_shape: {X.shape}')
 print(X)
 
@@ -25,27 +27,33 @@ print(X)
 units = 2       # Dim
 activation_fuc = lambda x: np.tanh(x)
 
-Xi = X[0,0]
-Xi.shape    # (Embedding)
+X0 = X[0,0]
+X1 = X[0,1]
+X0.shape    # (Embedding)
 
 # Weight Initailize
-Wx = np.random.normal(size=(X.shape[-1], units)).astype('float32')  # (Embedding, Dim)
-Wh = np.random.normal(size=(units, units)).astype('float32')    # *(Dim, Dim)
+rng = np.random.RandomState(1)
+Wx = rng.normal(size=(X.shape[-1], units)).astype('float32')  # (Embedding, Dim)
+Wh = rng.normal(size=(units, units)).astype('float32')    # *(Dim, Dim)
 b = np.zeros((units,), dtype='float32')       # bias: (1, Dim)
 h0 = np.zeros((units,), dtype='float32')      # h0 = hidden state : (1, Dim)
 
 
 # RNN forward for each input element
-h1 = activation_fuc(h0 @ Wh +  Xi @ Wx + b)
+h1 = activation_fuc(h0 @ Wh +  X0 @ Wx + b)     # (1, Dim)
+h1
+h2 = activation_fuc(h1 @ Wh +  X1 @ Wx + b)     # (1, Dim)
+h2
 
-# RNN forward for entire input
-activation_fuc(h0 @ Wh +  X @ Wx + b)
-
+# # RNN forward for entire input
+# h_output = activation_fuc(h0 @ Wh +  X @ Wx + b)   # (Batch, Seq, Dim)
+# h_output.shape
+# h_output
 
 
 # RNN all steps -----------------------------------------------------------------------------
 # Hidden State Initialize
-stateful = True
+stateful = False
 hidden_state = np.zeros((units,), dtype='float32')
 print(f'hidden_state: {hidden_state.shape}, Wx: {Wx.shape}, Wh: {Wh.shape}, b: {b.shape}')
 
@@ -54,6 +62,7 @@ for batch in X:
     if not stateful:
         hidden_state = np.zeros((units,), dtype='float32')
     batch_output = []
+    
     for sequence in batch:
         output_seq = activation_fuc(sequence[np.newaxis,...] @ Wx + hidden_state @ Wh + b).ravel()
         batch_output.append(output_seq)
@@ -61,12 +70,46 @@ for batch in X:
     outputs.append(batch_output)
 
 sequence_outputs = np.array(outputs)
-sequence_outputs       # sequence
+sequence_outputs           # all sequence output
 print(sequence_outputs.shape)
-sequence_outputs[-1]   # last_output
+sequence_outputs[:,-1,:]   # last_output
 
 
-# X[1,0][np.newaxis,...] @ Wx +  sequence_output[0,2] @ Wh + b
+
+# Torch RNN -------------------------------------------------------------------
+
+rnn = torch.nn.RNN(embed_dim, units, batch_first=True)
+
+state_dict = rnn.state_dict()
+weight_dict = [torch.tensor(e, requires_grad=True) for e in [Wx.T, Wh.T, b, h0]]
+for k, vn in zip(state_dict, weight_dict):
+    state_dict[k] = vn
+rnn.load_state_dict(state_dict)
+
+
+# RNN forward for each input element
+r1, r2 = rnn(torch.tensor(X0).reshape(1,1,-1))
+r1
+
+# # RNN forward for entire input
+r1, r2 = rnn(torch.tensor(X))
+r1              # all sequence output
+# r1[:,-1,:]    # last_output
+r2              # last_output = r1[:,-1,:]
+
+
+rnn_ouput_torch = []
+for batch_x in X:
+    result = rnn(torch.tensor(batch_x[np.newaxis, ...]))
+    rnn_ouput_torch.append(result[0].detach().numpy()[0])
+rnn_ouput_torch = np.array(rnn_ouput_torch)
+rnn_ouput_torch             # r1 : all sequence output
+rnn_ouput_torch[:,-1,:]     # r2 : last_output = r1[:,-1,:]
+
+
+
+
+
 
 
 # RNN by Tensorflow  **** ------------------------------------------------------------------
@@ -95,8 +138,6 @@ rnn = tf.keras.layers.SimpleRNN(units=units, return_sequences=True, stateful=Tru
 result = rnn(X[:1])
 rnn.reset_states()
 rnn.set_weights([tf.constant(Wx), tf.constant(Wh), tf.constant(b)])
-
-
 
 # rnn.weights
 rnn_result = []
