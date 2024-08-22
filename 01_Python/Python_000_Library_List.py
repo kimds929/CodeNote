@@ -21,6 +21,36 @@
 # import requests
 
 
+# 【 Mainly Required Library 】=============================================================
+# conda install ipykernel
+
+# conda install numpy
+# conda install pandas
+# conda install matplotlib
+# conda install scipy
+# conda install scikit-learn
+
+# conda install seaborn
+# conda install missingno
+# conda install -c conda-forge pyperclip
+# conda install six
+# conda install -c conda-forge tqdm
+# conda install beutifulsoup4
+# conda install -c conda-forge bayesian-optimization
+# conda install -c conda-forge xgboost
+# conda install -c conda-forge shap
+# conda install -c conda-forge eli5
+# pip install torchbnn
+
+# # pip install torch==1.12.0 torchvision==0.13.0
+# # pip install torchvision==0.13.0
+# conda install pillow
+# conda install -c conda-forge opencv
+
+# # pip install --upgrade torch matplotlib
+# # pip install --upgrade jupyter
+# # pip install --upgrade ipywidgets
+
 # 【 Install Library 】=============================================================
 # conda install numpy
 # conda install pandas
