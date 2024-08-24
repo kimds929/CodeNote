@@ -14,7 +14,7 @@ model = nn.Sequential(
 )
 
 # 새 레이어 추가
-new_layer = nn.Linear(20, 30)
+new_layer = nn.Linear(10, 1)
 model = nn.Sequential(*list(model) + [new_layer])
 print(model)
 
@@ -22,6 +22,16 @@ print(model)
 model = nn.Sequential(*list(model)[:-1])
 
 print(model)
+
+# ------------------------------------------
+model_layer = []
+model_layer.append(nn.Linear(2,10))
+model_layer.append(nn.ReLU())
+model_layer.append(nn.BatchNorm1d(10))
+model_layer.append(nn.Dropout(0.5))
+
+model = nn.Sequential(*model_layer)
+
 
 ################################################################################################################################
 # nn.ModuleList
