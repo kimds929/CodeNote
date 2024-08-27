@@ -16,6 +16,8 @@ input_dim_init = 1    # Dimension of input data
 hidden_dim = 10   # Number of hidden units
 output_dim = 1    # Dimension of latent space
 
+learning_process = False
+
 # (sample data) x_train / y_train --------------------------------------------------
 class UnknownFuncion():
     def __init__(self, n_polynorm=1, tneta_scale=1, error_scale=None, normalize=True):
@@ -53,27 +55,29 @@ class UnknownFuncion():
 # device
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-# scale = 1
-# shift = 0
+scale = 200
+shift = 0
 # error_scale = 0.3
-scale = torch.randint(0,100 ,size=(1,))
-shift = torch.randint(0,500 ,size=(1,))
+# scale = torch.randint(0,100 ,size=(1,))
+# shift = torch.randint(0,500 ,size=(1,))
 # error_scale = torch.rand((1,))*0.3+0.1
 
 x_train = torch.randn(1000, input_dim_init) *scale + shift   # 1000 samples of dimension 10
 x_train_add_const = torch.cat([x_train, torch.ones_like(x_train)], axis=1)
 input_dim = x_train_add_const.shape[1]
 
+
 # f = UnknownFuncion()
 # f = UnknownFuncion(n_polynorm=2, normalize=True)
 # f = UnknownFuncion(n_polynorm=3)
 # f = UnknownFuncion(n_polynorm=4)
-f = UnknownFuncion(n_polynorm=5)
+# f = UnknownFuncion(n_polynorm=5)
 # f = UnknownFuncion(n_polynorm=6)
 # f = UnknownFuncion(n_polynorm=7)
 # f = UnknownFuncion(n_polynorm=8)
 # f = UnknownFuncion(n_polynorm=9)
-f.normalize_setting(x_train)
+f = RewardFunctionTorch()
+# f.normalize_setting(x_train)
 
 y_true = f.true_f(x_train)
 y_train = f(x_train)
@@ -82,10 +86,24 @@ error_sigma = (y_train - y_true).std()
 # y_true = x_train_add_const @ true_theta
 # y_train = y_true + error_scale*scale*torch.randn((x_train_add_const.shape[0],1))
 
-
 # Dataset and DataLoader
-dataset = TensorDataset(x_train_add_const, y_train)
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+train_dataset = TensorDataset(x_train_add_const, y_train)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+# Valid DataSet
+x_valid = torch.randn(300, input_dim_init) *scale + shift   # 300 samples of validation set
+x_valid_add_const = torch.cat([x_valid, torch.ones_like(x_valid)], axis=1)
+y_valid = f(x_valid)
+valid_dataset = TensorDataset(x_train_add_const, y_train)
+valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
+
+# Test DataSet
+x_test = torch.randn(200, input_dim_init) *scale + shift   # 200 samples of test set
+x_test_add_const = torch.cat([x_test, torch.ones_like(x_test)], axis=1)
+y_test = f(x_test)
+test_dataset = TensorDataset(x_train_add_const, y_train)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
 
 # visualize
 x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
@@ -112,7 +130,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class BNN_Direct(nn.Module):
+class DirectEstimate(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
 
@@ -136,7 +154,7 @@ class BNN_Direct(nn.Module):
 
 
 # -----------------------------------------------------------------------------------------------
-class BNN_DirectEnsemble1(nn.Module):
+class DirectEnsemble1(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, n_models=10):
         super().__init__()
         self.models = nn.ModuleList([BNN_Direct(input_dim, hidden_dim, output_dim) for _ in range(n_models)])
@@ -148,7 +166,7 @@ class BNN_DirectEnsemble1(nn.Module):
         return mu, logvar
 
 # ★Mu/Var Ensemble only last layer
-class BNN_DirectEnsemble2(nn.Module):
+class DirectEnsemble2(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, n_models=10):
         super().__init__()
         self.basic_block = nn.Sequential(
@@ -188,105 +206,172 @@ class BNN_DirectEnsemble2(nn.Module):
         else:
             return self.predict(x)
 
+# ★Mu/Var Ensemble only last layer
+class FeedForwardBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, activation=nn.ReLU(),
+                batchNorm=True,  dropout=0.5):
+        super().__init__()
+        ff_block = [nn.Linear(input_dim, output_dim)]
+        if activation:
+            ff_block.append(activation)
+        if batchNorm:
+            ff_block.append(nn.BatchNorm1d(output_dim))
+        if dropout > 0:
+            ff_block.append(nn.Dropout(dropout))
+        self.ff_block = nn.Sequential(*ff_block)
+    
+    def forward(self, x):
+        return self.ff_block(x)
+
+class DirectEnsemble3(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_layers=3, n_models=10):
+        super().__init__()
+        
+        self.EnsembleBlock = nn.ModuleDict({'in_layer':FeedForwardBlock(input_dim, hidden_dim)})
+
+        for h_idx in range(n_layers):
+            if h_idx < n_layers-1:
+               self.EnsembleBlock[f'hidden_layer{h_idx+1}'] = FeedForwardBlock(hidden_dim, hidden_dim)
+            else:
+                self.EnsembleBlock['out_layer'] = FeedForwardBlock(hidden_dim, output_dim*2*n_models, activation=False, batchNorm=False, dropout=0)
+        self.n_layers = n_layers
+        self.n_models = n_models
+        self.output_dim = output_dim
+
+    # train step
+    def train_forward(self, x):
+        for layer_name, layer in self.EnsembleBlock.items():
+            if layer_name == 'in_layer' or layer_name == 'out_layer':
+                x = layer(x)
+            else:
+                x = layer(x) + x    # residual connection
+
+        mu_logvar = (x)
+        mu, logvar = torch.split(mu_logvar, self.n_models, dim=1)
+        logvar = torch.clamp(logvar, min=-10, max=20) 
+        return mu, logvar
+
+    # eval step : 여러 번 샘플링하여 평균과 분산 계산
+    def predict(self, x, idx=None):
+        mu, logvar = self.train_forward(x)
+        if idx is None:
+            mu_mean = torch.mean(mu, dim=1, keepdims=True)
+            logvar_mean = torch.mean(logvar, dim=1, keepdims=True)
+        else:
+            mu_mean = torch.mean(mu[:, idx], dim=1, keepdims=True)
+            logvar_mean = torch.mean(logvar[:, idx], dim=1, keepdims=True)
+        return  mu_mean, logvar_mean
+
+    def forward(self, x):
+        if self.training:
+            return self.train_forward(x)
+        else:
+            return self.predict(x)
+
+
 ################################################################################################
 
-# Initialize the model, optimizer
-# model = BNN_Direct(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim)
-# model = BNN_DirectEnsemble1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
-model = BNN_DirectEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
-model.to(device)
-
-# -----------------------------------------------------------------------------------------------
-# Hyperparameters
-learning_rate = 1e-3
-beta = 0.5
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-loss_gaussian = nn.GaussianNLLLoss()
-# mu_loss_weight = 0.5  # mu에 대한 손실 가중치
-# logvar_loss_weight = 0.1  # log_var에 대한 손실 가중치
-
-num_epochs = 100
-
-# Training loop
-for epoch in range(num_epochs):
-    model.train()
-    for batch_idx, (batch_x, batch_y) in enumerate(dataloader):
-        batch_x = batch_x.to(device)
-        batch_y = batch_y.to(device)
-
-        optimizer.zero_grad()
-        
-        # Forward pass ----------------------------------------
-        mu, logvar = model(batch_x)
-        std = torch.exp(0.5*logvar)
-        
-        # (Loss Parameters) ----------------------------------------
-        # # fixed variance : # Reparameterization trick: z = mu + sigma * epsilon
-        # z = mu + std * torch.randn_like(std)    
-        # loss = torch.sum( (z - batch_y)**2)
-
-        # # variational variance : neg_log_likelihood
-        # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
-        # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
-        loss = loss_gaussian(mu, batch_y, std**2)
-
-        # # weigted variantional variance
-        # gaussian_loss = torch.exp(-logvar) * (batch_y - mu)**2 + logvar
-        # loss = mu_loss_weight * torch.mean((batch_y - mu)**2) + logvar_loss_weight * torch.mean(gaussian_loss)
-
-        
-        # (KL-Divergence Loss) For anchoring response range \hat{y} ~ N(0,1) 
-        # loss_kl = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        # loss_kl = 0.5 * torch.sum(mu**2 + std**2 - torch.log(std**2) - 1)
-        
-        # Compute loss ----------------------------------------
-        # loss = loss + beta * loss_kl
-        
-        # Backward pass and optimize
-        loss.backward()
-        optimizer.step()
-   
-    if epoch % 25 ==0:
-        with torch.no_grad():
-            model.eval()
-            eval_mu, eval_logvar = model(x_train_add_const.to(device))
-            eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-            eval_std = torch.exp(0.5*eval_logvar)
-            residual_sigma = (eval_mu - y_train).std()
-        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
-        # print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, Loss_recon: {loss_recon:.2f}, Loss_KL: {loss_kl:.2f}')
-# -----------------------------------------------------------------------------------------------
+if learning_process:
+    # Initialize the model, optimizer
+    # model = DirectEstimate(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim)
+    # model = DirectEnsemble1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
+    # model = DirectEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
+    model = DirectEnsemble3(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
+    model.to(device)
 
 
-# visualize
-x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
-x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
+    # -----------------------------------------------------------------------------------------------
+    # Hyperparameters
+    learning_rate = 1e-3
+    # beta = 0.5
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    loss_gaussian = nn.GaussianNLLLoss()
+    # mu_loss_weight = 0.5  # mu에 대한 손실 가중치
+    # logvar_loss_weight = 0.1  # log_var에 대한 손실 가중치
 
-with torch.no_grad():
-    model.eval()
-    y_mu, y_logvar = model(x_lin_add_const.to(device))
-    y_mu = y_mu.to('cpu')
-    y_std = torch.exp(0.5*y_logvar).to('cpu')
+    num_epochs = 100
 
-plt.figure()
-plt.scatter(x_train, y_train, label='obs', alpha=0.5)
-plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+    # Training loop
+    for epoch in range(num_epochs):
+        model.train()
+        for batch_idx, (batch_x, batch_y) in enumerate(train_loader):
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
 
-plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
-plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
-plt.legend()
-plt.show()
+            optimizer.zero_grad()
+            
+            # Forward pass ----------------------------------------
+            loss = gaussian_loss(model, batch_x, batch_y)
+            # mu, logvar = model(batch_x)
+            # std = torch.exp(0.5*logvar)
+            
+            # (Loss Parameters) ----------------------------------------
+            # # fixed variance : # Reparameterization trick: z = mu + sigma * epsilon
+            # z = mu + std * torch.randn_like(std)    
+            # loss = torch.sum( (z - batch_y)**2)
 
-# valid std
-with torch.no_grad():
-    model.eval()
-    eval_mu, eval_logvar = model(x_train_add_const.to(device))
-    eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-    eval_std = torch.exp(0.5*eval_logvar)
-    residual_sigma = (eval_mu - y_train).std()
-    print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
-print(f"/ error_sigma :{error_sigma:.3f}")
-# print(f"/ error_sigma :{f.error_scale:.3f}")
+            # # variational variance : neg_log_likelihood
+            # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
+            # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
+            # loss = loss_gaussian(mu, batch_y, std**2)
+
+            # # weigted variantional variance
+            # gaussian_loss = torch.exp(-logvar) * (batch_y - mu)**2 + logvar
+            # loss = mu_loss_weight * torch.mean((batch_y - mu)**2) + logvar_loss_weight * torch.mean(gaussian_loss)
+
+            
+            # (KL-Divergence Loss) For anchoring response range \hat{y} ~ N(0,1) 
+            # loss_kl = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+            # loss_kl = 0.5 * torch.sum(mu**2 + std**2 - torch.log(std**2) - 1)
+            
+            # Compute loss ----------------------------------------
+            # loss = loss + beta * loss_kl
+            
+            # Backward pass and optimize
+            loss.backward()
+            optimizer.step()
+    
+        if epoch % 25 ==0:
+            with torch.no_grad():
+                model.eval()
+                eval_mu, eval_logvar = model(x_train_add_const.to(device))
+                eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+                eval_std = torch.exp(0.5*eval_logvar)
+                residual_sigma = (eval_mu - y_train).std()
+            print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
+            # print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, Loss_recon: {loss_recon:.2f}, Loss_KL: {loss_kl:.2f}')
+    # -----------------------------------------------------------------------------------------------
+
+
+    # visualize
+    x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
+    x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
+
+    with torch.no_grad():
+        model.eval()
+        y_mu, y_logvar = model(x_lin_add_const.to(device))
+        y_mu = y_mu.to('cpu')
+        y_std = torch.exp(0.5*y_logvar).to('cpu')
+
+    plt.figure()
+    plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+    plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+
+    plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
+    plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+    plt.legend()
+    plt.show()
+
+    # valid std
+    with torch.no_grad():
+        model.eval()
+        eval_mu, eval_logvar = model(x_train_add_const.to(device))
+        eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+        eval_std = torch.exp(0.5*eval_logvar)
+        residual_sigma = (eval_mu - y_train).std()
+        print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
+    print(f"/ error_sigma :{error_sigma:.3f}")
+    # print(f"/ error_sigma :{f.error_scale:.3f}")
 
 
 
@@ -490,93 +575,94 @@ class BNN_Weight_4(nn.Module):
 
 ################################################################################################
 
-# Initialize the model, optimizer
-# model = BNN_Weight_1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
-model = BNN_Weight_2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
-# model = BNN_Weight_3(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
-# model = BNN_Weight_4(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
-model.to(device)
+if learning_process:
+    # Initialize the model, optimizer
+    # model = BNN_Weight_1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
+    model = BNN_Weight_2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
+    # model = BNN_Weight_3(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
+    # model = BNN_Weight_4(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
+    model.to(device)
 
 
-# -----------------------------------------------------------------------------------------------
-# Hyperparameters
-learning_rate = 1e-3
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-loss_mse = nn.MSELoss()     # for BNN_Weight_1, BNN_Weight_3
-loss_gaussian = nn.GaussianNLLLoss()    # for BNN_Weight_2, BNN_Weight_4
+    # -----------------------------------------------------------------------------------------------
+    # Hyperparameters
+    learning_rate = 1e-3
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    loss_mse = nn.MSELoss()     # for BNN_Weight_1, BNN_Weight_3
+    loss_gaussian = nn.GaussianNLLLoss()    # for BNN_Weight_2, BNN_Weight_4
 
-num_epochs = 300
+    num_epochs = 300
 
-# Training loop
-for epoch in range(num_epochs):
-    model.train()
-    for batch_idx, (batch_x, batch_y) in enumerate(dataloader):
-        batch_x = batch_x.to(device)
-        batch_y = batch_y.to(device)
+    # Training loop
+    for epoch in range(num_epochs):
+        model.train()
+        for batch_idx, (batch_x, batch_y) in enumerate(train_loader):
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
 
-        optimizer.zero_grad()
-        
-        # Forward pass ----------------------------------------
-        mu, logvar = model(batch_x)
-        if logvar is not None:
-            std = torch.exp(0.5*logvar)
+            optimizer.zero_grad()
+            
+            # Forward pass ----------------------------------------
+            mu, logvar = model(batch_x)
+            if logvar is not None:
+                std = torch.exp(0.5*logvar)
 
-        # Compute loss ----------------------------------------
-        if logvar is None:
-            # # (Not assumption of error distribution) nn.MSELoss()
-            # loss = torch.sum( (batch_y - mu)**2)
-            loss = loss_mse(mu, batch_y)
-        
-        else:
-            # # (Assumption of error distribution as Gaussian : Negative Log-Likelihood) nn.GaussianNLLLoss()
-            # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
-            # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
-            loss = loss_gaussian(mu, batch_y, std**2)
-        
-        # Backward pass and optimize --------------------------
-        loss.backward()
-        optimizer.step()
+            # Compute loss ----------------------------------------
+            if logvar is None:
+                # # (Not assumption of error distribution) nn.MSELoss()
+                # loss = torch.sum( (batch_y - mu)**2)
+                loss = loss_mse(mu, batch_y)
+            
+            else:
+                # # (Assumption of error distribution as Gaussian : Negative Log-Likelihood) nn.GaussianNLLLoss()
+                # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
+                # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
+                loss = loss_gaussian(mu, batch_y, std**2)
+            
+            # Backward pass and optimize --------------------------
+            loss.backward()
+            optimizer.step()
 
-    if epoch % 25 ==0:
-        with torch.no_grad():
-            model.eval()
-            eval_mu, eval_logvar = model(x_train_add_const.to(device))
-            eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-            eval_std = torch.exp(0.5*eval_logvar)
-            residual_sigma = (eval_mu - y_train).std()
-        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
-# --------------------------------------------------------------------------------------------------
+        if epoch % 25 ==0:
+            with torch.no_grad():
+                model.eval()
+                eval_mu, eval_logvar = model(x_train_add_const.to(device))
+                eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+                eval_std = torch.exp(0.5*eval_logvar)
+                residual_sigma = (eval_mu - y_train).std()
+            print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
+    # --------------------------------------------------------------------------------------------------
 
 
-# visualize
-x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
-x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
+    # visualize
+    x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
+    x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
 
-with torch.no_grad():
-    model.eval()
-    y_mu, y_logvar = model(x_lin_add_const.to(device))
-    y_mu = y_mu.to('cpu')
-    y_std = torch.exp(0.5*y_logvar).to('cpu')
+    with torch.no_grad():
+        model.eval()
+        y_mu, y_logvar = model(x_lin_add_const.to(device))
+        y_mu = y_mu.to('cpu')
+        y_std = torch.exp(0.5*y_logvar).to('cpu')
 
-plt.figure()
-plt.scatter(x_train, y_train, label='obs', alpha=0.5)
-plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+    plt.figure()
+    plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+    plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
 
-plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
-plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
-plt.legend()
-plt.show()
+    plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
+    plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+    plt.legend()
+    plt.show()
 
-# valid std
-with torch.no_grad():
-    model.eval()
-    eval_mu, eval_logvar = model(x_train_add_const.to(device))
-    eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-    eval_std = torch.exp(0.5*eval_logvar)
-    residual_sigma = (eval_mu - y_train).std()
-    print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
-print(f"/ error_sigma :{error_sigma:.3f}")
-# print(f"/ error_sigma :{f.error_scale:.3f}")
+    # valid std
+    with torch.no_grad():
+        model.eval()
+        eval_mu, eval_logvar = model(x_train_add_const.to(device))
+        eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+        eval_std = torch.exp(0.5*eval_logvar)
+        residual_sigma = (eval_mu - y_train).std()
+        print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
+    print(f"/ error_sigma :{error_sigma:.3f}")
+    # print(f"/ error_sigma :{f.error_scale:.3f}")
 
 
 
@@ -614,10 +700,10 @@ class BasicNetwork(nn.Module):
         return self.basic_block(x)
 
 # Ensemble Model
-class BNN_Model_1(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=None, n_models=10):
+class SampleEnsemble1(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim=None, n_samples=10):
         super().__init__()
-        hidden_dims = torch.randint(low=8,high=128,size=(n_models,)) if hidden_dim is None else torch.ones((n_models,)).type(torch.int)*n_models
+        hidden_dims = torch.randint(low=8,high=128,size=(n_samples,)) if hidden_dim is None else torch.ones((n_models,)).type(torch.int)*n_models
 
         self.models = nn.ModuleList([BasicNetwork(input_dim, int(h_dim), output_dim) for _, h_dim in zip(range(n_models), hidden_dims)])
     
@@ -629,8 +715,8 @@ class BNN_Model_1(nn.Module):
         return mu, logvar
 
 # ★ Sample Ensemble only last layers Model
-class BNN_Model_2(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, n_models=10):
+class SampleEnsemble2(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_samples=10):
         super().__init__()
         self.basic_block = nn.Sequential(
             nn.Linear(input_dim, hidden_dim)
@@ -639,7 +725,7 @@ class BNN_Model_2(nn.Module):
             ,nn.ReLU()
             ,nn.Linear(hidden_dim, hidden_dim)
             ,nn.ReLU()
-            ,nn.Linear(hidden_dim, output_dim*n_models)
+            ,nn.Linear(hidden_dim, output_dim*n_samples)
         )
     
     def forward(self, x):
@@ -650,92 +736,124 @@ class BNN_Model_2(nn.Module):
         logvar = torch.log(var)
         return mu, logvar
 
+
+# ★ Sample Ensemble only last layers Model
+class SampleEnsemble2(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_layers=3, n_samples=10):
+        super().__init__()
+        self.EnsembleBlock = nn.ModuleDict({'in_layer':FeedForwardBlock(input_dim, hidden_dim)})
+
+        for h_idx in range(n_layers):
+            if h_idx < n_layers-1:
+               self.EnsembleBlock[f'hidden_layer{h_idx+1}'] = FeedForwardBlock(hidden_dim, hidden_dim)
+            else:
+                self.EnsembleBlock['out_layer'] = FeedForwardBlock(hidden_dim, output_dim*n_samples, activation=False, batchNorm=False, dropout=0)
+        self.n_layers = n_layers
+        self.n_samples = n_samples
+        self.output_dim = output_dim
+
+    
+    def forward(self, x):
+        for layer_name, layer in self.EnsembleBlock.items():
+            if layer_name == 'in_layer' or layer_name == 'out_layer':
+                x = layer(x)
+            else:
+                x = layer(x) + x    # residual connection
+
+        # return ensemble_outputs
+        mu = torch.mean(x, dim=1, keepdims=True)
+        var = torch.var(x, dim=1, keepdims=True)
+        logvar = torch.log(var)
+        return mu, logvar
+
 ################################################################################################
-# model = BNN_Model_1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)    # initial weight ensemble
-# model = BNN_Model_1(input_dim=input_dim, hidden_dim=None, output_dim=output_dim, n_models=10)    # architecture ensemble
-model = BNN_Model_2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)    # initial weight ensemble
-model.to(device)
-model
+
+if learning_process:
+    # model = SampleEnsemble1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)    # initial weight ensemble
+    # model = SampleEnsemble1(input_dim=input_dim, hidden_dim=None, output_dim=output_dim, n_models=10)    # architecture ensemble
+    model = SampleEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)    # initial weight ensemble
+    model.to(device)
+    model
 
 
 
-# -----------------------------------------------------------------------------------------------
-# Hyperparameters
-learning_rate = 1e-3
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-loss_mse = nn.MSELoss()
-loss_gaussian = nn.GaussianNLLLoss()
+    # -----------------------------------------------------------------------------------------------
+    # Hyperparameters
+    learning_rate = 1e-3
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    loss_mse = nn.MSELoss()
+    loss_gaussian = nn.GaussianNLLLoss()
 
-num_epochs = 100
+    num_epochs = 100
 
-# Training loop
-for epoch in range(num_epochs):
-    model.train()
-    for batch_idx, (batch_x, batch_y) in enumerate(dataloader):
-        batch_x = batch_x.to(device)
-        batch_y = batch_y.to(device)
+    # Training loop
+    for epoch in range(num_epochs):
+        model.train()
+        for batch_idx, (batch_x, batch_y) in enumerate(train_loader):
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
 
-        optimizer.zero_grad()
-        
-        # Forward pass ----------------------------------------
-        mu, logvar = model(batch_x)
-        std = torch.exp(0.5*logvar)
+            optimizer.zero_grad()
+            
+            # Forward pass ----------------------------------------
+            mu, logvar = model(batch_x)
+            std = torch.exp(0.5*logvar)
 
-        # Compute loss ----------------------------------------
-        # # (Not assumption of error distribution) nn.MSELoss()
-        # loss = torch.sum( (batch_y - mu)**2)
-        # loss = loss_mse(mu, batch_y)
+            # Compute loss ----------------------------------------
+            # # (Not assumption of error distribution) nn.MSELoss()
+            # loss = torch.sum( (batch_y - mu)**2)
+            # loss = loss_mse(mu, batch_y)
 
-        # # (Assumption of error distribution as Gaussian : Negative Log-Likelihood) nn.GaussianNLLLoss()
-        # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
-        # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
-        loss = loss_gaussian(mu, batch_y, std**2)
-        
-        # Backward pass and optimize --------------------------
-        loss.backward()
-        optimizer.step()
+            # # (Assumption of error distribution as Gaussian : Negative Log-Likelihood) nn.GaussianNLLLoss()
+            # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
+            # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
+            loss = loss_gaussian(mu, batch_y, std**2)
+            
+            # Backward pass and optimize --------------------------
+            loss.backward()
+            optimizer.step()
 
-    if epoch % 25 ==0:
-        with torch.no_grad():
-            model.eval()
-            eval_mu, eval_logvar = model(x_train_add_const.to(device))
-            eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-            eval_std = torch.exp(0.5*eval_logvar)
-            residual_sigma = (eval_mu - y_train).std()
-        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
-        # print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, Loss_recon: {loss_recon:.2f}, Loss_KL: {loss_kl:.2f}')
-# -----------------------------------------------------------------------------------------------
+        if epoch % 25 ==0:
+            with torch.no_grad():
+                model.eval()
+                eval_mu, eval_logvar = model(x_train_add_const.to(device))
+                eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+                eval_std = torch.exp(0.5*eval_logvar)
+                residual_sigma = (eval_mu - y_train).std()
+            print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
+            # print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, Loss_recon: {loss_recon:.2f}, Loss_KL: {loss_kl:.2f}')
+    # -----------------------------------------------------------------------------------------------
 
 
-# visualize
-x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
-x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
+    # visualize
+    x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
+    x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
 
-with torch.no_grad():
-    model.eval()
-    y_mu, y_logvar = model(x_lin_add_const.to(device))
-    y_mu = y_mu.to('cpu')
-    y_std = torch.exp(0.5*y_logvar).to('cpu')
+    with torch.no_grad():
+        model.eval()
+        y_mu, y_logvar = model(x_lin_add_const.to(device))
+        y_mu = y_mu.to('cpu')
+        y_std = torch.exp(0.5*y_logvar).to('cpu')
 
-plt.figure()
-plt.scatter(x_train, y_train, label='obs', alpha=0.5)
-plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+    plt.figure()
+    plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+    plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
 
-plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
-plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
-plt.legend()
-plt.show()
+    plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
+    plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+    plt.legend()
+    plt.show()
 
-# valid std
-with torch.no_grad():
-    model.eval()
-    eval_mu, eval_logvar = model(x_train_add_const.to(device))
-    eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-    eval_std = torch.exp(0.5*eval_logvar)
-    residual_sigma = (eval_mu - y_train).std()
-    print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
-print(f"/ error_sigma :{error_sigma:.3f}")
-# print(f"/ error_sigma :{f.error_scale:.3f}")
+    # valid std
+    with torch.no_grad():
+        model.eval()
+        eval_mu, eval_logvar = model(x_train_add_const.to(device))
+        eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+        eval_std = torch.exp(0.5*eval_logvar)
+        residual_sigma = (eval_mu - y_train).std()
+        print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
+    print(f"/ error_sigma :{error_sigma:.3f}")
+    # print(f"/ error_sigma :{f.error_scale:.3f}")
 
 
 
@@ -849,86 +967,88 @@ class BNN_FullEnsemble(nn.Module):
         return mu, logvar
 
 ################################################################################################
-model = BNN_FullEnsemble(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)    # initial weight ensemble
-# model = BNN_FullEnsemble(input_dim=input_dim, hidden_dim=None, output_dim=output_dim, n_models=10)    # architecture ensemble
-model.to(device)
-# model
+
+if learning_process:
+    model = BNN_FullEnsemble(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)    # initial weight ensemble
+    # model = BNN_FullEnsemble(input_dim=input_dim, hidden_dim=None, output_dim=output_dim, n_models=10)    # architecture ensemble
+    model.to(device)
+    # model
 
 
-# -----------------------------------------------------------------------------------------------
-# Hyperparameters
-learning_rate = 1e-3
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-loss_mse = nn.MSELoss()
-loss_gaussian = nn.GaussianNLLLoss()
+    # -----------------------------------------------------------------------------------------------
+    # Hyperparameters
+    learning_rate = 1e-3
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    loss_mse = nn.MSELoss()
+    loss_gaussian = nn.GaussianNLLLoss()
 
-num_epochs = 100
+    num_epochs = 100
 
-# Training loop
-for epoch in range(num_epochs):
-    model.train()
-    for batch_idx, (batch_x, batch_y) in enumerate(dataloader):
-        batch_x = batch_x.to(device)
-        batch_y = batch_y.to(device)
+    # Training loop
+    for epoch in range(num_epochs):
+        model.train()
+        for batch_idx, (batch_x, batch_y) in enumerate(train_loader):
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
 
-        optimizer.zero_grad()
-        
-        # Forward pass ----------------------------------------
-        mu, logvar = model(batch_x)
-        std = torch.exp(0.5*logvar)
+            optimizer.zero_grad()
+            
+            # Forward pass ----------------------------------------
+            mu, logvar = model(batch_x)
+            std = torch.exp(0.5*logvar)
 
-        # Compute loss ----------------------------------------
-        # # (Not assumption of error distribution) nn.MSELoss()
-        # loss = torch.sum( (batch_y - mu)**2)
-        # loss = loss_mse(mu, batch_y)
+            # Compute loss ----------------------------------------
+            # # (Not assumption of error distribution) nn.MSELoss()
+            # loss = torch.sum( (batch_y - mu)**2)
+            # loss = loss_mse(mu, batch_y)
 
-        # # (Assumption of error distribution as Gaussian : Negative Log-Likelihood) nn.GaussianNLLLoss()
-        # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
-        # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
-        loss = loss_gaussian(mu, batch_y, std**2)
-        
-        # Backward pass and optimize --------------------------
-        loss.backward()
-        optimizer.step()
+            # # (Assumption of error distribution as Gaussian : Negative Log-Likelihood) nn.GaussianNLLLoss()
+            # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
+            # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
+            loss = loss_gaussian(mu, batch_y, std**2)
+            
+            # Backward pass and optimize --------------------------
+            loss.backward()
+            optimizer.step()
 
-    if epoch % 25 ==0:
-        with torch.no_grad():
-            model.eval()
-            eval_mu, eval_logvar = model(x_train_add_const.to(device))
-            eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-            eval_std = torch.exp(0.5*eval_logvar)
-            residual_sigma = (eval_mu - y_train).std()
-        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
-        # print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, Loss_recon: {loss_recon:.2f}, Loss_KL: {loss_kl:.2f}')
-# -----------------------------------------------------------------------------------------------
+        if epoch % 25 ==0:
+            with torch.no_grad():
+                model.eval()
+                eval_mu, eval_logvar = model(x_train_add_const.to(device))
+                eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+                eval_std = torch.exp(0.5*eval_logvar)
+                residual_sigma = (eval_mu - y_train).std()
+            print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
+            # print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, Loss_recon: {loss_recon:.2f}, Loss_KL: {loss_kl:.2f}')
+    # -----------------------------------------------------------------------------------------------
 
 
-# visualize
-x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
-x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
+    # visualize
+    x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
+    x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
 
-with torch.no_grad():
-    model.eval()
-    y_mu, y_logvar = model(x_lin_add_const.to(device))
-    y_mu = y_mu.to('cpu')
-    y_std = torch.exp(0.5*y_logvar).to('cpu')
+    with torch.no_grad():
+        model.eval()
+        y_mu, y_logvar = model(x_lin_add_const.to(device))
+        y_mu = y_mu.to('cpu')
+        y_std = torch.exp(0.5*y_logvar).to('cpu')
 
-plt.figure()
-plt.scatter(x_train, y_train, label='obs', alpha=0.5)
-plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+    plt.figure()
+    plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+    plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
 
-plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
-plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
-plt.legend()
-plt.show()
+    plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
+    plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+    plt.legend()
+    plt.show()
 
-# valid std
-with torch.no_grad():
-    model.eval()
-    eval_mu, eval_logvar = model(x_train_add_const.to(device))
-    eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-    eval_std = torch.exp(0.5*eval_logvar)
-    residual_sigma = (eval_mu - y_train).std()
-    print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
-print(f"/ error_sigma :{error_sigma:.3f}")
-# print(f"/ error_sigma :{f.error_scale:.3f}")
+    # valid std
+    with torch.no_grad():
+        model.eval()
+        eval_mu, eval_logvar = model(x_train_add_const.to(device))
+        eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+        eval_std = torch.exp(0.5*eval_logvar)
+        residual_sigma = (eval_mu - y_train).std()
+        print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
+    print(f"/ error_sigma :{error_sigma:.3f}")
+    # print(f"/ error_sigma :{f.error_scale:.3f}")
