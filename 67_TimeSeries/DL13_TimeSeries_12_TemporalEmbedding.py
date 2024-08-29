@@ -7,15 +7,15 @@ class Time2Vec(nn.Module):
         super().__init__()
         # Linear Component
         self.linear_weights = nn.Parameter(torch.randn(input_dim, 1))
-        self.linear_bias = nn.Parameter(torch.randn(input_dim, 1))
+        self.linear_bias = nn.Parameter(torch.randn(1, 1))
         
         # Periodic Components
         self.periodic_weights = nn.Parameter(torch.randn(input_dim, (embed_dim - 1)//2 ))
-        self.periodic_bias = nn.Parameter(torch.randn(input_dim, (embed_dim - 1)//2 ))
+        self.periodic_bias = nn.Parameter(torch.randn(1, (embed_dim - 1)//2 ))
 
         # NonLinear Purse Periodic Component
         self.nonlinear_weights = nn.Parameter(torch.randn(input_dim, (embed_dim - 1)//2 ))
-        self.nonlinear_bias = nn.Parameter(torch.randn(input_dim, (embed_dim - 1)//2 ))
+        self.nonlinear_bias = nn.Parameter(torch.randn(1, (embed_dim - 1)//2 ))
 
     def forward(self, x):
         # Linear Component
