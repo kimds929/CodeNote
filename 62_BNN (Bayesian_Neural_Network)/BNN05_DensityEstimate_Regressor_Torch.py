@@ -20,13 +20,13 @@ learning_process = False
 
 # (sample data) x_train / y_train --------------------------------------------------
 class UnknownFuncion():
-    def __init__(self, n_polynorm=1, tneta_scale=1, error_scale=None, normalize=True):
+    def __init__(self, n_polynorm=1, theta_scale=1, error_scale=None, normalize=True):
         self.n_polynorm = n_polynorm
         self.normalize = normalize
         self.y_mu = None
         self.y_std = None
 
-        self.true_theta = torch.randn((self.n_polynorm+1,1)) * tneta_scale
+        self.true_theta = torch.randn((self.n_polynorm+1,1)) * theta_scale
         self.error_scale = torch.rand((1,))*0.3+0.1 if error_scale is None else error_scale
     
     def normalize_setting(self, train_x):
@@ -52,6 +52,55 @@ class UnknownFuncion():
     def __call__(self, x):
         return self.forward(x)
 
+class UnknownBernoulliFunction():
+    def __init__(self, n_polynorm=1, theta_scale=1, error_scale=None, normalize=True):
+        self.n_polynorm = n_polynorm
+        self.normalize = normalize
+        self.y_mu = None
+        self.y_std = None
+
+        self.true_theta = torch.randn((self.n_polynorm+1,1)) * theta_scale
+        self.error_scale = torch.rand((1,))*0.3+0.1 if error_scale is None else error_scale
+    
+    def normalize_setting(self, train_x):
+        if (self.y_mu is None) and (self.y_std is None):
+            outputs = self.true_f(train_x)
+            self.y_mu = torch.mean(outputs)
+            self.y_std = torch.std(outputs)
+
+    def true_z(self, x):
+        for i in range(self.n_polynorm+1):
+            response = self.true_theta[i] * (x**i)
+
+            if (self.normalize) and (self.y_mu is not None) and (self.y_std is not None):
+                response = (response - self.y_mu)/self.y_std
+        return response
+
+    def sigmoid_f(self, x):
+        return 1/(1 + torch.exp(x))
+
+    def true_f(self, x):
+        response = self.true_z(x)
+        return self.sigmoid_f(-response)
+
+    def forward_z(self, x):
+        if (self.normalize) and (self.y_mu is not None) and (self.y_std is not None):
+            noise_z = self.true_z(x) + self.error_scale * torch.randn((x.shape[0],1))
+        else:
+            noise_z = self.true_z(x) + self.true_z(x).mean()*self.error_scale * torch.randn((x.shape[0],1))
+        return noise_z
+
+    def forward(self, x):
+        noise_z = self.forward_z(x)
+        probs = self.sigmoid_f(-noise_z)
+        bernoulli_dist = torch.distributions.Bernoulli(probs=probs)
+        return bernoulli_dist.sample()
+
+    def __call__(self, x):
+        return self.forward(x)
+
+
+
 # device
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -76,7 +125,8 @@ input_dim = x_train_add_const.shape[1]
 # f = UnknownFuncion(n_polynorm=7)
 # f = UnknownFuncion(n_polynorm=8)
 # f = UnknownFuncion(n_polynorm=9)
-f = RewardFunctionTorch()
+# f = RewardFunctionTorch()
+f = UnknownBernoulliFunction()
 # f.normalize_setting(x_train)
 
 y_true = f.true_f(x_train)
@@ -114,6 +164,9 @@ plt.scatter(x_train, y_train, label='obs')
 plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true')
 plt.legend()
 plt.show()
+
+
+# plt.plot(x_lin, f.true_z(x_lin), color='orange', label='true')
 
 # -----------------------------------------------------------------------------------------------
 # (NOTE) ★ model is the most powerful for performance as well as easy to learn
@@ -372,6 +425,491 @@ if learning_process:
         print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
     print(f"/ error_sigma :{error_sigma:.3f}")
     # print(f"/ error_sigma :{f.error_scale:.3f}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+from six.moves import cPickle
+import os
+import time
+import numpy as np
+import pandas as pd
+from datetime import datetime
+from tqdm.notebook import tqdm
+from IPython.display import clear_output, display, update_display
+
+class TorchModeling():
+    def __init__(self, model, device='cpu'):
+        self.now_date = datetime.strftime(datetime.now(), '%y%m%d_%H')
+
+        self.model = model.to(device)
+        self.device = device
+        self.t = 1
+
+        self.train_losses = []
+        self.train_metrics = []
+        self.valid_losses = []
+        self.valid_metrics = []
+        self.test_losses = []
+        self.test_metrics = [] 
+
+        self.train_info = []
+        self.test_info = []
+    
+    def get_save_path(self):
+        return f"{os.getcwd()}/{self.now_date}_{self.model._get_name()}"
+
+    def fun_decimal_point(self, value):
+        if type(value) == str or type(value) == int:
+            return value
+        else:
+            if value == 0:
+                return 3
+            try:
+                point_log10 = np.floor(np.log10(abs(value)))
+                point = int((point_log10 - 3)* -1) if point_log10 >= 0 else int((point_log10 - 2)* -1)
+            except:
+                point = 0
+            return np.round(value, point)
+
+    def compile(self, optimizer, loss_function, metric_function=None, scheduler=None,
+                early_stop_loss=None, early_stop_metrics=None):
+        """
+        loss_function(model, x, y) -> loss
+        """
+        self.optimizer = optimizer
+        self.loss_function = loss_function
+        self.metrics_function = metric_function
+        self.scheduler = scheduler
+        self.early_stop_loss = early_stop_loss
+        self.early_stop_metrics = early_stop_metrics
+
+    def recompile(self, optimizer=None, loss_function=None, metric_function=None, scheduler=None,
+                early_stop_loss=None, early_stop_metrics=None):
+        if scheduler is not None:
+            self.scheduler = scheduler
+            self.scheduler.optimizer = self.optimizer
+
+        if optimizer is not None:
+            self.optimizer = optimizer
+            self.scheduler.optimizer = self.optimizer
+
+        if loss_function is not None:
+            self.loss_function = loss_function
+        
+        if metric_function is not None:
+            self.metrics_function = metric_function
+
+        if early_stop_loss is not None:
+            self.early_stop_loss.patience = early_stop_loss.patience
+            self.early_stop_loss.optimize = early_stop_loss.optimize
+            early_stop_loss.load(self.early_stop_loss)
+            self.early_stop_loss = early_stop_loss
+
+        if early_stop_metrics is not None:
+            self.early_stop_metrics.patience = early_stop_metrics.patience
+            self.early_stop_metrics.optimize = early_stop_metrics.optimize
+            early_stop_metrics.load(self.early_stop_metrics)
+            self.early_stop_metrics = early_stop_metrics
+
+    def train_model(self, train_loader, valid_loader=None, epochs=10, tqdm_display=False,
+                early_stop=True, save_parameters=False, display_earlystop_result=False):
+        final_epcohs = self.t + epochs - 1
+        # [START of Epochs Loop] ############################################################################################
+        epochs_iter = tqdm(range(self.t, self.t + epochs), desc="Epochs", total=epochs, position=0, leave=True) if tqdm_display else range(self.t, self.t + epochs)
+        for epoch in epochs_iter:
+            print_info = {}
+
+            # train Loop --------------------------------------------------------------
+            self.model.train()
+            train_epoch_loss = []
+            train_epoch_metrics = []
+            train_iter = tqdm(enumerate(train_loader), desc="Train Batch", total=len(train_loader), position=1, leave=False) if tqdm_display else enumerate(train_loader)
+            for batch_idx, (batch_x, batch_y) in train_iter:
+                batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                self.optimizer.zero_grad()
+                loss = self.loss_function(self.model, batch_x, batch_y)
+                loss.backward()
+                self.optimizer.step()
+            
+                with torch.no_grad():
+                    train_epoch_loss.append( loss.to('cpu').detach().numpy() )
+                    if self.metrics_function is not None:
+                        train_epoch_metrics.append( self.metric_f(self.model, batch_x, batch_y) )
+
+            with torch.no_grad():
+                print_info['train_loss'] = np.mean(train_epoch_loss)
+                self.train_losses.append(print_info['train_loss'])
+                if self.metrics_function is not None:
+                    print_info['train_metrics'] = np.mean(train_epoch_metrics)
+                    self.train_metrics.append(print_info['train_metrics'])
+
+            # scheduler ---------------------------------------------------------
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            with torch.no_grad():
+                # valid Loop ---------------------------------------------------------
+                if valid_loader is not None and len(valid_loader) > 0:
+                    self.model.eval()
+                    valid_epoch_loss = []
+                    valid_epoch_metrics = []
+                    valid_iter = tqdm(enumerate(valid_loader), desc="Valid Batch", total=len(valid_loader), position=1, leave=False) if tqdm_display else enumerate(valid_loader)
+                    for batch_idx, (batch_x, batch_y) in valid_iter:
+                        batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                        
+                        loss = self.loss_function(self.model, batch_x, batch_y)
+                    
+                        valid_epoch_loss.append( loss.to('cpu').detach().numpy() )
+                        if self.metrics_function is not None:
+                            valid_epoch_metrics.append( self.metric_f(self.model, batch_x, batch_y) )
+
+                    print_info['valid_loss'] = np.mean(valid_epoch_loss)
+                    self.valid_losses.append(print_info['valid_loss'])
+                    if self.metrics_function is not None:
+                        print_info['valid_metrics'] = np.mean(valid_epoch_metrics)
+                        self.valid_metrics.append(print_info['valid_metrics'])
+            
+                # print_info ---------------------------------------------------------
+                self.train_info.append(print_info)
+                print_sentences = ",  ".join([f"{k}: {str(self.fun_decimal_point(v))}" for k, v in print_info.items()])
+                
+                # print(f"[Epoch: {epoch}/{final_epcohs}] {print_sentences}")
+                if final_epcohs - epoch + 1 == epochs:
+                    display(f"[Epoch: {epoch}/{final_epcohs}] {print_sentences}", display_id="epoch_result")
+                else:
+                    update_display(f"[Epoch: {epoch}/{final_epcohs}] {print_sentences}", display_id="epoch_result")
+
+                # early_stop ---------------------------------------------------------
+                early_stop_TF = None
+                if self.early_stop_loss is not None:
+                    score = print_info['valid_loss'] if (valid_loader is not None and len(valid_loader) > 0) else print_info['train_loss']
+                    reference_score = print_info['train_loss'] if (valid_loader is not None and len(valid_loader) > 0) else None
+                    params = self.model.state_dict() if save_parameters else None
+                    early_stop_TF = self.early_stop_loss.early_stop(score=score, reference_score=reference_score,save=params, verbose=0)
+
+                    if save_parameters:
+                        path_save_loss = f"{self.get_save_path()}_earlystop_loss.pth"
+                        cPickle.dump(self.early_stop_loss, open(path_save_loss, 'wb'))      # save earlystop loss
+
+                if self.metrics_function is not None and self.early_stop_metrics is not None:
+                    score = print_info['valid_metrics'] if (valid_loader is not None and len(valid_loader) > 0) else print_info['train_metrics']
+                    reference_score = print_info['train_metrics'] if (valid_loader is not None and len(valid_loader) > 0) else None
+                    params = self.model.state_dict() if save_parameters else None
+                    self.early_stop_loss.early_stop(score=score, reference_score=reference_score, save=params, verbose=0)
+
+                    if save_parameters:
+                        path_save_metrics = f"{self.get_save_path()}_earlystop_metrics.pth"
+                        cPickle.dump(self.early_stop_metrics, open(path_save_metrics, 'wb'))      # save earlystop metrics
+
+                # save_parameters ---------------------------------------------------------
+                if save_parameters:
+                    path_save_weight = f"{self.get_save_path()}_weights.pth"
+                    cPickle.dump(self.model.state_dict(), open(path_save_weight, 'wb'))      # save earlystop weights
+
+                # step update ---------------------------------------------------------
+                self.t += 1
+
+                # early_stop break ---------------------------------------------------------
+                if early_stop is True and early_stop_TF == 'break':
+                        break
+        
+        if display_earlystop_result:
+            if self.early_stop_loss is not None:
+                display(self.early_stop_loss.plot)
+            if self.metrics_function is not None and self.early_stop_metrics is not None:
+                display(self.early_stop_metrics.plot)
+        # [END of Epochs Loop] ############################################################################################
+
+    def test_model(self, test_loader, tqdm_display=False):
+        with torch.no_grad():
+            print_info = {"epoch":self.t-1}
+            # test Loop ---------------------------------------------------------
+            if test_loader is not None and len(test_loader) > 0:
+                self.model.eval()
+                test_epoch_loss = []
+                test_epoch_metrics = []
+                test_iter = tqdm(enumerate(test_loader), desc="Valid Batch", total=len(test_loader), position=1, leave=False) if tqdm_display else enumerate(test_loader)
+                for batch_idx, (batch_x, batch_y) in test_iter:
+                    batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                    
+                    loss = self.loss_function(self.model, batch_x, batch_y)
+                
+                    test_epoch_loss.append( loss.to('cpu').detach().numpy() )
+                    if self.metrics_function is not None:
+                        test_epoch_metrics.append( self.metric_f(self.model, batch_x, batch_y) )
+
+                print_info['test_loss'] = np.mean(test_epoch_loss)
+                self.test_losses.append(print_info['test_loss'])
+                if self.metrics_function is not None:
+                    print_info['test_metrics'] = np.mean(test_epoch_metrics)
+                    self.test_metrics.append(print_info['test_metrics'])
+            print_sentences = ",  ".join([f"{k}: {str(self.fun_decimal_point(v))}" for k, v in print_info.items() if k != 'epoch'])
+            print(f"[After {self.t-1} epoch test performances] {print_sentences}")
+            self.test_info.append(print_info)
+
+
+# import importlib
+# import requests
+# importlib.reload(httpimport)
+
+
+# response_DS_DataFrame = requests.get("https://raw.githubusercontent.com/kimds929/DS_Library/main/DS_DataFrame.py")
+# response_DS_Plot = requests.get("https://raw.githubusercontent.com/kimds929/DS_Library/main/DS_Plot.py")
+# response_DS_MachineLearning = requests.get("https://raw.githubusercontent.com/kimds929/DS_Library/main/DS_MachineLearning.py")
+# response_DS_DeepLearning = requests.get("https://raw.githubusercontent.com/kimds929/DS_Library/main/DS_DeepLearning.py")
+# response_DS_Torch = requests.get("https://raw.githubusercontent.com/kimds929/DS_Library/main/DS_Torch.py")
+# exec(response_DS_DataFrame.text)
+# exec(response_DS_Plot.text)
+# exec(response_DS_MachineLearning.text)
+# exec(response_DS_DeepLearning.text)
+# exec(DS_Torch.text)
+
+
+import numpy as np
+import pandas as pd
+import missingno as msno
+# from datetime import datetime
+
+import httpimport
+remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
+
+
+# with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+#     from DS_DataFrame import DF_Summary
+
+# with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+#     from DS_Plot import ttest_each, violin_box_plot, distbox
+
+# with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+#     from DS_MachineLearning import ScalerEncoder, DataSet
+
+with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+    from DS_DeepLearning import EarlyStopping
+
+with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+    from DS_Torch import TorchDataLoader, TorchModeling, AutoML
+
+# with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+#     from DS_TorchModule import ScaledDotProductAttention, MultiHeadAttentionLayer
+
+
+
+
+# # with httpimport.remote_repo(['DS_DeepLearning'], "https://raw.githubusercontent.com/kimds929/DS_Library/main/"):
+# #     import DS_DeepLearning
+# remote_data_url = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/99_DataSet/'
+# df_titanic = pd.read_csv(f"{remote_data_url}/Data_Tabular/titanic.csv", encoding="utf-8-sig")
+
+# df_summary = DF_Summary(df_titanic)
+# df_summary.summary
+# df_summary.summary_plot()
+
+# df_titanic2 = df_titanic[~df_titanic.isna().any(axis=1)]
+
+# DF_Summary(df_titanic2)
+# df_titanic2['pclass'] = df_titanic2['pclass'].astype(object)
+# df_titanic2['survived'] = df_titanic2['survived'].astype(object)
+# # DF_Summary(df_titanic2)
+
+
+# ttest_each(data=df_titanic2, x='age', group='pclass')
+# violin_box_plot(data=df_titanic2, x='pclass', y='age')
+# distbox(data=df_titanic2, on='age', group='pclass')
+
+# se = ScalerEncoder()
+# se.fit_transform(df_titanic2)
+
+
+
+
+
+# loss_mse = nn.MSELoss()
+def mse_loss(model, x, y):
+    logmu = model(x)
+    mu = torch.exp(logmu)
+    loss = torch.nn.functional.mse_loss(mu, y)
+    return loss
+
+
+# loss_gaussian = nn.GaussianNLLLoss()
+def gaussian_loss(model, x, y):
+    mu, logvar = model(x)
+    std = torch.exp(0.5*logvar)
+    loss = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
+    # loss = loss_gaussian(mu, y, std**2)
+    return loss
+
+def bernoulli_loss(model, x, y):
+    mu, logvar = model(x)
+    std = torch.exp(0.5*logvar)
+    logit = torch.log((y + 1e-10) / (1 - y + 1e-10))
+    loss = torch.nn.functional.gaussian_nll_loss(mu, logit, std**2)
+    # loss = loss_gaussian(mu, logit, std**2)
+    return loss
+
+
+f.true_z(x_train).numpy().astype(int)
+# f.forward_z(x_train).numpy().astype(int)
+# f.true_z(x_train).numpy().astype(int)
+model(x_train_add_const.to(device))
+
+# model = DirectEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
+model = DirectEnsemble3(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10, n_layers=5)
+# model = SampleEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_samples=10, n_layers=5)
+# [name for name, layer in model.EnsembleBlock.named_children()]
+
+
+optimizer = optim.Adam(model.parameters(), lr=1e-2)
+# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
+
+tm = TorchModeling(model=model, device=device)
+tm.compile(optimizer=optimizer
+            # ,loss_function = gaussian_loss
+            ,loss_function = bernoulli_loss
+            , scheduler=scheduler
+            , early_stop_loss = EarlyStopping(patience=5)
+            )
+# tm.early_stop_loss = None
+# tm.early_stop_loss = EarlyStopping(patience=20)
+# tm.early_stop_loss.reset_patience_scores()
+
+# tm.training(train_loader=train_loader, valid_loader=valid_loader, epochs=100, display_earlystop_result=True)
+tm.train_model(train_loader=train_loader, valid_loader=valid_loader, epochs=100, display_earlystop_result=True, early_stop=False)
+# tm.train_model(train_loader=train_loader, valid_loader=valid_loader, epochs=10, tqdm_display=True, display_earlystop_result=True, early_stop=False)
+tm.test_model(test_loader=test_loader)
+# tm.early_stop_loss.generate_plot(figsize=(15,4))
+
+# tm.optimizer
+# tm.recompile(early_stop_loss = EarlyStopping(patience=4))
+# tm.recompile(optimizer = optim.Adam(model.parameters(), lr=1e-3))
+# tm.recompile(optimizer = optim.Adam(model.parameters(), lr=1e-4))
+# tm.recompile(scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2))
+
+
+
+
+################################################################################################################################
+
+# visualize
+x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
+x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
+
+with torch.no_grad():
+    model.eval()
+    y_mu, y_logvar = model(x_lin_add_const.to(device))
+    y_mu = y_mu.to('cpu')
+    y_std = torch.exp(0.5*y_logvar).to('cpu')
+
+# # Gaussian
+# plt.figure()
+# plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+# plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+
+# plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
+# plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+# plt.legend()
+# plt.show()
+
+# Logit
+plt.figure()
+plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+
+plt.plot(x_lin, 1/(1+torch.exp(-y_mu)), alpha=0.5, color='mediumseagreen', label='pred_mu')
+plt.fill_between(x_lin.flatten(), 1/(1+torch.exp(-(y_mu-y_std))).flatten(), 1/(1+torch.exp(-(y_mu+y_std))).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+plt.legend()
+plt.show()
+
+
+
+
+
+# valid std
+with torch.no_grad():
+    model.eval()
+    eval_mu, eval_logvar = model(x_train_add_const.to(device))
+    eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+    eval_std = torch.exp(0.5*eval_logvar)
+    residual_sigma = (eval_mu - y_train).std()
+    print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
+print(f"/ error_sigma :{error_sigma:.3f}")
+# print(f"/ error_sigma :{f.error_scale:.3f}")
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+###########################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
