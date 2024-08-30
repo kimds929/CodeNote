@@ -5,7 +5,8 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 
-class Time2Vec(nn.Module):
+# -------------------------------------------------------------------------------------------
+class PeriodicEmbedding(nn.Module):
     def __init__(self, input_dim, embed_dim):
         super().__init__()
         # Linear Component
@@ -33,6 +34,28 @@ class Time2Vec(nn.Module):
         # Combine All Components
         return torch.cat([linear_term, periodic_term, nonlinear_term], dim=-1)
 
+
+# -------------------------------------------------------------------------------------------
+class TimePredictModel(nn.Module):
+    def __init__(self, input_dim=1, embed_dim=5, hidden_dim=32, output_dim=1):
+        super().__init__()
+        self.periodic_embedding = PeriodicEmbedding(input_dim, embed_dim)
+
+        self.fc_block = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim)
+        )
+    
+    def forward(self, x):
+        periodic_embed = self.periodic_embedding(x)
+        output = self.fc_block(periodic_embed)
+        return output
+
+
+# -------------------------------------------------------------------------------------------
 # FullyConnected Base Model
 class FeedForwardBlock(nn.Module):
     def __init__(self, input_dim, output_dim, activation=nn.ReLU(),
@@ -74,21 +97,21 @@ class FullyConnectedModel(nn.Module):
         output = x
         return output
 
+# -------------------------------------------------------------------------------------------
 
 
 
-
-# Time2Vec 모델 초기화
+# PeriodicEmbedding 모델 초기화
 in_dim = 1
 em_dim = 7
-time2vec = Time2Vec(input_dim=in_dim, embed_dim=em_dim)
+periodic_embed = PeriodicEmbedding(input_dim=in_dim, embed_dim=em_dim)
 
 # 월요일(0)부터 일요일(6)까지 7일을 24*60분 단위로 나눈 시간 데이터 생성
 time_data = np.linspace(0, 7, 7 * 60*24, endpoint=False).reshape(-1, 1)
 time_data_tensor = torch.tensor(time_data, dtype=torch.float32)
 
 # Time2Vec 모델을 통해 시간 데이터를 임베딩
-embedding = time2vec(time_data_tensor)
+embedding = periodic_embed(time_data_tensor)
 print(embedding.shape)
 
 for ei in range(em_dim):
@@ -131,12 +154,12 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 ##################################################################################
 
 import httpimport
-remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
+remote_url = 'https://raw.githubusercontent.com/kimds929/'
 
-with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
     from DS_DeepLearning import EarlyStopping
 
-with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
     from DS_Torch import TorchDataLoader, TorchModeling, AutoML
 
 
