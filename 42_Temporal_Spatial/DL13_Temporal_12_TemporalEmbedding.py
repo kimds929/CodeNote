@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
+import torch.optim as optim
+
 import numpy as np
+import matplotlib.pyplot as plt
 
 class Time2Vec(nn.Module):
     def __init__(self, input_dim, embed_dim):
@@ -30,6 +33,50 @@ class Time2Vec(nn.Module):
         # Combine All Components
         return torch.cat([linear_term, periodic_term, nonlinear_term], dim=-1)
 
+# FullyConnected Base Model
+class FeedForwardBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, activation=nn.ReLU(),
+                batchNorm=True,  dropout=0.5):
+        super().__init__()
+        ff_block = [nn.Linear(input_dim, output_dim)]
+        if activation:
+            ff_block.append(activation)
+        if batchNorm:
+            ff_block.append(nn.BatchNorm1d(output_dim))
+        if dropout > 0:
+            ff_block.append(nn.Dropout(dropout))
+        self.ff_block = nn.Sequential(*ff_block)
+    
+    def forward(self, x):
+        return self.ff_block(x)
+
+class FullyConnectedModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_layers=3):
+        super().__init__()
+        
+        self.EnsembleBlock = nn.ModuleDict({'in_layer':FeedForwardBlock(input_dim, hidden_dim)})
+
+        for h_idx in range(n_layers):
+            if h_idx < n_layers-1:
+               self.EnsembleBlock[f'hidden_layer{h_idx+1}'] = FeedForwardBlock(hidden_dim, hidden_dim)
+            else:
+                self.EnsembleBlock['out_layer'] = FeedForwardBlock(hidden_dim, output_dim, activation=False, batchNorm=False, dropout=0)
+        self.n_layers = n_layers
+        self.output_dim = output_dim
+
+    def forward(self, x):
+        for layer_name, layer in self.EnsembleBlock.items():
+            if layer_name == 'in_layer' or layer_name == 'out_layer':
+                x = layer(x)
+            else:
+                x = layer(x) + x    # residual connection
+
+        output = x
+        return output
+
+
+
+
 
 # Time2Vec 모델 초기화
 in_dim = 1
@@ -49,27 +96,7 @@ for ei in range(em_dim):
 plt.legend()
 plt.show()
 
-
-
-class TimePredictModel(nn.Module):
-    def __init__(self, input_dim=1, embed_dim=5, hidden_dim=32, output_dim=1):
-        super().__init__()
-        self.time2vec = Time2Vec(input_dim, embed_dim)
-
-        self.fc_block = nn.Sequential(
-            nn.Linear(embed_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, output_dim)
-        )
-    
-    def forward(self, x):
-        time_embed = self.time2vec(x)
-        output = self.fc_block(time_embed)
-        return output
-
-
+ 
 
 # 데이터 생성: 주기 함수를 예시로 사용 ##################################################
 def sine_wave(x):
@@ -85,8 +112,8 @@ def square_wave(x, period=1.0):
 time_data_x = np.linspace(0, 7, 7 * 24*6, endpoint=False)
 
 # period_y = sine_wave(time_data_x)
-# period_y = square_wave(time_data_x)
-period_y = periodic_improve(time_data_x*60*24)
+period_y = square_wave(time_data_x)
+# period_y = periodic_improve(time_data_x*60*24)
 
 train_x = torch.tensor(time_data_x.astype(np.float32).reshape(-1, 1))
 train_y = torch.tensor(period_y.astype(np.float32).reshape(-1,1))
@@ -95,6 +122,7 @@ plt.figure()
 plt.plot(time_data_x, period_y)
 plt.show()
 
+from torch.utils.data import DataLoader, TensorDataset
 # Dataset and DataLoader
 batch_size = 64
 train_dataset = TensorDataset(train_x, train_y)
@@ -117,7 +145,8 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 # 모델 초기화
 model = TimePredictModel(input_dim=1, embed_dim=5, hidden_dim=32, output_dim=1) 
-
+# model = FullyConnectedModel(input_dim=1, hidden_dim=64, output_dim=1, n_layers=5)
+# sum(p.numel() for p in model.parameters())    # the number of parameters in model
 
 # loss_mse = nn.MSELoss()
 def mse_loss(model, x, y):
@@ -131,12 +160,11 @@ optimizer = optim.Adam(model.parameters(), lr=1e-2)
 tm = TorchModeling(model=model, device=device)
 tm.compile(optimizer=optimizer
             , loss_function = mse_loss
-            , scheduler = scheduler_pathtime
             , early_stop_loss = EarlyStopping(patience=5)
             )
 tm.train_model(train_loader=train_loader, epochs=100, display_earlystop_result=True, early_stop=False)
 # tm.test_model(test_loader=test_loader)
-# tm.recompile(optimizer=optim.Adam(model.parameters(), lr=1e-4))
+# tm.recompile(optimizer=optim.Adam(model.parameters(), lr=1e-3))
 
 
 with torch.no_grad():
