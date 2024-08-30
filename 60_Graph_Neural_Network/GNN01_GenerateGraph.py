@@ -3,6 +3,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
+####################################################################################
+def apply_function_to_matrix(matrix, func, *args, **kwargs):
+    vectorized_func = np.vectorize(lambda x: func(x, *args, **kwargs))
+    return vectorized_func(matrix)
+
+def matrix_rank(matrix, ascending=True, axis=0):
+    """
+    ascending: True (low 1 -> high ...), False (high 1 -> low ...)
+    axis: 0 (row-wise), 1 (column-wise)
+    """
+    if ascending:
+        return (np.argsort(np.argsort(matrix, axis=axis), axis=axis) + 1)
+    else:
+        return (np.argsort(np.argsort(-matrix, axis=axis), axis=axis) + 1)
+
 # (Create Basic GraphSetting) #####################################################
 class GenerateNodeMap():
     def __init__(self, n_nodes, distance_scale=1, random_state=None):
