@@ -123,16 +123,15 @@ if example:
  
 
 # 데이터 생성: 주기 함수를 예시로 사용 ##################################################
-if example:
-    def sine_wave(x):
+def sine_wave(x):
     return np.sin(2 * np.pi * x)
 
-    # 데이터 생성: 사각파 함수를 예시로 사용
-    def square_wave(x, period=1.0):
-        return np.sign(np.sin(2 * np.pi * x / period))
+def square_wave(x, period=1.0):
+    return np.sign(np.sin(2 * np.pi * x / period))
 
-    # plt.plot(periodic_improve(time_data*24*60))
+# plt.plot(periodic_improve(time_data*24*60))
 
+if example:
     # time_data_x = np.linspace(0, 7, 7 * 60*24, endpoint=False)
     time_data_x = np.linspace(0, 7, 7 * 24*6, endpoint=False)
 
@@ -147,7 +146,6 @@ if example:
     plt.plot(time_data_x, period_y)
     plt.show()
 
-if example:
     from torch.utils.data import DataLoader, TensorDataset
     # Dataset and DataLoader
     batch_size = 64
