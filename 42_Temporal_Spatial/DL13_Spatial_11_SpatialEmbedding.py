@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-
+example = False
 # -------------------------------------------------------------------------------------------
 
 class CoordinateEmbedding(nn.Module):
@@ -21,11 +21,12 @@ class CoordinateEmbedding(nn.Module):
     def forward(self, x):
         return self.embedding(x)
 
-model = CoordinateEmbedding(input_dim=2, hidden_dim=32, embed_dim=16, depth=3)
-model
-coordinates = torch.tensor([[0.5, 0.5], [0.7, 0.2]], dtype=torch.float32)
-embedding = model(coordinates)
-print(embedding.shape)
+if example:
+    model = CoordinateEmbedding(input_dim=2, hidden_dim=32, embed_dim=16, depth=3)
+    model
+    coordinates = torch.tensor([[0.5, 0.5], [0.7, 0.2]], dtype=torch.float32)
+    embedding = model(coordinates)
+    print(embedding.shape)
 
 
 # -------------------------------------------------------------------------------------------
@@ -42,11 +43,12 @@ class GridEmbedding(nn.Module):
         # print(x_grid, x_index)
         return self.embedding(x_index)
 
-grid_size = 10
-model = GridEmbedding(grid_size=grid_size, embed_dim=16)
-coordinates = torch.tensor([[0.5, 0.5], [0.7, 0.2]], dtype=torch.float32)
-embedding = model(coordinates)
-print(embedding.shape)
+if example:
+    grid_size = 10
+    model = GridEmbedding(grid_size=grid_size, embed_dim=16)
+    coordinates = torch.tensor([[0.5, 0.5], [0.7, 0.2]], dtype=torch.float32)
+    embedding = model(coordinates)
+    print(embedding.shape)
 
 # -------------------------------------------------------------------------------------------
 def positional_encoding(coords, d_model):
@@ -292,153 +294,136 @@ class FullyConnectedModel(nn.Module):
 
 
 ############################################################################################################################################
-import httpimport
-remote_url = 'https://raw.githubusercontent.com/kimds929/'
+if example:
+    import httpimport
+    remote_url = 'https://raw.githubusercontent.com/kimds929/'
 
-with httpimport.remote_repo(f"{remote_url}/CodeNote/main/60_Graph_Neural_Network/"):
-    from GNN01_GenerateGraph import GenerateNodeMap, visualize_graph, Dijkstra
-
-
-# --------------------------------------------------------------------------------------------------------------------------------
-n_nodes = 50
-random_state = 1
-
-# (create base graph) 
-node_map = GenerateNodeMap(n_nodes, random_state=random_state)
-node_map.create_node(node_scale=50, cov_knn=3)           # create node
-node_map.create_connect(connect_scale=0)             # create connection
-
-visualize_graph(centers=node_map.centers, adjacent_matrix=node_map.adj_matrix)
-
-features = []
-dists = []
-for _ in range(1000):
-    start_node, end_node = np.random.choice(np.arange(n_nodes), size=2, replace=False)
-    dijkstra = Dijkstra(node_map.adj_matrix)
-    shortest_distance, path = dijkstra.dijkstra(start_node, end_node)
-
-    # visualize_graph(centers=node_map.centers, adjacent_matrix=node_map.adj_matrix,
-    #                 path=path, distance=shortest_distance)
-
-    feature = np.append(node_map.centers[start_node], node_map.centers[end_node])
-    dist = shortest_distance
-
-    features.append(feature)
-    dists.append(dist)
-
-x_train_arr = np.stack(features).astype(np.float32)
-y_train_arr = np.stack(dists).astype(np.float32).reshape(-1,1)
-
-x_train = torch.tensor(x_train_arr)
-y_train = torch.tensor(y_train_arr)
+    with httpimport.remote_repo(f"{remote_url}/CodeNote/main/60_Graph_Neural_Network/"):
+        from GNN01_GenerateGraph import GenerateNodeMap, visualize_graph, Dijkstra
 
 
-from torch.utils.data import DataLoader, TensorDataset
-# Dataset and DataLoader
-batch_size=64
-train_dataset = TensorDataset(x_train, y_train)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    # --------------------------------------------------------------------------------------------------------------------------------
+    n_nodes = 50
+    random_state = 1
+
+    # (create base graph) 
+    node_map = GenerateNodeMap(n_nodes, random_state=random_state)
+    node_map.create_node(node_scale=50, cov_knn=3)           # create node
+    node_map.create_connect(connect_scale=0)             # create connection
+
+    visualize_graph(centers=node_map.centers, adjacent_matrix=node_map.adj_matrix)
+
+    features = []
+    dists = []
+    for _ in range(1000):
+        start_node, end_node = np.random.choice(np.arange(n_nodes), size=2, replace=False)
+        dijkstra = Dijkstra(node_map.adj_matrix)
+        shortest_distance, path = dijkstra.dijkstra(start_node, end_node)
+
+        # visualize_graph(centers=node_map.centers, adjacent_matrix=node_map.adj_matrix,
+        #                 path=path, distance=shortest_distance)
+
+        feature = np.append(node_map.centers[start_node], node_map.centers[end_node])
+        dist = shortest_distance
+
+        features.append(feature)
+        dists.append(dist)
+
+    x_train_arr = np.stack(features).astype(np.float32)
+    y_train_arr = np.stack(dists).astype(np.float32).reshape(-1,1)
+
+    x_train = torch.tensor(x_train_arr)
+    y_train = torch.tensor(y_train_arr)
+
+
+    from torch.utils.data import DataLoader, TensorDataset
+    # Dataset and DataLoader
+    batch_size=64
+    train_dataset = TensorDataset(x_train, y_train)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
 
 ############################################################################################################################################
-import matplotlib.pyplot as plt
-import httpimport
-remote_url = 'https://raw.githubusercontent.com/kimds929/'
+if example:
+    import matplotlib.pyplot as plt
+    import httpimport
+    remote_url = 'https://raw.githubusercontent.com/kimds929/'
 
-with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
-    from DS_DeepLearning import EarlyStopping
+    with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
+        from DS_DeepLearning import EarlyStopping
 
-with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
-    from DS_Torch import TorchDataLoader, TorchModeling, AutoML
-
-
-
-# device
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
+        from DS_Torch import TorchDataLoader, TorchModeling, AutoML
 
 
-model = SpatialPredictModel(hidden_dim=128, output_dim=1,
-                            coord_hidden_dim=64, coord_embed_dim=16, coord_depth=3, grid_size=30, grid_embed_dim=16, periodic_embed_dim=9, 
-                            relative=True, euclidean_dist=True, angle=True)
-# model = FullyConnectedModel(hidden_dim=128, output_dim=1, fc_hidden_dim=64, fc_embed_dim=16,
-#                           n_layers=5, batchNorm=False, dropout=0.5)
-sum(p.numel() for p in model.parameters())    # the number of parameters in model
 
-# loss_mse = nn.MSELoss()
-def mse_loss(model, x, y):
-    pred = model(x[:,:2], x[:,2:])
-    loss = torch.nn.functional.mse_loss(pred, y)
-    return loss
-
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    # device
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
-tm = TorchModeling(model=model, device=device)
-tm.compile(optimizer=optimizer
-            , loss_function = mse_loss
-            , early_stop_loss = EarlyStopping(patience=5)
-            )
-tm.train_model(train_loader=train_loader, epochs=100, display_earlystop_result=True, early_stop=False)
-# tm.test_model(test_loader=test_loader)
-tm.recompile(optimizer=optim.Adam(model.parameters(), lr=1e-4))
+    model = SpatialPredictModel(hidden_dim=128, output_dim=1,
+                                coord_hidden_dim=64, coord_embed_dim=16, coord_depth=3, grid_size=30, grid_embed_dim=16, periodic_embed_dim=9, 
+                                relative=True, euclidean_dist=True, angle=True)
+    # model = FullyConnectedModel(hidden_dim=128, output_dim=1, fc_hidden_dim=64, fc_embed_dim=16,
+    #                           n_layers=5, batchNorm=False, dropout=0.5)
+    sum(p.numel() for p in model.parameters())    # the number of parameters in model
+
+    # loss_mse = nn.MSELoss()
+    def mse_loss(model, x, y):
+        pred = model(x[:,:2], x[:,2:])
+        loss = torch.nn.functional.mse_loss(pred, y)
+        return loss
+
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 
-# --------------------------------------------------------------------------------------------------------------------------------
-with torch.no_grad():
-    model.eval()
-    pred = model(x_train[:,:2].to(device), x_train[:,2:].to(device))
-    pred_arr = pred.to('cpu').numpy()
-
-
-plt.figure()
-plt.scatter(pred_arr.ravel(), y_train.numpy().ravel(), alpha=0.5)
-plt.legend(loc='upper right')
-plt.show()
+    tm = TorchModeling(model=model, device=device)
+    tm.compile(optimizer=optimizer
+                , loss_function = mse_loss
+                , early_stop_loss = EarlyStopping(patience=5)
+                )
+    tm.train_model(train_loader=train_loader, epochs=100, display_earlystop_result=True, early_stop=False)
+    # tm.test_model(test_loader=test_loader)
+    tm.recompile(optimizer=optim.Adam(model.parameters(), lr=1e-4))
 
 
 # --------------------------------------------------------------------------------------------------------------------------------
-start_node, end_node = np.random.choice(np.arange(n_nodes), size=2, replace=False)
-# start_node, end_node = 12, 39
-# start_node, end_node = 16, 38
-# start_node, end_node = 48, 12
-start_node, end_node = 8, 44
-# start_node, end_node = 32, 47
-dijkstra = Dijkstra(node_map.adj_matrix)
-shortest_distance, path = dijkstra.dijkstra(start_node, end_node)
-feature = np.append(node_map.centers[start_node], node_map.centers[end_node])
-dist = shortest_distance
+if example:
+    with torch.no_grad():
+        model.eval()
+        pred = model(x_train[:,:2].to(device), x_train[:,2:].to(device))
+        pred_arr = pred.to('cpu').numpy()
 
-x = torch.tensor(feature[np.newaxis,...].astype(np.float32)).to(device)
-with torch.no_grad():
-    model.eval()
-    pred = model(x[:,:2].to(device), x[:,2:].to(device))
-    pred_arr = pred.to('cpu').numpy()
 
-print(pred.item(), dist)
-# start_node, end_node
-# visualize_graph(centers=node_map.centers, adjacent_matrix=node_map.adj_matrix,
-#                     path=path, distance=shortest_distance)
+    plt.figure()
+    plt.scatter(pred_arr.ravel(), y_train.numpy().ravel(), alpha=0.5)
+    plt.legend(loc='upper right')
+    plt.show()
 
 
 # --------------------------------------------------------------------------------------------------------------------------------
-# torch.norm(torch.tensor([[2,1]], dtype=torch.float32), p=2, dim=1, keepdim=True)
+if example:
+    start_node, end_node = np.random.choice(np.arange(n_nodes), size=2, replace=False)
+    # start_node, end_node = 12, 39
+    # start_node, end_node = 16, 38
+    # start_node, end_node = 48, 12
+    start_node, end_node = 8, 44
+    # start_node, end_node = 32, 47
+    dijkstra = Dijkstra(node_map.adj_matrix)
+    shortest_distance, path = dijkstra.dijkstra(start_node, end_node)
+    feature = np.append(node_map.centers[start_node], node_map.centers[end_node])
+    dist = shortest_distance
+
+    x = torch.tensor(feature[np.newaxis,...].astype(np.float32)).to(device)
+    with torch.no_grad():
+        model.eval()
+        pred = model(x[:,:2].to(device), x[:,2:].to(device))
+        pred_arr = pred.to('cpu').numpy()
+
+    print(pred.item(), dist)
+    # start_node, end_node
+    # visualize_graph(centers=node_map.centers, adjacent_matrix=node_map.adj_matrix,
+    #                     path=path, distance=shortest_distance)
 
 
-# # 좌표 데이터
-# coords = torch.tensor([
-#     [37.7749, -122.4194, 34.0522, -118.2437],  # 샌프란시스코 -> 로스앤젤레스
-#     [51.5074, -0.1278, 48.8566, 2.3522]        # 런던 -> 파리
-# ])
-
-# # 좌표 간 차이 피처 생성
-# delta_lat = coords[:, 2] - coords[:, 0]
-# delta_long = coords[:, 3] - coords[:, 1]
-
-# # 2x2 그리드 생성
-# coords_grid = torch.stack((
-#     coords[:, 0:2],                     # (lat1, long1)
-#     torch.stack((delta_lat, delta_long), dim=1)  # (delta_lat, delta_long)
-# ), dim=1)
-
-
-# coords_grid
+# --------------------------------------------------------------------------------------------------------------------------------
