@@ -69,6 +69,14 @@ class TemporalEmbedding(nn.Module):
 # te = TemporalEmbedding(1,5,32)
 # te(torch.rand(5,1))
 
+if example:
+    te = TemporalEmbedding(input_dim=1, embed_dim=6, hidden_dim=64)
+    x = torch.linspace(0,10,100).view(-1,1)
+
+    for i in range(6):
+        plt.plot(x.ravel().numpy(), te(x)[:,i].ravel().detach().numpy(), label=i)
+    plt.legend()
+
 # -------------------------------------------------------------------------------------------
 class TimePredictModel(nn.Module):
     def __init__(self, input_dim=1, embed_dim=5, hidden_dim=32, output_dim=1):
