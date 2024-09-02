@@ -10,13 +10,14 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader, TensorDataset
 
-# Example data (replace this with your actual data)
-batch_size = 64
-input_dim_init = 1    # Dimension of input data
-hidden_dim = 10   # Number of hidden units
-output_dim = 1    # Dimension of latent space
+example = False
 
-learning_process = False
+if example:
+    # Example data (replace this with your actual data)
+    batch_size = 64
+    input_dim_init = 1    # Dimension of input data
+    hidden_dim = 10   # Number of hidden units
+    output_dim = 1    # Dimension of latent space
 
 # (sample data) x_train / y_train --------------------------------------------------
 class UnknownFuncion():
@@ -100,79 +101,79 @@ class UnknownBernoulliFunction():
         return self.forward(x)
 
 
+if example:
+    # device
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-# device
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    scale = 200
+    shift = 0
+    # error_scale = 0.3
+    # scale = torch.randint(0,100 ,size=(1,))
+    # shift = torch.randint(0,500 ,size=(1,))
+    # error_scale = torch.rand((1,))*0.3+0.1
 
-scale = 200
-shift = 0
-# error_scale = 0.3
-# scale = torch.randint(0,100 ,size=(1,))
-# shift = torch.randint(0,500 ,size=(1,))
-# error_scale = torch.rand((1,))*0.3+0.1
-
-x_train = torch.randn(1000, input_dim_init) *scale + shift   # 1000 samples of dimension 10
-x_train_add_const = torch.cat([x_train, torch.ones_like(x_train)], axis=1)
-input_dim = x_train_add_const.shape[1]
-
-
-# f = UnknownFuncion()
-# f = UnknownFuncion(n_polynorm=2, normalize=True)
-# f = UnknownFuncion(n_polynorm=3)
-# f = UnknownFuncion(n_polynorm=4)
-# f = UnknownFuncion(n_polynorm=5)
-# f = UnknownFuncion(n_polynorm=6)
-# f = UnknownFuncion(n_polynorm=7)
-# f = UnknownFuncion(n_polynorm=8)
-# f = UnknownFuncion(n_polynorm=9)
-# f = RewardFunctionTorch()
-f = UnknownBernoulliFunction()
-# f.normalize_setting(x_train)
-
-y_true = f.true_f(x_train)
-y_train = f(x_train)
-error_sigma = (y_train - y_true).std()
-# true_theta = torch.randn((input_dim,1))
-# y_true = x_train_add_const @ true_theta
-# y_train = y_true + error_scale*scale*torch.randn((x_train_add_const.shape[0],1))
-
-# Dataset and DataLoader
-train_dataset = TensorDataset(x_train_add_const, y_train)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-# Valid DataSet
-x_valid = torch.randn(300, input_dim_init) *scale + shift   # 300 samples of validation set
-x_valid_add_const = torch.cat([x_valid, torch.ones_like(x_valid)], axis=1)
-y_valid = f(x_valid)
-valid_dataset = TensorDataset(x_train_add_const, y_train)
-valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
-
-# Test DataSet
-x_test = torch.randn(200, input_dim_init) *scale + shift   # 200 samples of test set
-x_test_add_const = torch.cat([x_test, torch.ones_like(x_test)], axis=1)
-y_test = f(x_test)
-test_dataset = TensorDataset(x_train_add_const, y_train)
-test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    x_train = torch.randn(1000, input_dim_init) *scale + shift   # 1000 samples of dimension 10
+    x_train_add_const = torch.cat([x_train, torch.ones_like(x_train)], axis=1)
+    input_dim = x_train_add_const.shape[1]
 
 
-# visualize
-x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
-x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
+    # f = UnknownFuncion()
+    # f = UnknownFuncion(n_polynorm=2, normalize=True)
+    # f = UnknownFuncion(n_polynorm=3)
+    # f = UnknownFuncion(n_polynorm=4)
+    f = UnknownFuncion(n_polynorm=5)
+    # f = UnknownFuncion(n_polynorm=6)
+    # f = UnknownFuncion(n_polynorm=7)
+    # f = UnknownFuncion(n_polynorm=8)
+    # f = UnknownFuncion(n_polynorm=9)
+    # f = RewardFunctionTorch()
+    # f = UnknownBernoulliFunction()
+    f.normalize_setting(x_train)
 
-plt.figure()
-plt.scatter(x_train, y_train, label='obs')
-plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true')
-plt.legend()
-plt.show()
+    y_true = f.true_f(x_train)
+    y_train = f(x_train)
+    error_sigma = (y_train - y_true).std()
+    # true_theta = torch.randn((input_dim,1))
+    # y_true = x_train_add_const @ true_theta
+    # y_train = y_true + error_scale*scale*torch.randn((x_train_add_const.shape[0],1))
+
+    # Dataset and DataLoader
+    train_dataset = TensorDataset(x_train_add_const, y_train)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+    # Valid DataSet
+    x_valid = torch.randn(300, input_dim_init) *scale + shift   # 300 samples of validation set
+    x_valid_add_const = torch.cat([x_valid, torch.ones_like(x_valid)], axis=1)
+    y_valid = f(x_valid)
+    valid_dataset = TensorDataset(x_train_add_const, y_train)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
+
+    # Test DataSet
+    x_test = torch.randn(200, input_dim_init) *scale + shift   # 200 samples of test set
+    x_test_add_const = torch.cat([x_test, torch.ones_like(x_test)], axis=1)
+    y_test = f(x_test)
+    test_dataset = TensorDataset(x_train_add_const, y_train)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
 
-# plt.plot(x_lin, f.true_z(x_lin), color='orange', label='true')
+    # visualize
+    x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
+    x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
 
-# -----------------------------------------------------------------------------------------------
-# (NOTE) ★ model is the most powerful for performance as well as easy to learn
-#  1. BNN_DirectEnsemble2
-#  2. BNN_Model_2
-# -----------------------------------------------------------------------------------------------
+    plt.figure()
+    plt.scatter(x_train, y_train, label='obs')
+    plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true')
+    plt.legend()
+    plt.show()
+
+
+    # plt.plot(x_lin, f.true_z(x_lin), color='orange', label='true')
+
+    # -----------------------------------------------------------------------------------------------
+    # (NOTE) ★ model is the most powerful for performance as well as easy to learn
+    #  1. BNN_DirectEnsemble2
+    #  2. BNN_Model_2
+    # -----------------------------------------------------------------------------------------------
 
 
 
@@ -324,7 +325,7 @@ class DirectEnsemble3(nn.Module):
 
 ################################################################################################
 
-if learning_process:
+if example:
     # Initialize the model, optimizer
     # model = DirectEstimate(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim)
     # model = DirectEnsemble1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
@@ -709,56 +710,20 @@ class TorchModeling():
 import numpy as np
 import pandas as pd
 import missingno as msno
+import httpimport
 # from datetime import datetime
 
-import httpimport
-remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
+if example:
+    remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
 
+    with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+        from DS_DeepLearning import EarlyStopping
 
-# with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-#     from DS_DataFrame import DF_Summary
+    with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+        from DS_Torch import TorchDataLoader, TorchModeling, AutoML
 
-# with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-#     from DS_Plot import ttest_each, violin_box_plot, distbox
-
-# with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-#     from DS_MachineLearning import ScalerEncoder, DataSet
-
-with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-    from DS_DeepLearning import EarlyStopping
-
-with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-    from DS_Torch import TorchDataLoader, TorchModeling, AutoML
-
-# with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-#     from DS_TorchModule import ScaledDotProductAttention, MultiHeadAttentionLayer
-
-
-
-
-# # with httpimport.remote_repo(['DS_DeepLearning'], "https://raw.githubusercontent.com/kimds929/DS_Library/main/"):
-# #     import DS_DeepLearning
-# remote_data_url = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/99_DataSet/'
-# df_titanic = pd.read_csv(f"{remote_data_url}/Data_Tabular/titanic.csv", encoding="utf-8-sig")
-
-# df_summary = DF_Summary(df_titanic)
-# df_summary.summary
-# df_summary.summary_plot()
-
-# df_titanic2 = df_titanic[~df_titanic.isna().any(axis=1)]
-
-# DF_Summary(df_titanic2)
-# df_titanic2['pclass'] = df_titanic2['pclass'].astype(object)
-# df_titanic2['survived'] = df_titanic2['survived'].astype(object)
-# # DF_Summary(df_titanic2)
-
-
-# ttest_each(data=df_titanic2, x='age', group='pclass')
-# violin_box_plot(data=df_titanic2, x='pclass', y='age')
-# distbox(data=df_titanic2, on='age', group='pclass')
-
-# se = ScalerEncoder()
-# se.fit_transform(df_titanic2)
+    # with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+    #     from DS_TorchModule import ScaledDotProductAttention, MultiHeadAttentionLayer
 
 
 
@@ -788,94 +753,97 @@ def bernoulli_loss(model, x, y):
     # loss = loss_gaussian(mu, logit, std**2)
     return loss
 
+if example:
+    f.true_z(x_train).numpy().astype(int)
+    # f.forward_z(x_train).numpy().astype(int)
+    # f.true_z(x_train).numpy().astype(int)
+    model(x_train_add_const.to(device))
 
-f.true_z(x_train).numpy().astype(int)
-# f.forward_z(x_train).numpy().astype(int)
-# f.true_z(x_train).numpy().astype(int)
-model(x_train_add_const.to(device))
-
-# model = DirectEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
-model = DirectEnsemble3(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10, n_layers=5)
-# model = SampleEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_samples=10, n_layers=5)
-# [name for name, layer in model.EnsembleBlock.named_children()]
+    # model = DirectEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
+    model = DirectEnsemble3(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10, n_layers=5)
+    # model = SampleEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_samples=10, n_layers=5)
+    # [name for name, layer in model.EnsembleBlock.named_children()]
 
 
-optimizer = optim.Adam(model.parameters(), lr=1e-2)
-# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
+    optimizer = optim.Adam(model.parameters(), lr=1e-2)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
 
-tm = TorchModeling(model=model, device=device)
-tm.compile(optimizer=optimizer
-            # ,loss_function = gaussian_loss
-            ,loss_function = bernoulli_loss
-            , scheduler=scheduler
-            , early_stop_loss = EarlyStopping(patience=5)
-            )
-# tm.early_stop_loss = None
-# tm.early_stop_loss = EarlyStopping(patience=20)
-# tm.early_stop_loss.reset_patience_scores()
+    tm = TorchModeling(model=model, device=device)
+    tm.compile(optimizer=optimizer
+                # ,loss_function = gaussian_loss
+                ,loss_function = bernoulli_loss
+                , scheduler=scheduler
+                , early_stop_loss = EarlyStopping(patience=5)
+                )
+    # tm.early_stop_loss = None
+    # tm.early_stop_loss = EarlyStopping(patience=20)
+    # tm.early_stop_loss.reset_patience_scores()
 
-# tm.training(train_loader=train_loader, valid_loader=valid_loader, epochs=100, display_earlystop_result=True)
-tm.train_model(train_loader=train_loader, valid_loader=valid_loader, epochs=100, display_earlystop_result=True, early_stop=False)
-# tm.train_model(train_loader=train_loader, valid_loader=valid_loader, epochs=10, tqdm_display=True, display_earlystop_result=True, early_stop=False)
-tm.test_model(test_loader=test_loader)
-# tm.early_stop_loss.generate_plot(figsize=(15,4))
+    # tm.training(train_loader=train_loader, valid_loader=valid_loader, epochs=100, display_earlystop_result=True)
+    tm.train_model(train_loader=train_loader, valid_loader=valid_loader, epochs=100, display_earlystop_result=True, early_stop=False)
+    # tm.train_model(train_loader=train_loader, valid_loader=valid_loader, epochs=10, tqdm_display=True, display_earlystop_result=True, early_stop=False)
+    tm.test_model(test_loader=test_loader)
+    # tm.early_stop_loss.generate_plot(figsize=(15,4))
 
-# tm.optimizer
-# tm.recompile(early_stop_loss = EarlyStopping(patience=4))
-# tm.recompile(optimizer = optim.Adam(model.parameters(), lr=1e-3))
-# tm.recompile(optimizer = optim.Adam(model.parameters(), lr=1e-4))
-# tm.recompile(scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2))
+    # tm.optimizer
+    # tm.recompile(early_stop_loss = EarlyStopping(patience=4))
+    # tm.recompile(optimizer = optim.Adam(model.parameters(), lr=1e-3))
+    # tm.recompile(optimizer = optim.Adam(model.parameters(), lr=1e-4))
+    # tm.recompile(scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2))
 
 
 
 
 ################################################################################################################################
 
-# visualize
-x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
-x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
+if example:
+    # visualize
+    x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
+    x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
 
-with torch.no_grad():
-    model.eval()
-    y_mu, y_logvar = model(x_lin_add_const.to(device))
-    y_mu = y_mu.to('cpu')
-    y_std = torch.exp(0.5*y_logvar).to('cpu')
+    with torch.no_grad():
+        model.eval()
+        y_mu, y_logvar = model(x_lin_add_const.to(device))
+        y_mu = y_mu.to('cpu')
+        y_std = torch.exp(0.5*y_logvar).to('cpu')
 
-# # Gaussian
-# plt.figure()
-# plt.scatter(x_train, y_train, label='obs', alpha=0.5)
-# plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+if example:
+    # # Gaussian
+    # plt.figure()
+    # plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+    # plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
 
-# plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
-# plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
-# plt.legend()
-# plt.show()
+    # plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
+    # plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+    # plt.legend()
+    # plt.show()
 
-# Logit
-plt.figure()
-plt.scatter(x_train, y_train, label='obs', alpha=0.5)
-plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+if example:
+    # Logit
+    plt.figure()
+    plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+    plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
 
-plt.plot(x_lin, 1/(1+torch.exp(-y_mu)), alpha=0.5, color='mediumseagreen', label='pred_mu')
-plt.fill_between(x_lin.flatten(), 1/(1+torch.exp(-(y_mu-y_std))).flatten(), 1/(1+torch.exp(-(y_mu+y_std))).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
-plt.legend()
-plt.show()
-
-
-
+    plt.plot(x_lin, 1/(1+torch.exp(-y_mu)), alpha=0.5, color='mediumseagreen', label='pred_mu')
+    plt.fill_between(x_lin.flatten(), 1/(1+torch.exp(-(y_mu-y_std))).flatten(), 1/(1+torch.exp(-(y_mu+y_std))).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+    plt.legend()
+    plt.show()
 
 
-# valid std
-with torch.no_grad():
-    model.eval()
-    eval_mu, eval_logvar = model(x_train_add_const.to(device))
-    eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-    eval_std = torch.exp(0.5*eval_logvar)
-    residual_sigma = (eval_mu - y_train).std()
-    print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
-print(f"/ error_sigma :{error_sigma:.3f}")
-# print(f"/ error_sigma :{f.error_scale:.3f}")
+
+if example:
+    # valid std
+    with torch.no_grad():
+        model.eval()
+        eval_mu, eval_logvar = model(x_train_add_const.to(device))
+        eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+        eval_std = torch.exp(0.5*eval_logvar)
+        residual_sigma = (eval_mu - y_train).std()
+        print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
+    print(f"/ error_sigma :{error_sigma:.3f}")
+    # print(f"/ error_sigma :{f.error_scale:.3f}")
+    
 ###########################################################################################################
 ###########################################################################################################
 ###########################################################################################################
@@ -1113,7 +1081,7 @@ class BNN_Weight_4(nn.Module):
 
 ################################################################################################
 
-if learning_process:
+if example:
     # Initialize the model, optimizer
     # model = BNN_Weight_1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
     model = BNN_Weight_2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
@@ -1306,7 +1274,7 @@ class SampleEnsemble2(nn.Module):
 
 ################################################################################################
 
-if learning_process:
+if example:
     # model = SampleEnsemble1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)    # initial weight ensemble
     # model = SampleEnsemble1(input_dim=input_dim, hidden_dim=None, output_dim=output_dim, n_models=10)    # architecture ensemble
     model = SampleEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)    # initial weight ensemble
@@ -1506,7 +1474,7 @@ class BNN_FullEnsemble(nn.Module):
 
 ################################################################################################
 
-if learning_process:
+if example:
     model = BNN_FullEnsemble(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)    # initial weight ensemble
     # model = BNN_FullEnsemble(input_dim=input_dim, hidden_dim=None, output_dim=output_dim, n_models=10)    # architecture ensemble
     model.to(device)
