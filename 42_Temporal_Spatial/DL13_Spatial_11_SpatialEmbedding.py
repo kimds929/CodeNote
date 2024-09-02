@@ -98,8 +98,9 @@ class PeriodicEmbedding(nn.Module):
 
 
 # -------------------------------------------------------------------------------------------
+# ★ Main Embedding Block
 class SpatialEmbedding(nn.Module):
-    def __init__(self, coord_hidden_dim=32, coord_embed_dim=None, coord_depth=1,
+    def __init__(self, embed_dim=None, coord_hidden_dim=32, coord_embed_dim=None, coord_depth=1,
                 grid_size=10, grid_embed_dim=None, periodic_embed_dim=None, 
                 relative=False, euclidean_dist=False, angle=False):
         super().__init__()
@@ -135,6 +136,13 @@ class SpatialEmbedding(nn.Module):
 
         if self.angle:
             self.embed_dim += 1
+
+        if embed_dim is not None:
+            self.hidden_dim = self.embed_dim
+            self.embed_dim = embed_dim
+            self.hidden_layer = nn.Linear(self.hidden_dim, self.embed_dim)
+        else:
+            self.hidden_dim = None
 
     def forward(self, coord1, coord2):
         spatial_embeddings = []
@@ -176,26 +184,30 @@ class SpatialEmbedding(nn.Module):
             spatial_embeddings.append(angle)
 
         # combine
-        combined = torch.cat(spatial_embeddings, dim=1)
+        output = torch.cat(spatial_embeddings, dim=1)
         # embed_dim = coord_embed_dim * 2 + grid_embed_dim * 2 + periodic_embed_dim * 2 + 2(relative) + 1(euclidean_dist) + 1(angle)
-        return combined
+
+        if self.hidden_dim is not None:
+            output = self.hidden_layer(output)
+        return output
 
 # se = SpatialEmbedding(coord_hidden_dim=32, coord_embed_dim=4, coord_depth=1, grid_embed_dim=4, grid_size=10, periodic_embed_dim=3, relative=True, euclidean_dist=True, angle=True)
 # se(torch.rand(5,2), torch.rand(5,2)).shape
 
+# se = SpatialEmbedding(embed_dim=16, coord_hidden_dim=32, coord_embed_dim=4, coord_depth=1, grid_embed_dim=4, grid_size=10, periodic_embed_dim=3, relative=True, euclidean_dist=True, angle=True)
+# se(torch.rand(5,2), torch.rand(5,2)).shape
 
 # -------------------------------------------------------------------------------------------
-
 class SpatialPredictModel(nn.Module):
     def __init__(self, hidden_dim, output_dim, coord_hidden_dim=32, coord_embed_dim=None, coord_depth=1, grid_size=10, grid_embed_dim=None, periodic_embed_dim=None, 
                     relative=False, euclidean_dist=False, angle=False):
         super().__init__()
-        self.spatial_embedding = SpatialEmbedding(coord_hidden_dim=coord_hidden_dim, coord_embed_dim=coord_embed_dim, coord_depth=coord_depth,
+        self.spatial_embedding = SpatialEmbedding(embed_dim=hidden_dim, coord_hidden_dim=coord_hidden_dim, coord_embed_dim=coord_embed_dim, coord_depth=coord_depth,
                                                 grid_size=grid_size, grid_embed_dim=grid_embed_dim, periodic_embed_dim=periodic_embed_dim,
                                                 relative=relative, euclidean_dist=euclidean_dist, angle=angle)
 
         self.fc_block = nn.Sequential(
-            nn.Linear(self.spatial_embedding.embed_dim, hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             # nn.BatchNorm1d(hidden_dim),
             # nn.Dropout(0.5),

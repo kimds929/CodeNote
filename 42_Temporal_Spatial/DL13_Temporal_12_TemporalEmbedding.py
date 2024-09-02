@@ -38,6 +38,29 @@ class PeriodicEmbedding(nn.Module):
 
 
 # -------------------------------------------------------------------------------------------
+class TemporalEmbedding(nn.Module):
+    def __init__(self, input_dim, embed_dim, hidden_dim=None):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.embed_dim = input_dim * embed_dim
+
+        if hidden_dim is None:
+            self.temporal_embed_layers = nn.ModuleList([PeriodicEmbedding(input_dim=1, embed_dim=embed_dim) for _ in range(input_dim)])
+        else:
+            self.temporal_embed_layers = nn.ModuleList([PeriodicEmbedding(input_dim=1, embed_dim=hidden_dim) for _ in range(input_dim)])
+            self.hidden_layer = nn.Linear(input_dim*hidden_dim, embed_dim)
+            self.embed_dim = embed_dim
+    
+    def forward(self, x):
+        emb_outputs = [layer(x[:,i:i+1]) for i, layer in enumerate(self.temporal_embed_layers)]
+        output = torch.cat(emb_outputs, dim=1)
+        if self.hidden_dim is not None:
+            output = self.hidden_layer(output)
+
+        return output
+
+
+# -------------------------------------------------------------------------------------------
 class TimePredictModel(nn.Module):
     def __init__(self, input_dim=1, embed_dim=5, hidden_dim=32, output_dim=1):
         super().__init__()
