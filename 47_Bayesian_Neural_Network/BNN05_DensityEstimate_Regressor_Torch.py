@@ -808,7 +808,6 @@ if example:
         y_mu = y_mu.to('cpu')
         y_std = torch.exp(0.5*y_logvar).to('cpu')
 
-if example:
     # # Gaussian
     # plt.figure()
     # plt.scatter(x_train, y_train, label='obs', alpha=0.5)
@@ -819,7 +818,6 @@ if example:
     # plt.legend()
     # plt.show()
 
-if example:
     # Logit
     plt.figure()
     plt.scatter(x_train, y_train, label='obs', alpha=0.5)
@@ -843,7 +841,7 @@ if example:
         print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
     print(f"/ error_sigma :{error_sigma:.3f}")
     # print(f"/ error_sigma :{f.error_scale:.3f}")
-    
+
 ###########################################################################################################
 ###########################################################################################################
 ###########################################################################################################
