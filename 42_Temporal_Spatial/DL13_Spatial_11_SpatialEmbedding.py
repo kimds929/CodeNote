@@ -100,9 +100,19 @@ class PeriodicEmbedding(nn.Module):
 # -------------------------------------------------------------------------------------------
 # ★ Main Embedding Block
 class SpatialEmbedding(nn.Module):
-    def __init__(self, embed_dim=None, coord_hidden_dim=32, coord_embed_dim=None, coord_depth=1,
-                grid_size=10, grid_embed_dim=None, periodic_embed_dim=None, 
-                relative=False, euclidean_dist=False, angle=False):
+    def __init__(self, embed_dim=None, coord_hidden_dim=32, coord_embed_dim=8, coord_depth=2,
+                grid_size=10, grid_embed_dim=8, periodic_embed_dim=5, 
+                relative=True, euclidean_dist=True, angle=True):
+        """
+        embed_dim : (None) end with combined result
+        coord_embed_dim : (None) not use coordinate embedding
+        grid_embed_dim : (None) not use grid embedding
+        periodic_embed_dim : (None) not use periodic embedding
+        relative : (False) not use relative coordinate, (True) use relative coordinate
+        euclidean_dist : (False) not use euclidean distance, (True) use euclidean distance
+        angle : (False) not use angle, (True) use angle
+
+        """
         super().__init__()
         self.coord_hidden_dim = coord_hidden_dim        ## 32
         self.coord_embed_dim = coord_embed_dim          ## 4
@@ -192,6 +202,7 @@ class SpatialEmbedding(nn.Module):
         return output
 
 # se = SpatialEmbedding(coord_hidden_dim=32, coord_embed_dim=4, coord_depth=1, grid_embed_dim=4, grid_size=10, periodic_embed_dim=3, relative=True, euclidean_dist=True, angle=True)
+# se = SpatialEmbedding()
 # se(torch.rand(5,2), torch.rand(5,2)).shape
 
 # se = SpatialEmbedding(embed_dim=16, coord_hidden_dim=32, coord_embed_dim=4, coord_depth=1, grid_embed_dim=4, grid_size=10, periodic_embed_dim=3, relative=True, euclidean_dist=True, angle=True)
