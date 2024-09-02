@@ -190,6 +190,7 @@ class SpatialEmbedding(nn.Module):
 
         # angle
         if self.angle:
+            relative = coord2 - coord1
             angle = torch.atan2(relative[:,1], relative[:,0]).unsqueeze(1)  
             spatial_embeddings.append(angle)
 
