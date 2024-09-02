@@ -12,8 +12,11 @@ class PeriodicEmbedding(nn.Module):
     def __init__(self, input_dim, embed_dim):
         super().__init__()
         # Linear Component
-        self.linear_weights = nn.Parameter(torch.randn(input_dim, 1))
-        self.linear_bias = nn.Parameter(torch.randn(1, 1))
+        self.linear_layer = nn.Linear(input_dim , 1)
+        if embed_dim % 2 == 0:
+            self.linear_layer2 = nn.Linear(input_dim , 1)
+        else:
+            self.linear_layer2 = None
         
         # Periodic Components
         self.periodic_weights = nn.Parameter(torch.randn(input_dim, (embed_dim - 1)//2 ))
@@ -25,7 +28,7 @@ class PeriodicEmbedding(nn.Module):
 
     def forward(self, x):
         # Linear Component
-        linear_term = x @ self.linear_weights + self.linear_bias
+        linear_term = self.linear_layer(x)
         
         # Periodic Component
         periodic_term = torch.sin(x @ self.periodic_weights + self.periodic_bias)
@@ -34,10 +37,15 @@ class PeriodicEmbedding(nn.Module):
         nonlinear_term = torch.sign(torch.sin(x @ self.nonlinear_weights + self.nonlinear_bias))
         
         # Combine All Components
-        return torch.cat([linear_term, periodic_term, nonlinear_term], dim=-1)
+        if self.linear_layer2 is None:
+            return torch.cat([linear_term, periodic_term, nonlinear_term], dim=-1)
+        else:
+            linear_term2 = self.linear_layer2(x)
+            return torch.cat([linear_term, linear_term2, periodic_term, nonlinear_term], dim=-1)
 
 
 # -------------------------------------------------------------------------------------------
+# ★ Main Embedding
 class TemporalEmbedding(nn.Module):
     def __init__(self, input_dim, embed_dim, hidden_dim=None):
         super().__init__()
@@ -58,13 +66,14 @@ class TemporalEmbedding(nn.Module):
             output = self.hidden_layer(output)
 
         return output
-
+# te = TemporalEmbedding(1,5,32)
+# te(torch.rand(5,1))
 
 # -------------------------------------------------------------------------------------------
 class TimePredictModel(nn.Module):
     def __init__(self, input_dim=1, embed_dim=5, hidden_dim=32, output_dim=1):
         super().__init__()
-        self.periodic_embedding = PeriodicEmbedding(input_dim, embed_dim)
+        self.periodic_embedding = TemporalEmbedding(input_dim, embed_dim, hidden_dim)
 
         self.fc_block = nn.Sequential(
             nn.Linear(embed_dim, hidden_dim),

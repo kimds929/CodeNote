@@ -419,8 +419,9 @@ if example:
     # start_node, end_node = 12, 39
     # start_node, end_node = 16, 38
     # start_node, end_node = 48, 12
-    start_node, end_node = 8, 44
+    # start_node, end_node = 8, 44
     # start_node, end_node = 32, 47
+    # start_node, end_node = 27, 13
     dijkstra = Dijkstra(node_map.adj_matrix)
     shortest_distance, path = dijkstra.dijkstra(start_node, end_node)
     feature = np.append(node_map.centers[start_node], node_map.centers[end_node])
