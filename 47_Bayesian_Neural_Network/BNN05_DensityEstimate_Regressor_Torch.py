@@ -12,13 +12,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 example = False
 
-if example:
-    # Example data (replace this with your actual data)
-    batch_size = 64
-    input_dim_init = 1    # Dimension of input data
-    hidden_dim = 10   # Number of hidden units
-    output_dim = 1    # Dimension of latent space
-
 # (sample data) x_train / y_train --------------------------------------------------
 class UnknownFuncion():
     def __init__(self, n_polynorm=1, theta_scale=1, error_scale=None, normalize=True):
@@ -118,10 +111,10 @@ if example:
 
 
     # f = UnknownFuncion()
-    # f = UnknownFuncion(n_polynorm=2, normalize=True)
+    f = UnknownFuncion(n_polynorm=2)
     # f = UnknownFuncion(n_polynorm=3)
     # f = UnknownFuncion(n_polynorm=4)
-    f = UnknownFuncion(n_polynorm=5)
+    # f = UnknownFuncion(n_polynorm=5)
     # f = UnknownFuncion(n_polynorm=6)
     # f = UnknownFuncion(n_polynorm=7)
     # f = UnknownFuncion(n_polynorm=8)
@@ -138,6 +131,8 @@ if example:
     # y_train = y_true + error_scale*scale*torch.randn((x_train_add_const.shape[0],1))
 
     # Dataset and DataLoader
+    batch_size = 64
+
     train_dataset = TensorDataset(x_train_add_const, y_train)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
@@ -178,281 +173,6 @@ if example:
 
 
 
-################################################################################################
-# DirectlyInferenceNN ##########################################################################
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-class DirectEstimate(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        super().__init__()
-
-        self.direct_block = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim)
-            ,nn.ReLU()
-            ,nn.Linear(hidden_dim, hidden_dim)
-            ,nn.ReLU()
-            ,nn.Linear(hidden_dim, output_dim*2)
-        )   
-
-        self.output_dim = output_dim
-
-    def forward(self, x):
-        # Predict mu and log(sigma^2)
-        mu_logvar = self.direct_block(x)
-        mu, logvar = torch.split(mu_logvar, self.output_dim, dim=1)
-        logvar = torch.clamp(logvar, min=-5, max=10) 
-        
-        return mu, logvar
-
-
-# -----------------------------------------------------------------------------------------------
-class DirectEnsemble1(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, n_models=10):
-        super().__init__()
-        self.models = nn.ModuleList([BNN_Direct(input_dim, hidden_dim, output_dim) for _ in range(n_models)])
-
-    def forward(self, x):
-        ensemble_outputs = torch.stack([torch.stack(model(x)) for model in self.models])
-        mu, logvar = torch.mean(ensemble_outputs, dim=0)
-        # logvar = torch.clamp(logvar, min=-5, max=10) 
-        return mu, logvar
-
-# ★Mu/Var Ensemble only last layer
-class DirectEnsemble2(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, n_models=10):
-        super().__init__()
-        self.basic_block = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim)
-            ,nn.ReLU()
-            ,nn.Linear(hidden_dim, hidden_dim)
-            ,nn.ReLU()
-            ,nn.Linear(hidden_dim, hidden_dim)
-            ,nn.ReLU()
-            ,nn.Linear(hidden_dim, output_dim*2*n_models)
-        )
-        self.n_models = n_models
-
-        self.output_dim = output_dim
-
-    # train step
-    def train_forward(self, x):
-        mu_logvar = self.basic_block(x)
-        mu, logvar = torch.split(mu_logvar, self.n_models, dim=1)
-        logvar = torch.clamp(logvar, min=-10, max=20) 
-        return mu, logvar
-
-    # eval step : 여러 번 샘플링하여 평균과 분산 계산
-    def predict(self, x, idx=None):
-        mu, logvar = self.train_forward(x)
-        if idx is None:
-            mu_mean = torch.mean(mu, dim=1, keepdims=True)
-            logvar_mean = torch.mean(logvar, dim=1, keepdims=True)
-        else:
-            mu_mean = torch.mean(mu[:, idx], dim=1, keepdims=True)
-            logvar_mean = torch.mean(logvar[:, idx], dim=1, keepdims=True)
-        return  mu_mean, logvar_mean
-
-    def forward(self, x):
-        if self.training:
-            return self.train_forward(x)
-        else:
-            return self.predict(x)
-
-# ★Mu/Var Ensemble only last layer
-class FeedForwardBlock(nn.Module):
-    def __init__(self, input_dim, output_dim, activation=nn.ReLU(),
-                batchNorm=True,  dropout=0.5):
-        super().__init__()
-        ff_block = [nn.Linear(input_dim, output_dim)]
-        if activation:
-            ff_block.append(activation)
-        if batchNorm:
-            ff_block.append(nn.BatchNorm1d(output_dim))
-        if dropout > 0:
-            ff_block.append(nn.Dropout(dropout))
-        self.ff_block = nn.Sequential(*ff_block)
-    
-    def forward(self, x):
-        return self.ff_block(x)
-
-class DirectEnsemble3(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, n_layers=3, n_models=10):
-        super().__init__()
-        
-        self.EnsembleBlock = nn.ModuleDict({'in_layer':FeedForwardBlock(input_dim, hidden_dim)})
-
-        for h_idx in range(n_layers):
-            if h_idx < n_layers-1:
-               self.EnsembleBlock[f'hidden_layer{h_idx+1}'] = FeedForwardBlock(hidden_dim, hidden_dim)
-            else:
-                self.EnsembleBlock['out_layer'] = FeedForwardBlock(hidden_dim, output_dim*2*n_models, activation=False, batchNorm=False, dropout=0)
-        self.n_layers = n_layers
-        self.n_models = n_models
-        self.output_dim = output_dim
-
-    # train step
-    def train_forward(self, x):
-        for layer_name, layer in self.EnsembleBlock.items():
-            if layer_name == 'in_layer' or layer_name == 'out_layer':
-                x = layer(x)
-            else:
-                x = layer(x) + x    # residual connection
-
-        mu_logvar = (x)
-        mu, logvar = torch.split(mu_logvar, self.n_models, dim=1)
-        logvar = torch.clamp(logvar, min=-10, max=20) 
-        return mu, logvar
-
-    # eval step : 여러 번 샘플링하여 평균과 분산 계산
-    def predict(self, x, idx=None):
-        mu, logvar = self.train_forward(x)
-        if idx is None:
-            mu_mean = torch.mean(mu, dim=1, keepdims=True)
-            logvar_mean = torch.mean(logvar, dim=1, keepdims=True)
-        else:
-            mu_mean = torch.mean(mu[:, idx], dim=1, keepdims=True)
-            logvar_mean = torch.mean(logvar[:, idx], dim=1, keepdims=True)
-        return  mu_mean, logvar_mean
-
-    def forward(self, x):
-        if self.training:
-            return self.train_forward(x)
-        else:
-            return self.predict(x)
-
-
-################################################################################################
-
-if example:
-    # Initialize the model, optimizer
-    # model = DirectEstimate(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim)
-    # model = DirectEnsemble1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
-    # model = DirectEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
-    model = DirectEnsemble3(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
-    model.to(device)
-
-
-    # -----------------------------------------------------------------------------------------------
-    # Hyperparameters
-    learning_rate = 1e-3
-    # beta = 0.5
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    loss_gaussian = nn.GaussianNLLLoss()
-    # mu_loss_weight = 0.5  # mu에 대한 손실 가중치
-    # logvar_loss_weight = 0.1  # log_var에 대한 손실 가중치
-
-    num_epochs = 100
-
-    # Training loop
-    for epoch in range(num_epochs):
-        model.train()
-        for batch_idx, (batch_x, batch_y) in enumerate(train_loader):
-            batch_x = batch_x.to(device)
-            batch_y = batch_y.to(device)
-
-            optimizer.zero_grad()
-            
-            # Forward pass ----------------------------------------
-            loss = gaussian_loss(model, batch_x, batch_y)
-            # mu, logvar = model(batch_x)
-            # std = torch.exp(0.5*logvar)
-            
-            # (Loss Parameters) ----------------------------------------
-            # # fixed variance : # Reparameterization trick: z = mu + sigma * epsilon
-            # z = mu + std * torch.randn_like(std)    
-            # loss = torch.sum( (z - batch_y)**2)
-
-            # # variational variance : neg_log_likelihood
-            # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
-            # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
-            # loss = loss_gaussian(mu, batch_y, std**2)
-
-            # # weigted variantional variance
-            # gaussian_loss = torch.exp(-logvar) * (batch_y - mu)**2 + logvar
-            # loss = mu_loss_weight * torch.mean((batch_y - mu)**2) + logvar_loss_weight * torch.mean(gaussian_loss)
-
-            
-            # (KL-Divergence Loss) For anchoring response range \hat{y} ~ N(0,1) 
-            # loss_kl = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-            # loss_kl = 0.5 * torch.sum(mu**2 + std**2 - torch.log(std**2) - 1)
-            
-            # Compute loss ----------------------------------------
-            # loss = loss + beta * loss_kl
-            
-            # Backward pass and optimize
-            loss.backward()
-            optimizer.step()
-    
-        if epoch % 25 ==0:
-            with torch.no_grad():
-                model.eval()
-                eval_mu, eval_logvar = model(x_train_add_const.to(device))
-                eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-                eval_std = torch.exp(0.5*eval_logvar)
-                residual_sigma = (eval_mu - y_train).std()
-            print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
-            # print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, Loss_recon: {loss_recon:.2f}, Loss_KL: {loss_kl:.2f}')
-    # -----------------------------------------------------------------------------------------------
-
-
-    # visualize
-    x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
-    x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
-
-    with torch.no_grad():
-        model.eval()
-        y_mu, y_logvar = model(x_lin_add_const.to(device))
-        y_mu = y_mu.to('cpu')
-        y_std = torch.exp(0.5*y_logvar).to('cpu')
-
-    plt.figure()
-    plt.scatter(x_train, y_train, label='obs', alpha=0.5)
-    plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
-
-    plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
-    plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
-    plt.legend()
-    plt.show()
-
-    # valid std
-    with torch.no_grad():
-        model.eval()
-        eval_mu, eval_logvar = model(x_train_add_const.to(device))
-        eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
-        eval_std = torch.exp(0.5*eval_logvar)
-        residual_sigma = (eval_mu - y_train).std()
-        print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
-    print(f"/ error_sigma :{error_sigma:.3f}")
-    # print(f"/ error_sigma :{f.error_scale:.3f}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -478,6 +198,77 @@ import pandas as pd
 from datetime import datetime
 from tqdm.notebook import tqdm
 from IPython.display import clear_output, display, update_display
+
+# ------------------------------------------------------------------------------------------
+
+# Basic Block of DirectEnsemble
+class FeedForwardBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, activation=nn.ReLU(),
+                batchNorm=True,  dropout=0.2):
+        super().__init__()
+        ff_block = [nn.Linear(input_dim, output_dim)]
+        if activation:
+            ff_block.append(activation)
+        if batchNorm:
+            ff_block.append(nn.BatchNorm1d(output_dim))
+        if dropout > 0:
+            ff_block.append(nn.Dropout(dropout))
+        self.ff_block = nn.Sequential(*ff_block)
+    
+    def forward(self, x):
+        return self.ff_block(x)
+
+# ★Mu/Var Ensemble only last layer
+class DirectEnsemble(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_layers=3, n_models = 10, n_output=1, activation=nn.ReLU(), batchNorm=False, dropout=0):
+        super().__init__()
+
+        # fc block
+        self.fc_block = nn.ModuleDict({'in_layer':FeedForwardBlock(input_dim, hidden_dim, activation=activation, batchNorm=batchNorm, dropout=dropout)})
+
+        out_dim = output_dim*n_models if n_output == 1 else output_dim*n_output*n_models
+        for h_idx in range(n_layers):
+            if h_idx < n_layers-1:
+               self.fc_block[f'hidden_layer{h_idx+1}'] = FeedForwardBlock(hidden_dim, hidden_dim, activation=activation,batchNorm=batchNorm, dropout=dropout)
+            else:
+                self.fc_block['out_layer'] = FeedForwardBlock(hidden_dim, out_dim, activation=False, batchNorm=False, dropout=0)
+        
+        self.output_dim = output_dim
+        self.n_output = n_output
+        self.n_layers = n_layers
+        self.n_models = n_models
+
+    def train_forward(self, x):
+        for layer_name, layer in self.fc_block.items():
+            if layer_name == 'in_layer' or layer_name == 'out_layer':
+                x = layer(x)
+            else:
+                x = layer(x) + x    # residual connection
+        
+        if self.n_output == 1:
+            return x
+        else:
+            return torch.split(x, self.output_dim*self.n_models, dim=1)
+
+    def predict(self, x, idx=None):
+        if self.n_output == 1:
+            if idx is None:
+                return self.train_forward(x).mean(dim=1, keepdims=True)
+            else:
+                return self.train_forward(x)[:, idx].mean(dim=1, keepdims=True)
+        else:
+            if idx is None:
+                return tuple([output.mean(dim=1, keepdims=True) for output in self.train_forward(x)])
+            else:
+                return tuple([output[:, idx].mean(dim=1, keepdims=True) for output in self.train_forward(x)])
+
+    def forward(self, x, idx=None):
+        if self.training:
+            return self.train_forward(x)
+        else:
+            return self.predict(x, idx)
+
+# ------------------------------------------------------------------------------------------
 
 class TorchModeling():
     def __init__(self, model, device='cpu'):
@@ -707,6 +498,7 @@ class TorchModeling():
 # exec(DS_Torch.text)
 
 
+
 import numpy as np
 import pandas as pd
 import missingno as msno
@@ -726,9 +518,6 @@ if example:
     #     from DS_TorchModule import ScaledDotProductAttention, MultiHeadAttentionLayer
 
 
-
-
-
 # loss_mse = nn.MSELoss()
 def mse_loss(model, x, y):
     logmu = model(x)
@@ -736,15 +525,30 @@ def mse_loss(model, x, y):
     loss = torch.nn.functional.mse_loss(mu, y)
     return loss
 
-
 # loss_gaussian = nn.GaussianNLLLoss()
 def gaussian_loss(model, x, y):
     mu, logvar = model(x)
+    # var = torch.nn.functional.softplus(logvar)
+    # std = torch.sqrt(var)
+    logvar = torch.clamp(logvar, min=-5, max=5)
     std = torch.exp(0.5*logvar)
     loss = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
     # loss = loss_gaussian(mu, y, std**2)
     return loss
 
+# # weighted gaussian loss
+# def weighted_gaussian_loss(model, x, y, beta=0.1):
+#     mu, logvar = model(x)
+#     logvar = torch.clamp(logvar, min=-10, max=10)
+#     std = torch.exp(0.5*logvar)
+#     # loss = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
+
+#     mu_loss = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
+#     var_loss = beta * torch.mean(std**2)
+#     loss = mu_loss + var_loss
+#     return loss
+
+# loss_bernoulli
 def bernoulli_loss(model, x, y):
     mu, logvar = model(x)
     std = torch.exp(0.5*logvar)
@@ -753,17 +557,21 @@ def bernoulli_loss(model, x, y):
     # loss = loss_gaussian(mu, logit, std**2)
     return loss
 
+
+
 if example:
-    f.true_z(x_train).numpy().astype(int)
+    # f.true_z(x_train).numpy().astype(int)
     # f.forward_z(x_train).numpy().astype(int)
     # f.true_z(x_train).numpy().astype(int)
-    model(x_train_add_const.to(device))
+    # model(x_train_add_const.to(device))
 
-    # model = DirectEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
-    model = DirectEnsemble3(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10, n_layers=5)
-    # model = SampleEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_samples=10, n_layers=5)
-    # [name for name, layer in model.EnsembleBlock.named_children()]
+    # hyperparameters
+    input_dim_init = 1    # Dimension of input data
+    hidden_dim = 10   # Number of hidden units
+    output_dim = 1    # Dimension of latent space
 
+    model = DirectEnsemble(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim,
+                        n_output=2, n_models=10, n_layers=3, batchNorm=True, dropout=0.2)
 
     optimizer = optim.Adam(model.parameters(), lr=1e-2)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
@@ -771,8 +579,9 @@ if example:
 
     tm = TorchModeling(model=model, device=device)
     tm.compile(optimizer=optimizer
-                # ,loss_function = gaussian_loss
-                ,loss_function = bernoulli_loss
+                ,loss_function = gaussian_loss
+                # ,loss_function = weighted_gaussian_loss
+                # ,loss_function = bernoulli_loss
                 , scheduler=scheduler
                 , early_stop_loss = EarlyStopping(patience=5)
                 )
@@ -808,25 +617,31 @@ if example:
         y_mu = y_mu.to('cpu')
         y_std = torch.exp(0.5*y_logvar).to('cpu')
 
-    # # Gaussian
-    # plt.figure()
-    # plt.scatter(x_train, y_train, label='obs', alpha=0.5)
-    # plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+    # # MSE  -----------------------------
+    # with torch.no_grad():
+    #     model.eval()
+    #     y_mu = model(x_lin_add_const.to(device))
+    #     y_mu = y_mu.to('cpu')
 
-    # plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
-    # plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
-    # plt.legend()
-    # plt.show()
-
-    # Logit
+    # Gaussian Plot -----------------------------
     plt.figure()
     plt.scatter(x_train, y_train, label='obs', alpha=0.5)
     plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
 
-    plt.plot(x_lin, 1/(1+torch.exp(-y_mu)), alpha=0.5, color='mediumseagreen', label='pred_mu')
-    plt.fill_between(x_lin.flatten(), 1/(1+torch.exp(-(y_mu-y_std))).flatten(), 1/(1+torch.exp(-(y_mu+y_std))).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
-    plt.legend()
+    plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
+    plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+    plt.legend(loc='upper right')
     plt.show()
+
+    # # Logit  -----------------------------
+    # plt.figure()
+    # plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+    # plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+
+    # plt.plot(x_lin, 1/(1+torch.exp(-y_mu)), alpha=0.5, color='mediumseagreen', label='pred_mu')
+    # plt.fill_between(x_lin.flatten(), 1/(1+torch.exp(-(y_mu-y_std))).flatten(), 1/(1+torch.exp(-(y_mu+y_std))).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+    # plt.legend(loc='upper right')
+    # plt.show()
 
 
 
@@ -868,6 +683,292 @@ if example:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+################################################################################################
+# DirectlyInferenceNN ##########################################################################
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class DirectEstimate(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super().__init__()
+
+        self.direct_block = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, output_dim*2)
+        )   
+
+        self.output_dim = output_dim
+
+    def forward(self, x):
+        # Predict mu and log(sigma^2)
+        mu_logvar = self.direct_block(x)
+        mu, logvar = torch.split(mu_logvar, self.output_dim, dim=1)
+        logvar = torch.clamp(logvar, min=-5, max=10) 
+        
+        return mu, logvar
+
+
+# -----------------------------------------------------------------------------------------------
+class DirectEnsemble1(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_models=10):
+        super().__init__()
+        self.models = nn.ModuleList([BNN_Direct(input_dim, hidden_dim, output_dim) for _ in range(n_models)])
+
+    def forward(self, x):
+        ensemble_outputs = torch.stack([torch.stack(model(x)) for model in self.models])
+        mu, logvar = torch.mean(ensemble_outputs, dim=0)
+        # logvar = torch.clamp(logvar, min=-5, max=10) 
+        return mu, logvar
+
+# ★Mu/Var Ensemble only last layer
+class DirectEnsemble2(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_models=10):
+        super().__init__()
+        self.basic_block = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, output_dim*2*n_models)
+        )
+        self.n_models = n_models
+
+        self.output_dim = output_dim
+
+    # train step
+    def train_forward(self, x):
+        mu_logvar = self.basic_block(x)
+        mu, logvar = torch.split(mu_logvar, self.n_models, dim=1)
+        logvar = torch.clamp(logvar, min=-10, max=20) 
+        return mu, logvar
+
+    # eval step : 여러 번 샘플링하여 평균과 분산 계산
+    def predict(self, x, idx=None):
+        mu, logvar = self.train_forward(x)
+        if idx is None:
+            mu_mean = torch.mean(mu, dim=1, keepdims=True)
+            logvar_mean = torch.mean(logvar, dim=1, keepdims=True)
+        else:
+            mu_mean = torch.mean(mu[:, idx], dim=1, keepdims=True)
+            logvar_mean = torch.mean(logvar[:, idx], dim=1, keepdims=True)
+        return  mu_mean, logvar_mean
+
+    def forward(self, x):
+        if self.training:
+            return self.train_forward(x)
+        else:
+            return self.predict(x)
+
+# ★Mu/Var Ensemble only last layer
+class FeedForwardBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, activation=nn.ReLU(),
+                batchNorm=True,  dropout=0.2):
+        super().__init__()
+        ff_block = [nn.Linear(input_dim, output_dim)]
+        if activation:
+            ff_block.append(activation)
+        if batchNorm:
+            ff_block.append(nn.BatchNorm1d(output_dim))
+        if dropout > 0:
+            ff_block.append(nn.Dropout(dropout))
+        self.ff_block = nn.Sequential(*ff_block)
+    
+    def forward(self, x):
+        return self.ff_block(x)
+
+class DirectEnsemble(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_layers=3, n_models = 10, n_output=1, batchNorm=False, dropout=0):
+        super().__init__()
+
+        # fc block
+        self.fc_block = nn.ModuleDict({'in_layer':FeedForwardBlock(input_dim, hidden_dim, batchNorm=batchNorm, dropout=dropout)})
+
+        out_dim = output_dim*n_models if n_output == 1 else output_dim*n_output*n_models
+        for h_idx in range(n_layers):
+            if h_idx < n_layers-1:
+               self.fc_block[f'hidden_layer{h_idx+1}'] = FeedForwardBlock(hidden_dim, hidden_dim, batchNorm=batchNorm, dropout=dropout)
+            else:
+                self.fc_block['out_layer'] = FeedForwardBlock(hidden_dim, out_dim, activation=False, batchNorm=False, dropout=0)
+        
+        self.output_dim = output_dim
+        self.n_output = n_output
+        self.n_layers = n_layers
+        self.n_models = n_models
+
+    def train_forward(self, x):
+        for layer_name, layer in self.fc_block.items():
+            if layer_name == 'in_layer' or layer_name == 'out_layer':
+                x = layer(x)
+            else:
+                x = layer(x) + x    # residual connection
+        
+        if self.n_output == 1:
+            return x
+        else:
+            return torch.split(x, self.output_dim*self.n_models, dim=1)
+
+    def predict(self, x, idx=None):
+        if self.n_output == 1:
+            if idx is None:
+                return self.train_forward(x).mean(dim=1, keepdims=True)
+            else:
+                return self.train_forward(x)[:, idx].mean(dim=1, keepdims=True)
+        else:
+            if idx is None:
+                return tuple([output.mean(dim=1, keepdims=True) for output in self.train_forward(x)])
+            else:
+                return tuple([output[:, idx].mean(dim=1, keepdims=True) for output in self.train_forward(x)])
+
+    def forward(self, x, idx=None):
+        if self.training:
+            return self.train_forward(x)
+        else:
+            return self.predict(x, idx)
+
+
+################################################################################################
+
+if example:
+    # Initialize the model, optimizer
+    # hyperparameters
+    input_dim_init = 1    # Dimension of input data
+    hidden_dim = 10   # Number of hidden units
+    output_dim = 1    # Dimension of latent space
+
+
+    # model = DirectEstimate(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim)
+    # model = DirectEnsemble1(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=10)
+    # model = DirectEnsemble2(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5)
+    model = DirectEnsemble(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, n_models=5, n_output=2)
+    model.to(device)
+
+    # -----------------------------------------------------------------------------------------------
+    # Hyperparameters
+    learning_rate = 1e-2
+    # beta = 0.5
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    loss_gaussian = nn.GaussianNLLLoss()
+    # mu_loss_weight = 0.5  # mu에 대한 손실 가중치
+    # logvar_loss_weight = 0.1  # log_var에 대한 손실 가중치
+
+    num_epochs = 100
+
+    # Training loop
+    for epoch in range(num_epochs):
+        model.train()
+        for batch_idx, (batch_x, batch_y) in enumerate(train_loader):
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
+
+            optimizer.zero_grad()
+            
+            # Forward pass ----------------------------------------
+            # loss = gaussian_loss(model, batch_x, batch_y)
+            mu, logvar = model(batch_x)
+            std = torch.exp(0.5*logvar)
+            
+            # (Loss Parameters) ----------------------------------------
+            # # fixed variance : # Reparameterization trick: z = mu + sigma * epsilon
+            # z = mu + std * torch.randn_like(std)    
+            # loss = torch.sum( (z - batch_y)**2)
+
+            # # variational variance : neg_log_likelihood
+            # loss = torch.sum(0.5 * torch.log(std**2) + 0.5 * (1/std**2) * (batch_y - mu) ** 2)
+            # loss = -torch.distributions.Normal(mu, std).log_prob(batch_y).sum()
+            loss = loss_gaussian(mu, batch_y, std**2)
+
+            # # weigted variantional variance
+            # loss = torch.mean(torch.exp(-logvar) * (batch_y - mu)**2 + logvar)
+            # loss = mu_loss_weight * torch.mean((batch_y - mu)**2) + logvar_loss_weight * torch.mean(gaussian_loss)
+
+            
+            # (KL-Divergence Loss) For anchoring response range \hat{y} ~ N(0,1) 
+            # loss_kl = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+            # loss_kl = 0.5 * torch.sum(mu**2 + std**2 - torch.log(std**2) - 1)
+            
+            # Compute loss ----------------------------------------
+            # loss = loss + beta * loss_kl
+            
+            # Backward pass and optimize
+            loss.backward()
+            optimizer.step()
+    
+        if epoch % 25 ==0:
+            with torch.no_grad():
+                model.eval()
+                eval_mu, eval_logvar = model(x_train_add_const.to(device))
+                eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+                eval_std = torch.exp(0.5*eval_logvar)
+                residual_sigma = (eval_mu - y_train).std()
+            print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, mu: {torch.mean(mu):.2f}, resid_std: {residual_sigma:.2f}')
+            # print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.2f}, Loss_recon: {loss_recon:.2f}, Loss_KL: {loss_kl:.2f}')
+    # -----------------------------------------------------------------------------------------------
+
+
+    # visualize
+    x_lin = torch.linspace(x_train.min(),x_train.max(),300).reshape(-1,1)
+    x_lin_add_const = torch.concat([x_lin, torch.ones_like(x_lin)], axis=1)
+
+    with torch.no_grad():
+        model.eval()
+        y_mu, y_logvar = model(x_lin_add_const.to(device))
+        y_mu = y_mu.to('cpu')
+        y_std = torch.exp(0.5*y_logvar).to('cpu')
+
+    plt.figure()
+    plt.scatter(x_train, y_train, label='obs', alpha=0.5)
+    plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true', alpha=0.5)
+
+    plt.plot(x_lin, y_mu, alpha=0.5, color='mediumseagreen', label='pred_mu')
+    plt.fill_between(x_lin.flatten(), (y_mu-y_std).flatten(), (y_mu+y_std).flatten(), color='mediumseagreen', alpha=0.2, label='pred_var')
+    plt.legend()
+    plt.show()
+
+    # valid std
+    with torch.no_grad():
+        model.eval()
+        eval_mu, eval_logvar = model(x_train_add_const.to(device))
+        eval_mu, eval_logvar = eval_mu.to('cpu'), eval_logvar.to('cpu')
+        eval_std = torch.exp(0.5*eval_logvar)
+        residual_sigma = (eval_mu - y_train).std()
+        print(f"residual_sigma : {residual_sigma:.3f}", end =" ")
+    print(f"/ error_sigma :{error_sigma:.3f}")
+    # print(f"/ error_sigma :{f.error_scale:.3f}")
 
 
 
