@@ -206,8 +206,28 @@ class SpatialEmbedding(nn.Module):
 # se = SpatialEmbedding()
 # se(torch.rand(5,2), torch.rand(5,2)).shape
 
+
 # se = SpatialEmbedding(embed_dim=16, coord_hidden_dim=32, coord_embed_dim=4, coord_depth=1, grid_embed_dim=4, grid_size=10, periodic_embed_dim=3, relative=True, euclidean_dist=True, angle=True)
 # se(torch.rand(5,2), torch.rand(5,2)).shape
+
+# se = SpatialEmbedding(coord_hidden_dim=4, coord_embed_dim=4, coord_depth=1, grid_embed_dim=4, 
+#                     grid_size=10, periodic_embed_dim=3, relative=True, euclidean_dist=True, angle=True)
+
+# x1, x2 = torch.rand(1,2), torch.rand(1,2)
+
+# plt.scatter(x1[0][0], x1[0][1], s=70)
+# plt.text(x1[0][0]+0.01, x1[0][1]+0.01,'x1')
+# plt.scatter(x2[0][0], x2[0][1], s=70)
+# plt.text(x2[0][0]+0.01, x2[0][1]+0.01,'x2')
+# plt.xlim(0,1)
+# plt.ylim(0,1)
+
+# spatial_emb = se(x1, x2)
+# for i in range(spatial_emb.shape[1]):
+#     plt.plot(spatial_emb[:,i].item())
+# spatial_emb
+
+
 
 # -------------------------------------------------------------------------------------------
 class SpatialPredictModel(nn.Module):
@@ -218,22 +238,31 @@ class SpatialPredictModel(nn.Module):
                                                 grid_size=grid_size, grid_embed_dim=grid_embed_dim, periodic_embed_dim=periodic_embed_dim,
                                                 relative=relative, euclidean_dist=euclidean_dist, angle=angle)
 
-        self.fc_block = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            # nn.BatchNorm1d(hidden_dim),
-            # nn.Dropout(0.5),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            # nn.BatchNorm1d(hidden_dim),
-            # nn.Dropout(0.5),
-            nn.Linear(hidden_dim, output_dim)
-        )
+        self.Linear1 = nn.Linear(hidden_dim, hidden_dim)
+        self.Linear2 = nn.Linear(hidden_dim, hidden_dim)
+        self.Linear3 = nn.Linear(hidden_dim, output_dim)
+        self.relu = nn.ReLU()
+        # self.fc_block = nn.Sequential(
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     # nn.BatchNorm1d(hidden_dim),
+        #     # nn.Dropout(0.5),
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     # nn.BatchNorm1d(hidden_dim),
+        #     # nn.Dropout(0.1),
+        #     nn.Linear(hidden_dim, output_dim)
+        # )
 
     def forward(self, coord1, coord2):
-        spatial_embed = self.spatial_embedding(coord1, coord2)
-        output = self.fc_block(spatial_embed)
-        return output
+        x = self.spatial_embedding(coord1, coord2)
+        # x = self.relu(x)
+        x = self.Linear1(x) + x
+        x = self.relu(x)
+        x = self.Linear2(x) + x
+        x = self.relu(x)
+        x = self.Linear3(x)
+        return x
 
 # model = SpatialPredictModel(hidden_dim=64, output_dim=1,
 #                             coord_hidden_dim=32, coord_embed_dim=4, coord_depth=1, grid_size=10, grid_embed_dim=4, periodic_embed_dim=3, 
@@ -380,16 +409,14 @@ if example:
         from DS_Torch import TorchDataLoader, TorchModeling, AutoML
 
 
-
     # device
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
 
     model = SpatialPredictModel(hidden_dim=128, output_dim=1,
                                 coord_hidden_dim=64, coord_embed_dim=16, coord_depth=3, grid_size=30, grid_embed_dim=16, periodic_embed_dim=9, 
                                 relative=True, euclidean_dist=True, angle=True)
-    # model = FullyConnectedModel(hidden_dim=128, output_dim=1, fc_hidden_dim=64, fc_embed_dim=16,
-    #                           n_layers=5, batchNorm=False, dropout=0.5)
+    # model = FullyConnectedModel(hidden_dim=128, output_dim=1, fc_hidden_dim=64, fc_embed_dim=64,
+    #                           n_layers=5, batchNorm=True, dropout=0)
     sum(p.numel() for p in model.parameters())    # the number of parameters in model
 
     # loss_mse = nn.MSELoss()
@@ -406,7 +433,7 @@ if example:
                 , loss_function = mse_loss
                 , early_stop_loss = EarlyStopping(patience=5)
                 )
-    tm.train_model(train_loader=train_loader, epochs=100, display_earlystop_result=True, early_stop=False)
+    tm.train_model(train_loader=train_loader, epochs=200, display_earlystop_result=True, early_stop=False)
     # tm.test_model(test_loader=test_loader)
     tm.recompile(optimizer=optim.Adam(model.parameters(), lr=1e-4))
 
@@ -428,8 +455,8 @@ if example:
 # --------------------------------------------------------------------------------------------------------------------------------
 if example:
     start_node, end_node = np.random.choice(np.arange(n_nodes), size=2, replace=False)
-    # start_node, end_node = 12, 39
-    # start_node, end_node = 16, 38
+    start_node, end_node = 12, 39
+    start_node, end_node = 16, 38
     # start_node, end_node = 48, 12
     # start_node, end_node = 8, 44
     # start_node, end_node = 32, 47
@@ -445,10 +472,11 @@ if example:
         pred = model(x[:,:2].to(device), x[:,2:].to(device))
         pred_arr = pred.to('cpu').numpy()
 
-    print(pred.item(), dist)
+    summary = f"SpatialEmbedding (500 epoch)\npredict: {pred.item():.2f}, true: {dist:.2f}"
+    print(summary)
     # start_node, end_node
-    # visualize_graph(centers=node_map.centers, adjacent_matrix=node_map.adj_matrix,
-    #                     path=path, distance=shortest_distance)
+    visualize_graph(centers=node_map.centers, adjacent_matrix=node_map.adj_matrix,
+                        path=path, distance=shortest_distance, title=summary)
 
 
 # --------------------------------------------------------------------------------------------------------------------------------

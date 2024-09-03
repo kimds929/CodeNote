@@ -155,9 +155,10 @@ if example:
     embedding = periodic_embed(time_data_tensor)
     print(embedding.shape)
 
+    plt.figure(figsize=(14,6))
     for ei in range(em_dim):
         plt.plot(time_data.ravel(), embedding[:,ei].ravel().detach().numpy(), label=ei)
-    plt.legend()
+    plt.legend(loc='upper right')
     plt.show()
 
  
@@ -169,20 +170,24 @@ def sine_wave(x):
 def square_wave(x, period=1.0):
     return np.sign(np.sin(2 * np.pi * x / period))
 
+def triangle_wave(x, freq=1):
+    return 2 * np.abs(np.arcsin(np.sin(freq * x))) / np.pi
+
 # plt.plot(periodic_improve(time_data*24*60))
 
 if example:
     # time_data_x = np.linspace(0, 7, 7 * 60*24, endpoint=False)
     time_data_x = np.linspace(0, 7, 7 * 24*6, endpoint=False)
 
-    # period_y = sine_wave(time_data_x)
-    period_y = square_wave(time_data_x)
+    period_y = sine_wave(time_data_x)
+    # period_y = square_wave(time_data_x)
+    # period_y = triangle_wave(time_data_x, freq=2)
     # period_y = periodic_improve(time_data_x*60*24)
 
     train_x = torch.tensor(time_data_x.astype(np.float32).reshape(-1, 1))
     train_y = torch.tensor(period_y.astype(np.float32).reshape(-1,1))
 
-    plt.figure()
+    plt.figure(figsize=(14,6))
     plt.plot(time_data_x, period_y)
     plt.show()
 
@@ -210,8 +215,8 @@ if example:
 
     # 모델 초기화
     model = TimePredictModel(input_dim=1, embed_dim=5, hidden_dim=32, output_dim=1) 
-    # model = FullyConnectedModel(input_dim=1, hidden_dim=64, output_dim=1, n_layers=5)
-    # sum(p.numel() for p in model.parameters())    # the number of parameters in model
+    # model = FullyConnectedModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3)
+    sum(p.numel() for p in model.parameters())    # the number of parameters in model
 
     # loss_mse = nn.MSELoss()
     def mse_loss(model, x, y):
@@ -227,7 +232,7 @@ if example:
                 , loss_function = mse_loss
                 , early_stop_loss = EarlyStopping(patience=5)
                 )
-    tm.train_model(train_loader=train_loader, epochs=100, display_earlystop_result=True, early_stop=False)
+    tm.train_model(train_loader=train_loader, epochs=900, display_earlystop_result=True, early_stop=False)
     # tm.test_model(test_loader=test_loader)
     # tm.recompile(optimizer=optim.Adam(model.parameters(), lr=1e-3))
 
