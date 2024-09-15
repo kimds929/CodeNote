@@ -33,59 +33,65 @@ P1[0][1]
 
 # value_function이 주어졌을때 → MRP문제가 됨
 
-# state =2, action = 0 일때, ----------------------------------------------
-# q(s) = R(s) + γ·∑P(s'|s,a)v(x')
-# ∑P(s'|s,a)v(x')
+# # state =2, action = 0 일때, ----------------------------------------------
+# # q(s) = R(s,a) + γ·∑P(s'|s,a)v(x')
+# # ∑P(s'|s,a)v(x')
 
-v1 = np.array([0, 0, 10, 10])      # value_function이 해당과 같이 주어졌다고 가정하면,
-P1[2][0]
+# v1 = np.array([0, 0, 10, 10])      # value_function이 해당과 같이 주어졌다고 가정하면,
+# P1[2][0]
 
-# next_expectation_values = ∑P(s'|s,a)v(x')
-nev1 = 0
-for prob, state in P1[2][0]:
-    nev1 = nev1 + prob * v1[state]
-print(nev1)
+# # next_expectation_values = ∑P(s'|s,a)v(x')
+# nev1 = 0
+# for prob, state in P1[2][0]:
+#     nev1 = nev1 + prob * v1[state]
+# print(nev1)
 
-# simplify
-sum([prob *v1[state] for prob, state in P1[2][0]])
+# # simplify
+# sum([prob *v1[state] for prob, state in P1[2][0]])
 
-# q(s) = R(s) + γ·∑P(s'|s,a)v(x')
-q_s1 = R1[2] + g1 * sum([prob *v1[state] for prob, state in P1[2][0]])
-print(q_s1)
-
-
-
-
-# Bellman Expectaion Equation =====================================================================
-# (step1) : value_function initialize  ****
-v_exp1 = np.zeros(4)
-v_exp_temp1 = v_exp1.copy()
-
-# (step2) : 
-# v(s) ← ∑π(a|s)·[R(s) + γ· ∑P(s'|s,a)v(x')]  ****
-#       v(s) = ∑π(a|s)·q(s|a)
-#       q(s,a) = R(s) + γ· ∑P(s'|s,a)v(x')
-
-for _ in range(100):
-    for s in state_no1:
-        q_0 = sum([prob * v_exp1[state] for prob, state in P1[s][0]])    # action : 0 (save_money)
-        q_1 = sum([prob * v_exp1[state] for prob, state in P1[s][1]])    # action : 1 (advertising)
-
-        v_exp_temp1[s] = R1[s] + g1 * np.mean([q_0, q_1])
-    v_exp1 = v_exp_temp1.copy()
-print(v_exp1)
+# # q(s) = R(s,a) + γ·∑P(s'|s,a)v(x')    * state =2, action = 0 일때
+# r_sa = (P1[2][0][0][0] * R1[P1[2][0][0][1]]) + (P1[2][0][1][0] * R1[P1[2][0][1][1]])    # aciton a=0에 대한 next state의 transition probability와 reward distribution을 고려한 reward
+# q_s1 = r_sa + g1 * sum([prob *v1[state] for prob, state in P1[2][0]])
+# print(q_s1)
 
 
-# (step3) expectaion of policy ****
-pi_exp1 = {}
-for s in state_no1:
-    q_0 = sum([prob * v_exp1[state] for prob, state in P1[s][0]])    # action : 0 (save_money)
-    q_1 = sum([prob * v_exp1[state] for prob, state in P1[s][1]])    # action : 1 (advertising)
+
+
+# # Bellman Expectaion Equation =====================================================================
+# # (step1) : value_function initialize  ****
+# v_exp1 = np.zeros(4)
+# v_exp_temp1 = v_exp1.copy()
+
+# policy1 = {0:[0.5,0.5], 1:[0.5,0.5], 2:[0.5,0.5], 3:[0.5,0.5]}
+
+
+# P1
+# # (step2) : 
+# # v(s) ← ∑π(a|s)·[R(s,a) + γ· ∑P(s'|s,a)v(x')]  ****
+# #       v(s) = ∑π(a|s)·q(s|a)
+# #       q(s,a) = R(s,a) + γ· ∑P(s'|s,a)v(x')
+
+# for _ in range(100):
+#     for s in state_no1:
+#         q_0 = sum([prob * v_exp1[state] for prob, state in P1[s][0]])    # action : 0 (save_money)
+#         q_1 = sum([prob * v_exp1[state] for prob, state in P1[s][1]])    # action : 1 (advertising)
+
+#         # r_sa = (P1[s][0][0][0] * R1[P1[2][0][0][1]]) + (P1[s][0][1][0] * R1[P1[2][0][1][1]])
+#         v_exp_temp1[s] = R1[s] + g1 * np.mean([q_0, q_1])
+#     v_exp1 = v_exp_temp1.copy()
+# print(v_exp1)
+
+
+# # (step3) expectaion of policy ****
+# pi_exp1 = {}
+# for s in state_no1:
+#     q_0 = sum([prob * v_exp1[state] for prob, state in P1[s][0]])    # action : 0 (save_money)
+#     q_1 = sum([prob * v_exp1[state] for prob, state in P1[s][1]])    # action : 1 (advertising)
     
-    pi_exp1[s] = [q_0, q_1]
+#     pi_exp1[s] = [q_0, q_1]
 
-print(pi_exp1)  # 각각의 state에서 해당 action을 했을때 얻을 수 있는 reward 기대치 (항상 최선의 선택을 하지는 않음)
-print([np.mean(pi1[k]) for k in pi1]) # optimal policy
+# print(pi_exp1)  # 각각의 state에서 해당 action을 했을때 얻을 수 있는 reward 기대치 (항상 최선의 선택을 하지는 않음)
+# print([np.mean(pi1[k]) for k in pi1]) # optimal policy
 
 
 
