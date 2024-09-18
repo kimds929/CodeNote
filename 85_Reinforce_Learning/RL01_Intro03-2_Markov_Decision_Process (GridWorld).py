@@ -9,7 +9,7 @@ from IPython.display import clear_output
 from tqdm import tqdm_notebook
 
 import sys
-RLpath = r'D:\Python\★★Python_POSTECH_AI\Postech_AI 6) Reinforce_Learning\강의) 실습자료'
+RLpath = r'D:\DataScience\★Git_CodeNote\85_Reinforce_Learning\[POSTECH] ReinforcementLearning'
 sys.path.append(RLpath) # add project root to the python path
 
 from code_DP.lib.envs.gridworld import GridworldEnv
