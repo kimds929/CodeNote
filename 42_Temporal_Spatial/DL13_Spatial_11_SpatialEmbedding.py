@@ -430,8 +430,11 @@ if example:
     # device
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-    model = SpatialPredictModel(hidden_dim=128, output_dim=1,
-                                coord_hidden_dim=64, coord_embed_dim=16, coord_depth=3, grid_size=30, grid_embed_dim=16, periodic_embed_dim=9, 
+    # model = SpatialPredictModel(hidden_dim=128, output_dim=1,
+    #                             coord_hidden_dim=64, coord_embed_dim=16, coord_depth=3, grid_size=30, grid_embed_dim=16, periodic_embed_dim=9, 
+    #                             relative=True, euclidean_dist=True, angle=True)
+    model = SpatialPredictModel(hidden_dim=196, output_dim=1,
+                                coord_hidden_dim=64, coord_embed_dim=16, coord_depth=3, grid_size=30, grid_embed_dim=8, periodic_embed_dim=21, 
                                 relative=True, euclidean_dist=True, angle=True)
     # model = FullyConnectedModel(hidden_dim=128, output_dim=1, fc_hidden_dim=64, fc_embed_dim=64,
     #                           n_layers=5, batchNorm=True, dropout=0)
