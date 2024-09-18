@@ -40,8 +40,8 @@ class CustomGridWorld:
         self.random_state = random_state
         self.rng = np.random.RandomState(random_state)
 
+        self.cur_info = ([0,0], 0, False)
         self.init_info = {}
-
         self.initialize(grid_map)
 
     def set_rewards(self, reward_step=0, reward_goal=10, reward_trap=-1, reward_obstacle=1, reward_treasure=1):
@@ -205,7 +205,8 @@ class CustomGridWorld:
         else:
             self.render(verbose=False, return_map=False)
         
-        return self.cur_state, reward, done
+        self.cur_info = (self.cur_state, reward, done)
+        return self.cur_info
 
     def apply_transition_probability(self, action):
         """ transition probability에 따라 실제 이동 액션을 결정 """
