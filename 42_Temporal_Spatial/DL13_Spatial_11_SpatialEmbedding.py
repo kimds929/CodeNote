@@ -6,20 +6,38 @@ import torch.optim as optim
 
 example = False
 # -------------------------------------------------------------------------------------------
-
 class CoordinateEmbedding(nn.Module):
     def __init__(self, input_dim, hidden_dim, embed_dim, depth=1):
         super().__init__()
-        coord_embed = [nn.Linear(input_dim, hidden_dim), nn.ReLU()]
-        for _ in range(depth-1):
-            coord_embed.append(nn.Linear(hidden_dim, hidden_dim))
-            coord_embed.append(nn.ReLU())
-        coord_embed.append(nn.Linear(hidden_dim, embed_dim))
+        self.embedding_block = nn.ModuleDict({'in_layer':FeedForwardBlock(input_dim, hidden_dim, batchNorm=False, dropout=0)})
 
-        self.embedding = nn.Sequential(*coord_embed)
+        for h_idx in range(depth):
+            if h_idx < depth-1:
+               self.embedding_block[f'hidden_layer{h_idx+1}'] = FeedForwardBlock(hidden_dim, hidden_dim, batchNorm=False, dropout=0)
+            else:
+                self.embedding_block['out_layer'] = FeedForwardBlock(hidden_dim, embed_dim, activation=False, batchNorm=False, dropout=0)
 
     def forward(self, x):
-        return self.embedding(x)
+        for layer_name, layer in self.embedding_block.items():
+            if layer_name == 'in_layer' or layer_name == 'out_layer':
+                x = layer(x)
+            else:
+                x = layer(x) + x
+        return x
+
+# class CoordinateEmbedding(nn.Module):
+#     def __init__(self, input_dim, hidden_dim, embed_dim, depth=1):
+#         super().__init__()
+#         coord_embed = [nn.Linear(input_dim, hidden_dim), nn.ReLU()]
+#         for _ in range(depth-1):
+#             coord_embed.append(nn.Linear(hidden_dim, hidden_dim))
+#             coord_embed.append(nn.ReLU())
+#         coord_embed.append(nn.Linear(hidden_dim, embed_dim))
+
+#         self.embedding = nn.Sequential(*coord_embed)
+
+#     def forward(self, x):
+#         return self.embedding(x)
 
 if example:
     model = CoordinateEmbedding(input_dim=2, hidden_dim=32, embed_dim=16, depth=3)
