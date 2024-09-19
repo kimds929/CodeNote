@@ -4,7 +4,7 @@ example = False
 
 class CustomGridWorld:
     def __init__(self, grid_map=None, grid_size=4, start=(0, 0), goal=None, obstacles=None, traps=None, treasures=None, transition_prob=1.0,
-                reward_step=0, reward_goal=10, reward_trap=-1, reward_obstacle=1, reward_treasure=1, random_state=None):
+                reward_step=0, reward_goal=10, reward_trap=-2, reward_obstacle=-1, reward_treasure=1, random_state=None):
         """
         action : 0 상, 1 하, 2 좌, 3 우
         self.step(action) : action에 대한 실행
@@ -40,11 +40,11 @@ class CustomGridWorld:
         self.random_state = random_state
         self.rng = np.random.RandomState(random_state)
 
-        self.cur_info = ([0,0], 0, False)
+        self.cur_info = ([0,0], [0,0], 0, False)
         self.init_info = {}
         self.initialize(grid_map)
 
-    def set_rewards(self, reward_step=0, reward_goal=10, reward_trap=-1, reward_obstacle=1, reward_treasure=1):
+    def set_rewards(self, reward_step=0, reward_goal=10, reward_trap=-2, reward_obstacle=-1, reward_treasure=1):
         self.reward_step = reward_step
         self.reward_goal = reward_goal
         self.reward_trap = reward_trap
@@ -82,7 +82,7 @@ class CustomGridWorld:
                 self.set_random_obstacles()
             else:
                 for obstacle in self.obstacles:
-                    self.grid_map[obstacle] = self.obstacle_label  # 장애물은 -2로 표시
+                    self.grid_map[obstacle] = self.obstacle_label  # 장애물은 -1로 표시
 
             # traps을 지정하지 않았을 때 random 배치
             if self.traps is None:
@@ -90,7 +90,7 @@ class CustomGridWorld:
                 self.set_random_traps()
             else:
                 for trap in self.traps:
-                    self.grid_map[trap] = self.trap_label  # 함정은 -1로 표시
+                    self.grid_map[trap] = self.trap_label  # 함정은 -2로 표시
 
             # 중간 보상 지점 설정
             if self.treasures is None:
@@ -106,7 +106,7 @@ class CustomGridWorld:
         self.init_info['traps'] = self.traps.copy()
         self.init_info['treasures'] = self.treasures.copy()
 
-        self.cur_state = list(self.start)
+        self.cur_state = tuple(list(self.start))
         self.render_map = self.render(verbose=0, return_map=True)
 
     def set_random_obstacles(self):
@@ -154,58 +154,57 @@ class CustomGridWorld:
         self.traps = self.init_info['traps']
         self.treasures = self.init_info['treasures']
         self.initialize()
-        return self.cur_state
+        return tuple(self.cur_state)
 
     def step(self, action=None, verbose=0):
         """ 에이전트가 이동한 후 상태, 보상, 완료 여부 반환 """
+
         if action is None:
             action = np.random.choice([0, 1, 2, 3])
 
         # Transition Probability 적용: action과 다른 방향으로 이동할 확률이 발생
         actual_action = self.apply_transition_probability(action)
 
-        new_pos = list(self.cur_state)  # 새로운 위치 계산
+        next_state = list(self.cur_state)  # 새로운 위치 계산
         if actual_action == 0:  # 상
-            new_pos[0] = max(0, self.cur_state[0] - 1)
+            next_state[0] = max(0, self.cur_state[0] - 1)
         elif actual_action == 1:  # 하
-            new_pos[0] = min(self.grid_size - 1, self.cur_state[0] + 1)
+            next_state[0] = min(self.grid_size - 1, self.cur_state[0] + 1)
         elif actual_action == 2:  # 좌
-            new_pos[1] = max(0, self.cur_state[1] - 1)
+            next_state[1] = max(0, self.cur_state[1] - 1)
         elif actual_action == 3:  # 우
-            new_pos[1] = min(self.grid_size - 1, self.cur_state[1] + 1)
-
-        # 장애물에 부딪히면 움직이지 않음
-        if tuple(new_pos) in self.obstacles:
-            reward = self.reward_obstacle
-            new_pos = self.cur_state  # 이동을 취소하고 원래 위치로 돌아감
-        else:
-            reward = self.reward_step
-
-        self.cur_state = new_pos
+            next_state[1] = min(self.grid_size - 1, self.cur_state[1] + 1)
 
         # 보상 계산
         done = False
-
-        if tuple(self.cur_state) == self.goal:
+        
+        # 장애물에 부딪히면 움직이지 않음
+        if tuple(next_state) in self.obstacles:
+            reward = self.reward_obstacle
+            next_state = self.cur_state  # 이동을 취소하고 원래 위치로 돌아감
+        elif tuple(next_state) == self.goal:
             reward = self.reward_goal  # 목표 도달 시 보상
             done = True  # 목표 도달 시 종료
-
-        elif tuple(self.cur_state) in self.traps:
+        elif tuple(next_state) in self.traps:
             reward = self.reward_trap  # 함정에 빠질 때 보상
-            self.reset()  # 함정에 빠지면 리셋 후 진행
-        elif tuple(self.cur_state) in self.treasures:
+            next_state = self.reset()  # 함정에 빠지면 리셋 후 진행
+        elif tuple(next_state) in self.treasures:
             reward = self.reward_treasure   # 보물 지점에서 보상
-            self.treasures.remove(tuple(self.cur_state))  # 보물을 먹은 후 제거
-            self.grid_map[tuple(self.cur_state)] = 0
+            self.treasures.remove(tuple(next_state))  # 보물을 먹은 후 제거
+            self.grid_map[tuple(next_state)] = 0
+        else:
+            reward = self.reward_step
         
         if verbose > 0:
             if verbose == 2:
                 self.render(verbose=1, return_map=False)
-            print(self.cur_state, reward, done)
+            print(next_state, reward, done)
         else:
             self.render(verbose=False, return_map=False)
         
-        self.cur_info = (self.cur_state, reward, done)
+        self.cur_info = (tuple(self.cur_state), tuple(next_state), reward, done)
+        self.cur_state = tuple(next_state)
+
         return self.cur_info
 
     def apply_transition_probability(self, action):
