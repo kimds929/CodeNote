@@ -11,20 +11,15 @@ example = False
 # importlib.reload(httpimport)
 
 
-import httpimport
-remote_url = "https://raw.githubusercontent.com/kimds929/"
-with httpimport.remote_repo(f"{remote_url}/CodeNote/main/42_Temporal_Spatial/"):
-    from DL13_Temporal_12_TemporalEmbedding import PeriodicEmbedding, TemporalEmbedding
-
-with httpimport.remote_repo(f"{remote_url}/CodeNote/main/42_Temporal_Spatial/"):
-    from DL13_Spatial_11_SpatialEmbedding import SpatialEmbedding
-
 if example:
+    import httpimport
+
     with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
         from DS_DeepLearning import EarlyStopping
 
     with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
         from DS_Torch import TorchModeling
+
 
 
 
@@ -37,6 +32,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
+
+###########################################################################################################
 # Basic Block of DirectEnsemble
 class FeedForwardBlock(nn.Module):
     def __init__(self, input_dim, output_dim, activation=nn.ReLU(),
@@ -55,6 +52,237 @@ class FeedForwardBlock(nn.Module):
         return self.ff_block(x)
 
 
+###########################################################################################################
+# Temporal Embedding
+class PeriodicEmbedding(nn.Module):
+    def __init__(self, input_dim, embed_dim):
+        super().__init__()
+        # Linear Component
+        self.linear_layer = nn.Linear(input_dim , 1)
+        if embed_dim % 2 == 0:
+            self.linear_layer2 = nn.Linear(input_dim , 1)
+        else:
+            self.linear_layer2 = None
+        
+        # Periodic Components
+        self.periodic_weights = nn.Parameter(torch.randn(input_dim, (embed_dim - 1)//2 ))
+        self.periodic_bias = nn.Parameter(torch.randn(1, (embed_dim - 1)//2 ))
+
+        # NonLinear Purse Periodic Component
+        self.nonlinear_weights = nn.Parameter(torch.randn(input_dim, (embed_dim - 1)//2 ))
+        self.nonlinear_bias = nn.Parameter(torch.randn(1, (embed_dim - 1)//2 ))
+
+    def forward(self, x):
+        # Linear Component
+        linear_term = self.linear_layer(x)
+        
+        # Periodic Component
+        periodic_term = torch.sin(x @ self.periodic_weights + self.periodic_bias)
+
+        # NonLinear Purse Periodic Component
+        nonlinear_term = torch.sign(torch.sin(x @ self.nonlinear_weights + self.nonlinear_bias))
+        
+        # Combine All Components
+        if self.linear_layer2 is None:
+            return torch.cat([linear_term, periodic_term, nonlinear_term], dim=-1)
+        else:
+            linear_term2 = self.linear_layer2(x)
+            return torch.cat([linear_term, linear_term2, periodic_term, nonlinear_term], dim=-1)
+
+
+# -------------------------------------------------------------------------------------------
+# ★ Main Embedding
+class TemporalEmbedding(nn.Module):
+    def __init__(self, input_dim, embed_dim, hidden_dim=None):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.embed_dim = input_dim * embed_dim
+
+        if hidden_dim is None:
+            self.temporal_embed_layers = nn.ModuleList([PeriodicEmbedding(input_dim=1, embed_dim=embed_dim) for _ in range(input_dim)])
+        else:
+            self.temporal_embed_layers = nn.ModuleList([PeriodicEmbedding(input_dim=1, embed_dim=hidden_dim) for _ in range(input_dim)])
+            self.hidden_layer = nn.Linear(input_dim*hidden_dim, embed_dim)
+            self.embed_dim = embed_dim
+    
+    def forward(self, x):
+        emb_outputs = [layer(x[:,i:i+1]) for i, layer in enumerate(self.temporal_embed_layers)]
+        output = torch.cat(emb_outputs, dim=1)
+        if self.hidden_dim is not None:
+            output = self.hidden_layer(output)
+
+        return output
+
+
+
+###########################################################################################################
+# Spatial Embedding
+class CoordinateEmbedding(nn.Module):
+    def __init__(self, input_dim, hidden_dim, embed_dim, depth=1):
+        super().__init__()
+        self.embedding_block = nn.ModuleDict({'in_layer':FeedForwardBlock(input_dim, hidden_dim, batchNorm=False, dropout=0)})
+
+        for h_idx in range(depth):
+            if h_idx < depth-1:
+               self.embedding_block[f'hidden_layer{h_idx+1}'] = FeedForwardBlock(hidden_dim, hidden_dim, batchNorm=False, dropout=0)
+            else:
+                self.embedding_block['out_layer'] = FeedForwardBlock(hidden_dim, embed_dim, activation=False, batchNorm=False, dropout=0)
+
+    def forward(self, x):
+        for layer_name, layer in self.embedding_block.items():
+            if layer_name == 'in_layer' or layer_name == 'out_layer':
+                x = layer(x)
+            else:
+                x = layer(x) + x
+        return x
+
+# -------------------------------------------------------------------------------------------
+class GridEmbedding(nn.Module):
+    def __init__(self, grid_size, embed_dim):
+        super().__init__()
+        self.embedding = nn.Embedding(grid_size**2, embed_dim)
+        self.grid_size = grid_size
+
+    def forward(self, x):
+        # 좌표를 그리드로 매핑
+        x_grid = (x * self.grid_size).long()  # 좌표를 그리드 인덱스로 변환
+        x_index = x_grid[:, 0] * self.grid_size + x_grid[:, 1]  # 인덱스화
+        # print(x_grid, x_index)
+        return self.embedding(x_index)
+
+# -------------------------------------------------------------------------------------------
+def positional_encoding(coords, d_model):
+    # coords: [N, 2]
+    N, dim = coords.shape
+    pe = []
+    for i in range(d_model // 4):
+        freq = 10000 ** (2 * i / d_model)
+        pe.append(np.sin(coords * freq))
+        pe.append(np.cos(coords * freq))
+    pe = np.concatenate(pe, axis=1)  # [N, 2*d_model//2]
+    return torch.tensor(pe, dtype=torch.float32)
+
+
+# -------------------------------------------------------------------------------------------
+# ★ Main Embedding Block
+class SpatialEmbedding(nn.Module):
+    def __init__(self, embed_dim=None, coord_hidden_dim=32, coord_embed_dim=8, coord_depth=2,
+                grid_size=10, grid_embed_dim=8, periodic_embed_dim=5, 
+                relative=True, euclidean_dist=True, angle=True):
+        """
+        embed_dim : (None) end with combined result
+        coord_embed_dim : (None) not use coordinate embedding
+        grid_embed_dim : (None) not use grid embedding
+        periodic_embed_dim : (None) not use periodic embedding
+        relative : (False) not use relative coordinate, (True) use relative coordinate
+        euclidean_dist : (False) not use euclidean distance, (True) use euclidean distance
+        angle : (False) not use angle, (True) use angle
+
+        """
+        super().__init__()
+        self.coord_hidden_dim = coord_hidden_dim        ## 32
+        self.coord_embed_dim = coord_embed_dim          ## 4
+        self.grid_size = grid_size                      ## 10
+        self.grid_embed_dim = grid_embed_dim            ## 4
+        self.periodic_embed_dim = periodic_embed_dim    ## 3
+
+        self.relative = relative                    ## True: 2
+        self.euclidean_dist = euclidean_dist        ## True : 1
+        self.angle = angle                          ## True : 1
+        
+        self.embed_dim = 0
+
+        if self.coord_embed_dim is not None:
+            self.coord_embedding = CoordinateEmbedding(input_dim=2, hidden_dim=coord_hidden_dim, embed_dim=coord_embed_dim, depth=coord_depth)
+            self.embed_dim += self.coord_embed_dim * 2
+
+        if self.grid_embed_dim is not None:
+            self.grid_embedding = GridEmbedding(grid_size=grid_size, embed_dim=grid_embed_dim)
+            self.embed_dim += self.grid_embed_dim * 2
+
+        if self.periodic_embed_dim is not None:
+            self.periodic_embedding = PeriodicEmbedding(input_dim=2, embed_dim=periodic_embed_dim)
+            self.embed_dim += self.periodic_embed_dim * 2
+        
+        if self.relative:
+            self.embed_dim += 2
+        
+        if self.euclidean_dist:
+            self.embed_dim += 1
+
+        if self.angle:
+            self.embed_dim += 1
+
+        if embed_dim is not None:
+            self.hidden_dim = self.embed_dim
+            self.embed_dim = embed_dim
+            self.hidden_layer = nn.Linear(self.hidden_dim, self.embed_dim)
+        else:
+            self.hidden_dim = None
+
+    def forward(self, coord1, coord2):
+        spatial_embeddings = []
+        # [embed_1, embed_2, grid_1, grid_2, relative, euclidean_dist, angle, period_1, period_2]
+
+        # embed
+        if self.coord_embed_dim is not None:
+            embed_1 = self.coord_embedding(coord1)
+            embed_2 = self.coord_embedding(coord2)
+            spatial_embeddings.append(embed_1)
+            spatial_embeddings.append(embed_2)
+
+        # grid
+        if self.grid_embed_dim is not None:
+            grid_1 = self.grid_embedding(coord1)
+            grid_2 = self.grid_embedding(coord1)
+            spatial_embeddings.append(grid_1)
+            spatial_embeddings.append(grid_2)
+        
+        # periodic
+        if self.periodic_embed_dim is not None:
+            period_1 = self.periodic_embedding(coord1)
+            period_2 = self.periodic_embedding(coord2)
+            spatial_embeddings.append(period_1)
+            spatial_embeddings.append(period_2)
+
+        # norm
+        if self.relative:
+            relative = coord2 - coord1 
+            spatial_embeddings.append(relative)
+
+        if self.euclidean_dist:
+            euclidean_dist = torch.norm(coord2 - coord1, p=2, dim=1, keepdim=True)
+            spatial_embeddings.append(euclidean_dist)
+
+        # angle
+        if self.angle:
+            relative = coord2 - coord1
+            angle = torch.atan2(relative[:,1], relative[:,0]).unsqueeze(1)  
+            spatial_embeddings.append(angle)
+
+        # combine
+        output = torch.cat(spatial_embeddings, dim=1)
+        # embed_dim = coord_embed_dim * 2 + grid_embed_dim * 2 + periodic_embed_dim * 2 + 2(relative) + 1(euclidean_dist) + 1(angle)
+
+        if self.hidden_dim is not None:
+            output = self.hidden_layer(output)
+        return output
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+###########################################################################################################
+# Combined Embedding
 class CombinedEmbedding(nn.Module):
     def __init__(self, input_dim, t_input_dim,  output_dim=None, t_emb_dim=8, t_hidden_dim=None, s_emb_dim=None, **spatial_kwargs):
         super().__init__()
@@ -87,6 +315,11 @@ class CombinedEmbedding(nn.Module):
         if self.output_dim is not None:
             outputs = self.fc_layer(outputs)
         return outputs
+
+
+
+###########################################################################################################
+# EnsembleCombinedModel
 
 class EnsembleCombinedModel(nn.Module):
     def __init__(self, input_dim, output_dim, t_input_dim, hidden_dim,  n_layers=3, n_models = 10, n_output=1,
@@ -144,6 +377,44 @@ class EnsembleCombinedModel(nn.Module):
             return self.train_forward(x)
         else:
             return self.predict(x, idx)
+
+
+###########################################################################################################
+# (Version 4.0 Update)
+# 시간을 "요일. 시:분" 형식으로 변환하는 함수
+def format_time_to_str(time, return_type='str'):
+    """
+    return_type : 'str', 'dict'
+    """
+    if time is None:
+        return None
+    else:
+        int_time = int(time)
+        week_code = ["Mon.", "Tue.", "Wed.", "Thu.", "Fri.", "Sat.", "Sun."]
+        week = int_time // (24*60)
+        hour = (int_time % (24*60)) // 60
+        min = (int_time % (24*60)) % 60
+
+        # (Version 4.0 Update) -----------------------------------
+        if return_type == 'str':
+            return f"{week_code[week % 7]} {hour:02d}:{min:02d}"
+        elif return_type == 'dict':
+            return {"week": week_code[week % 7], "hour": hour, "min":min}
+            # return {"week": week, "hour": hour, "min":min}
+        # ---------------------------------------------------------
+
+# (Version 4.0 Update)
+# "요일. 시:분" 형식을 시간형식으로 변환하는 함수
+def format_str_to_time(time_str):
+    if time_str is None:
+        return None
+    else:
+        week_dict = {"Mon.":0, "Tue.":1, "Wed.":2, "Thu.":3, "Fri.":4, "Sat.":5, "Sun.":6}
+
+        week_str, hour_min_str = time_str.split(" ")
+        hour, min = hour_min_str.split(":")
+        return week_dict[week_str]*24*60 + 60*int(hour) + int(min)
+
 
 def make_feature_set_embedding(context_df, temporal_cols, spatial_cols, other_cols, fillna=None):
     # temproal features preprocessing
