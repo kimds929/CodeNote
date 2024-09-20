@@ -37,6 +37,23 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
+# Basic Block of DirectEnsemble
+class FeedForwardBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, activation=nn.ReLU(),
+                batchNorm=True,  dropout=0.2):
+        super().__init__()
+        ff_block = [nn.Linear(input_dim, output_dim)]
+        if activation:
+            ff_block.append(activation)
+        if batchNorm:
+            ff_block.append(nn.BatchNorm1d(output_dim))
+        if dropout > 0:
+            ff_block.append(nn.Dropout(dropout))
+        self.ff_block = nn.Sequential(*ff_block)
+    
+    def forward(self, x):
+        return self.ff_block(x)
+
 
 class CombinedEmbedding(nn.Module):
     def __init__(self, input_dim, t_input_dim,  output_dim=None, t_emb_dim=8, t_hidden_dim=None, s_emb_dim=None, **spatial_kwargs):
