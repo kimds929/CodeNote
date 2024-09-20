@@ -29,6 +29,9 @@ if example:
 
 
 ###########################################################################################################
+import numpy as np
+import pandas as pd
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -124,6 +127,27 @@ class EnsembleCombinedModel(nn.Module):
             return self.train_forward(x)
         else:
             return self.predict(x, idx)
+
+def make_feature_set_embedding(context_df, temporal_cols, spatial_cols, other_cols, fillna=None):
+    # temproal features preprocessing
+    temproal_arr = context_df[temporal_cols].applymap(lambda x: format_str_to_time(x) if type(x) == str else x).fillna(0).to_numpy().astype(np.float32)
+
+    # spatial features preprocessing
+    spatial_cols_transform = list(np.stack([[f"{cols}_x", f"{cols}_y"] for cols in spatial_cols]).ravel())
+
+    spatial_arr_stack = np.stack(list(context_df[spatial_cols].applymap(lambda x: np.array(x)).to_dict('list').values())).astype(np.float32)
+    spatial_arr = spatial_arr_stack.transpose(1,0,2).reshape(-1,4)
+
+    # other features
+    other_arr = context_df[other_cols].to_numpy().astype(np.float32)
+
+    # # combine and transform to dataframe
+    df_columns = temporal_cols + spatial_cols_transform + other_cols
+    df_transform = pd.DataFrame(np.hstack([temproal_arr, spatial_arr, other_arr]),
+                             columns=df_columns, index=context_df.index)
+    if fillna is not None:
+        df_transform = df_transform.fillna(fillna)
+    return df_transform
 
 ###########################################################################################################
 
