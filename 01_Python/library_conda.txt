@@ -2,6 +2,7 @@ notebook
 ipykernel
 numpy
 pandas
+beautifulsoup4
 matplotlib
 scikit-learn
 seaborn

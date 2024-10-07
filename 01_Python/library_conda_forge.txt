@@ -1,5 +1,4 @@
 tqdm
-beutifulsoup4
 bayesian-optimization
 xgboost
 shap
