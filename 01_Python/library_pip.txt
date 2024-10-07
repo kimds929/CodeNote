@@ -4,6 +4,6 @@ xgboost
 shap
 eli5
 pyperclip
-opencv
+opencv-python
 gym
 holidays
