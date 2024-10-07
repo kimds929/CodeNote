@@ -1,0 +1,10 @@
+tqdm
+beutifulsoup4
+bayesian-optimization
+xgboost
+shap
+eli5
+pyperclip
+opencv
+gym
+holidays

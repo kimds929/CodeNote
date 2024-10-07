@@ -1,0 +1,12 @@
+notebook
+ipykernel
+numpy
+pandas
+matplotlib
+scikit-learn
+seaborn
+scipy
+missingno
+pillow
+pytorch
+torchvision
