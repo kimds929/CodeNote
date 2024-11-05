@@ -45,10 +45,11 @@ class PeriodicEmbedding(nn.Module):
 
 
 # -------------------------------------------------------------------------------------------
-# ★ Main Embedding
+# TemporalEmbedding     ★ Main Embedding
 class TemporalEmbedding(nn.Module):
     def __init__(self, input_dim, embed_dim, hidden_dim=None):
         super().__init__()
+        self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.embed_dim = input_dim * embed_dim
 
@@ -60,7 +61,9 @@ class TemporalEmbedding(nn.Module):
             self.embed_dim = embed_dim
     
     def forward(self, x):
-        emb_outputs = [layer(x[:,i:i+1]) for i, layer in enumerate(self.temporal_embed_layers)]
+        if x.shape[-1] != self.input_dim:
+            raise Exception(f"input shape does not match.")
+        emb_outputs = [layer(x[...,i:i+1]) for i, layer in enumerate(self.temporal_embed_layers)]
         output = torch.cat(emb_outputs, dim=1)
         if self.hidden_dim is not None:
             output = self.hidden_layer(output)
