@@ -74,5 +74,5 @@ class TorchModel(nn.Module):
 
 # model = TorchModel()
 # model.requires_grad_status()
-# model(torch.rand(10,6), layer=2)
+# model(torch.rand(10,6), layer=1).shape
 

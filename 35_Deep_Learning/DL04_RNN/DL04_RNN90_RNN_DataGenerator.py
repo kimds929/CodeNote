@@ -1,13 +1,14 @@
 
 # (Python) Random Sequence Generator 230307
 import numpy as np
+import pandas as pd
 import scipy as sp
 from scipy import stats
 rng = np.random.RandomState(1)
 rn_prob = rng.rand(4,5)
 
-np.random.normal()
-stats.multivariate_normal.pdf()
+# np.random.normal()
+# stats.multivariate_normal.pdf()
 
 # Generating Sequence Data ------------------------------------------------------
 states = [0,1,2,3,4,5,6]
