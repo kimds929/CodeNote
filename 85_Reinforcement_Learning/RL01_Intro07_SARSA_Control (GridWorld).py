@@ -45,11 +45,14 @@ from tqdm.auto import tqdm
 ###########################################################################################################
 # ( Util Functions ) ######################################################################################
 
-import httpimport
-remote_url = 'https://raw.githubusercontent.com/kimds929/'
-
-with httpimport.remote_repo(f"{remote_url}/CodeNote/main/85_Reinforce_Learning/"):
+try:
     from RL00_Env01_CustomGridWorld import CustomGridWorld
+except:
+    import httpimport
+    remote_url = 'https://raw.githubusercontent.com/kimds929/'
+
+    with httpimport.remote_repo(f"{remote_url}/CodeNote/main/85_Reinforce_Learning/"):
+        from RL00_Env01_CustomGridWorld import CustomGridWorld
 
 
 # ★ argmax with duplicated max number (max 값이 여러개일 때, max값 중 랜덤하게 sample해주는 함수)

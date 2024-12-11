@@ -18,6 +18,7 @@ class CustomGridWorld:
 
         self.nS = self.grid_size * self.grid_size
         self.nA = 4
+        self.action_move = {0: [-1, 0], 1: [1, 0], 2: [0, -1], 3: [0, 1]}
 
         self.grid_map = None
         self.render_map = None
@@ -27,8 +28,8 @@ class CustomGridWorld:
 
         self.reward_step = reward_step
         self.reward_goal = reward_goal
-        self.reward_trap = reward_trap
         self.reward_obstacle = reward_obstacle
+        self.reward_trap = reward_trap
         self.reward_treasure = reward_treasure
 
         self.agent_label = 1
@@ -36,6 +37,8 @@ class CustomGridWorld:
         self.obstacle_label = -1
         self.trap_label = -2
         self.treasure_label = 2
+        self.label_reward = {0: self.reward_step, self.goal_label: self.reward_goal, self.treasure_label : self.reward_treasure,
+                            self.obstacle_label: self.reward_obstacle, self.trap_label: self.reward_trap}
 
         self.random_state = random_state
         self.rng = np.random.RandomState(random_state)
@@ -156,6 +159,25 @@ class CustomGridWorld:
         self.initialize()
         return tuple(self.cur_state)
 
+    def get_nearby_state(self, action):
+        cur_state_list = list(self.cur_state)
+
+        x_new = cur_state_list[0] + self.action_move[action][0]
+        y_new = cur_state_list[1] + self.action_move[action][1]
+        if (0<= x_new <= self.grid_size - 1) and (0<= y_new <= self.grid_size - 1):
+            next_state = (x_new, y_new)
+            return next_state, self.label_reward[self.grid_map[x_new, y_new]]
+        else:
+            return (None, None)
+
+    def get_possible_actions(self):
+        possible_actions = []
+        for action in [0,1,2,3]:
+            next_state, next_reward = self.get_nearby_state(action)
+            if next_state is not None:
+                possible_actions.append(action)
+        return tuple(possible_actions)
+
     def step(self, action=None, verbose=0):
         """ 에이전트가 이동한 후 상태, 보상, 완료 여부 반환 """
 
@@ -232,6 +254,8 @@ class CustomGridWorld:
 
 
 
+
+
 if example:
     # 환경 사용 예시
     # 사용자 정의 장애물과 함정
@@ -245,6 +269,12 @@ if example:
     # env = CustomGridWorld(grid_size=5, obstacles=obstacles)
     # env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps)
     # env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps, treasures=treasures)
+
+    # env.get_nearby_state(0)
+    # env.get_nearby_state(1)
+    # env.get_nearby_state(2)
+    # env.get_nearby_state(3)
+    # env.get_possible_actions()
 
     # custom_map = [
     #     [0, 0, 0, 1],

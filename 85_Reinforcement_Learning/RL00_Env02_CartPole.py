@@ -16,16 +16,12 @@
 
 
 
-
-
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import math
 
-class CartPoleEnv:
+class CustomCartPole:
     def __init__(self):
         # 물리 상수들
         self.gravity = 9.8
@@ -101,18 +97,19 @@ class CartPoleEnv:
         ax.set_ylim(-0.5, 1.5)
         plt.pause(0.001)
 
-# 간단한 시뮬레이션
-env = CartPoleEnv()
-state = env.reset()
-env.render()
 
-from IPython.display import clear_output
-for _ in range(200):
-    env.render()
-    action = np.random.choice([0, 1])  # 임의의 행동 선택
-    state, done = env.step(action)
-    if done:
-        break
-    clear_output(wait=True)
-plt.show()
+# # 간단한 시뮬레이션
+# env = CustomCartPole()
+# state = env.reset()
+# env.render()
+
+# from IPython.display import clear_output
+# for _ in range(200):
+#     env.render()
+#     action = np.random.choice([0, 1])  # 임의의 행동 선택
+#     state, done = env.step(action)
+#     if done:
+#         break
+#     clear_output(wait=True)
+# plt.show()
 

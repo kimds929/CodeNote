@@ -1,24 +1,3 @@
-# import gym
-# import numpy as np
-# import matplotlib.pyplot as plt
-# from IPython import display
-# # get_ipython().run_line_magic('matplotlib', 'inline')
-
-# from time import sleep
-# from IPython.display import clear_output
-# from tqdm import tqdm_notebook
-
-# import sys
-# RLpath = r'D:\DataScience\SNU_DataScience\SNU_OhLab\Reinforce_Learning_Code\[POSTECH] ReinforcementLearning'
-# sys.path.append(RLpath) # add project root to the python path
-
-# import httpimport
-# remote_url = 'https://raw.githubusercontent.com/kimds929/'
-
-# with httpimport.remote_repo(f"{remote_url}/CodeNote/main/85_Reinforce_Learning/"):
-#     from RL00_Env01_CustomGridWorld import CustomGridWorld
-
-
 
 import os
 
@@ -39,18 +18,17 @@ from tqdm.auto import tqdm
 #     from RL00_Env01_CustomGridWorld import CustomGridWorld
 
 
-
-
-
 ###########################################################################################################
 # ( Util Functions ) ######################################################################################
 
-import httpimport
-remote_url = 'https://raw.githubusercontent.com/kimds929/'
-
-with httpimport.remote_repo(f"{remote_url}/CodeNote/main/85_Reinforce_Learning/"):
+try:
     from RL00_Env01_CustomGridWorld import CustomGridWorld
+except:
+    import httpimport
+    remote_url = 'https://raw.githubusercontent.com/kimds929/'
 
+    with httpimport.remote_repo(f"{remote_url}/CodeNote/main/85_Reinforce_Learning/"):
+        from RL00_Env01_CustomGridWorld import CustomGridWorld
 
 # ★ argmax with duplicated max number (max 값이 여러개일 때, max값 중 랜덤하게 sample해주는 함수)
 def rand_argmax(a, axis=None, return_max=False, random_state=None):
@@ -81,10 +59,8 @@ def epsilon_greedy(policy, epsilon=1e-1, random_state=None):
         return greedy_action
 
 
-
-
 ################################################################################################################
-# ( Temporal Difference Control (TD0) : Off-policy(Q-learning) ) ###############################################
+# ( Monte Carlo Control ) ######################################################################################
 
 # env = CustomGridWorld()
 # env = CustomGridWorld(grid_size=5)
@@ -98,16 +74,10 @@ env.render()
 
 # env.step(1)
 
-# Q-learning Update
-def q_learning_update(Q, state, next_state, reward, action, alpha, gamma):
-    best_next_action = np.argmax(Q[next_state])     # epsilon_greedy로 하면 안됨! : exploration으로 suboptimal action이 선택되어 수렴성을 방해 할 수 있음.
-    return (1-alpha)*Q[state][action] +  alpha * (reward + gamma * Q[next_state][best_next_action])
 
-alpha = 0.3
 gamma = 0.9
 # Q = np.ones([env.grid_size, env.grid_size, env.nA]) / env.nA
 Q = defaultdict(lambda: np.ones(env.nA)/env.nA)
-
 
 num_episodes = 100
 for _ in tqdm(range(num_episodes)):
@@ -124,9 +94,6 @@ for _ in tqdm(range(num_episodes)):
         from_state, next_state, reward, done = env.step(action)
         cur_info = (from_state, next_state, reward, done)
 
-        # Q-learning Update
-        Q[from_state][action] = q_learning_update(Q, from_state, next_state, reward, action, alpha, gamma)
-            
         # save episode info
         episode_info.append(cur_info)
         actions.append(action)
@@ -135,6 +102,32 @@ for _ in tqdm(range(num_episodes)):
         if i >=500:
             break
 
+    # states in episode
+    states_in_episode = [x[0] for x in episode_info]
+    unique_states = np.unique(np.array(states_in_episode), axis=0)
+    first_visit = [np.where((us == np.array(states_in_episode)).all(axis=1))[0][0] for us in unique_states]
+    rev_first_visit = len(episode_info) - 1 - np.array(first_visit)
+
+    # policy update
+    G = 0
+    for ei, ((state, next_state, reward, done), action) in enumerate(zip(reversed(episode_info), reversed(actions))):
+        
+        G = reward + gamma * G
+        if ei in rev_first_visit:
+            idx = np.where(rev_first_visit == ei)
+            if state == tuple(list(unique_states[idx].squeeze())):
+                Q[state][action] = G
+                # Q[(*state, action)] = G
+
+
+
+
+# plt.imshow(Q.reshape(-1,4), cmap='coolwarm')
+# np.argmax(Q[(0,0)])
+# pd.DataFrame(episode_info).to_clipboard()
+
+np.array(dir(Q))
+np.array(list(Q.values())).shape
 # Simulation Test ---------------------------------------------------------------------------------
 env.reset()
 # env.render()
@@ -150,7 +143,7 @@ while (done is not True):
     clear_output(wait=True)
 
     i += 1
-    if i >=100:
+    if i >=50:
         break
 
 ################################################################################################################
@@ -161,20 +154,11 @@ while (done is not True):
 
 
 
-
-
-
-
-
-
-
-
-
 ###########################################################################################################
 ###########################################################################################################
 ###########################################################################################################
 ###########################################################################################################
-# DeepNetwork TD - Q-Learning #############################################################################
+# DeepNetwork MonteCarlo ##################################################################################
 
 import torch
 import torch.nn as nn
@@ -197,10 +181,8 @@ with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
 with httpimport.remote_repo(f"{remote_url}/DS_Library/main/"):
     from DS_Torch import TorchDataLoader, TorchModeling, AutoML
 
-
 # device
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
 
 # Q-network 정의
 class QNetwork(nn.Module):
@@ -217,11 +199,6 @@ class QNetwork(nn.Module):
     def forward(self, x):
         return self.fc_block(x)
 
-
-
-
-
-
 ################################################################################################################
 
 def epsilon_greedy_torch(state, model, epsilon=1e-1, device='cpu'):
@@ -236,10 +213,10 @@ def epsilon_greedy_torch(state, model, epsilon=1e-1, device='cpu'):
             filtered_tensor = torch.arange(pred.shape[-1]).to(device)[~(pred==torch.max(pred)).squeeze()]
             action = filtered_tensor[torch.randint(0, len(filtered_tensor), (1,))].item()
     return action, pred
-
+    
 
 ################################################################################################################
-# ( Q-Learning Control ) ######################################################################################
+# ( Monte Carlo Control ) ######################################################################################
 
 # env = CustomGridWorld()
 # env = CustomGridWorld(grid_size=5)
@@ -250,6 +227,7 @@ def epsilon_greedy_torch(state, model, epsilon=1e-1, device='cpu'):
 env = CustomGridWorld(grid_size=4)
 env.reset()
 env.render()
+
 
 gamma = 0.9
 model = QNetwork(2, 16, 4)
@@ -262,37 +240,70 @@ num_episodes = 100
 for epoch in tqdm(range(num_episodes)):
     # run episode
     env.reset()
+    episode_info = []
+    actions = []
+    q_preds = []
+    torch_traindata = []
     done = False
 
     i = 0
     while (done is not True):
         # select action from policy
         action, q_pred = epsilon_greedy_torch(state=env.cur_state, model=model, epsilon=2e-1, device=device)
-        
         from_state, next_state, reward, done = env.step(action)
+        cur_info = (from_state, next_state, reward, done)
 
-        # select next action from policy
-        with torch.no_grad():
-            model.eval()
-            next_q_pred = model(torch.tensor(next_state, dtype=torch.float32).unsqueeze(0).to(device))
-            best_next_action = torch.argmax(next_q_pred).item()
-            
-            # Q-learning Target : Gradient Descent가 이미 네트워크의 학습률을 고려하여 가중치를 업데이트하기 때문에 Network학습에서는 Q-Learning의 완전한 Update식을 따르지 않음
-            # q_values[action] = (1-alpha)*q_pred.squeeze()[action] +  alpha * (reward + gamma * next_q_pred.squeeze()[best_next_action])
-            q_values = q_pred.squeeze().clone()
-            q_values[action] = reward + gamma * next_q_pred.squeeze()[best_next_action]
-        
-        # training
-        model.train()
-        optimizer.zero_grad()
-        q_pred = model(torch.tensor(from_state, dtype=torch.float32).unsqueeze(0).to(device))
-        loss = loss_function(q_pred.squeeze(), q_values)
-        loss.backward()
-        optimizer.step()
-
+        # save episode info
+        episode_info.append(cur_info)
+        actions.append(action)
+        q_preds.append(q_pred.squeeze().to('cpu').numpy())
         i += 1
         if i >=500:
             break
+
+    # (first visit) ------------------------------------------------------------------------------------------
+    # for each state in episode 
+    states_in_episode = [x[0] for x in episode_info]
+    unique_states = np.unique(np.array(states_in_episode), axis=0)
+    first_visit = [np.where((us == np.array(states_in_episode)).all(axis=1))[0][0] for us in unique_states]
+    rev_first_visit = len(episode_info) - 1 - np.array(first_visit)
+    actions_first_visit = np.array(actions)[first_visit]
+    q_preds_first_visit = np.array(q_preds)[first_visit]
+    
+    # calculate cumulative reward
+    G = 0
+    for ei, ((state, next_state, reward, done), action) in enumerate(zip(reversed(episode_info), reversed(actions))):
+        G = reward + gamma * G
+        if ei in rev_first_visit:
+            idx = np.where(rev_first_visit == ei)
+            if state == tuple(list(unique_states[idx].squeeze())):
+                q_pred = q_preds_first_visit[idx].squeeze()
+                q_pred[actions_first_visit[idx].item()] = G
+                torch_traindata.append((state, q_pred))
+    
+    # # (every visit)  ------------------------------------------------------------------------------------------
+    # # for each state in episode
+    # states_in_episode = [x[0] for x in episode_info]
+
+    # # calculate cumulative reward
+    # G = 0
+    # for ei, (state, action, q_pred) in enumerate(zip(reversed(states_in_episode), reversed(actions), reversed(q_preds))):
+    #     print(q_pred)
+    #     q_pred[action] = G
+    #     torch_traindata.append((state, q_pred))
+    
+    # ---------------------------------------------------------------------------------------------------------
+    # training dataset
+    states_tensor = torch.tensor([data[0] for data in torch_traindata], dtype=torch.float32)
+    q_pred_tensor = torch.tensor([data[1] for data in torch_traindata], dtype=torch.float32)
+
+    # training
+    model.train()
+    optimizer.zero_grad()
+    q_pred = model(states_tensor.to(device))
+    loss = loss_function(q_pred, q_pred_tensor.to(device))
+    loss.backward()
+    optimizer.step()
 
     with torch.no_grad():
         print(f"\r (epoch {epoch}) loss :{loss.to('cpu'):.3f}")
