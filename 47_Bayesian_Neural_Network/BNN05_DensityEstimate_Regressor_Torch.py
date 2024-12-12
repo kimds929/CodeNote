@@ -1,4 +1,198 @@
 
+###########################################################################################################
+###########################################################################################################
+# Update 2024.12.12
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+
+# 모델 정의
+class VarianceNN(nn.Module):
+    def __init__(self, input_dim, hidden_dim, train_X=None):
+        super(VarianceNN, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc_mu = nn.Linear(hidden_dim, 10)  # Mean prediction
+        self.fc_sigma = nn.Linear(hidden_dim, 10)  # Variance prediction
+        self.train_X = train_X
+
+    def forward_process(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return x
+        # mu = self.fc_mu(x).mean(dim=-1)
+        # sigma = self.fc_sigma(x).std(dim=-1)  # Variance must be positive
+        # return mu, sigma
+
+    def forward_mu(self, x):
+        for param in self.parameters():
+            param.requires_grad = True
+        x = self.forward_process(x)
+        return self.fc_mu(x).mean(dim=-1, keepdims=True)
+    
+    def forward_std(self, x, full_grad=False):
+        if full_grad is False:
+            for param in self.parameters():
+                param.requires_grad = False
+
+            for name, param in self.fc_sigma.named_parameters():
+                param.requires_grad = True
+
+        x = self.forward_process(x)
+        return self.fc_sigma(x).std(dim=-1, keepdims=True)  # Variance must be positive
+
+    def forward(self, x, alpha=0):
+        scale_factors = 1
+        if self.train_X is not None:
+            dists = torch.cdist(x, X_train)
+            scale_factors = 1 + alpha * dists.mean(dim=1, keepdim=True)  # Scale factor 계산
+        mu = self.forward_mu(x)
+        std = self.forward_std(x) * scale_factors
+        return (mu, std)
+        
+
+# 데이터 생성
+torch.manual_seed(42)
+x1 = torch.linspace(-3, -1.5, steps=30).unsqueeze(1)
+x2 = torch.linspace(1.5, 3, steps=30).unsqueeze(1)
+
+X_train = torch.cat([x1,x2], dim=0)
+y_train = torch.sin(X_train) + 0.1 * torch.randn_like(X_train)
+# y_train = y_train*100 + 200
+
+# 모델 및 손실 정의
+model = VarianceNN(input_dim=1, hidden_dim=128, train_X=X_train)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+
+
+epochs = 100
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    sigma = model.forward_std(X_train, full_grad=True)
+    sigma_init = torch.ones_like(sigma) * y_train.std() 
+    loss = nn.functional.mse_loss(sigma, sigma_init)
+    # loss = nll_loss(mu, sigma, y_train)
+    loss.backward()
+    optimizer.step()
+
+
+# 훈련
+epochs = 300
+for epoch in range(epochs):
+    model.train()
+    mu = model.forward_mu(X_train)
+    optimizer.zero_grad()
+    loss_mse = nn.functional.mse_loss(mu, y_train)
+    loss_mse.backward()
+    optimizer.step()
+
+    sigma = model.forward_std(X_train)
+    mu_ = mu.detach()
+    optimizer.zero_grad()
+    loss_gaussian = nn.functional.gaussian_nll_loss(mu_, y_train, sigma**2)
+    loss_gaussian.backward()
+    optimizer.step()
+
+
+
+
+# 예측 및 불확실성 계산
+model.eval()
+X_test = torch.linspace(-5, 5, steps=100).unsqueeze(1)
+
+mu_pred, sigma_pred = model(X_test, alpha=1)
+# mu_pred, sigma_pred = model(X_test, alpha=0)
+mu_pred = mu_pred.view(-1)
+sigma_pred = sigma_pred.view(-1)
+
+
+
+# 결과 시각화
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 6))
+plt.plot(X_train, y_train, 'o', label="Training Data")
+plt.plot(X_test, mu_pred.detach(), label="Mean Prediction")
+plt.fill_between(
+    X_test.squeeze().detach(),
+    (mu_pred.view(-1) - 2 * sigma_pred).detach(),
+    (mu_pred.view(-1) + 2 * sigma_pred).detach(),
+    alpha=0.2,
+    label="Uncertainty (±2 std)"
+)
+plt.legend()
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ################################################################################################
 # Generate Dataset ##########################################################################
 import numpy as np
@@ -169,6 +363,21 @@ if example:
     #  1. BNN_DirectEnsemble2
     #  2. BNN_Model_2
     # -----------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

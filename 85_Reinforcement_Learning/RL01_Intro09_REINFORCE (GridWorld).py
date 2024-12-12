@@ -296,8 +296,11 @@ with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as
             action_outputs = policy_network(state_tensor)
             action_prob = torch.softmax(action_outputs, dim=-1)
             # action_prob = torch.clamp(action_prob, min=1e-10)
-            log_action_prob = torch.log(action_prob[..., action] + 1e-6)
-            policy_loss_list.append( (-log_action_prob * G_t).unsqueeze(0) )
+            log_action_prob = torch.log(action_prob[..., action] + 1e-6) 
+            
+            advantage = G_t - np.mean(trajectory_returns)    # baseline trick
+
+            policy_loss_list.append( (-log_action_prob * advantage).unsqueeze(0) )
             state_tensors.append(state_tensor)
         policy_loss = torch.cat(policy_loss_list).mean()
 
