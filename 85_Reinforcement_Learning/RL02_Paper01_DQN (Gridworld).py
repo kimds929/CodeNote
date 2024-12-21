@@ -193,7 +193,7 @@ env.render()
 memory_size = 1024
 batch_size = 64
 sample_only_until = 500
-target_update_interval = 10
+target_update_interval = 30
 
 gamma = 0.9
 
