@@ -91,20 +91,39 @@ class PolicyNetwork(nn.Module):
         else:
             return self.greedy_action(x, possible_actions=possible_actions)
 
-# Q-network 정의
-class QNetwork(nn.Module):
-    def __init__(self, state_dim, hidden_dim, action_dim):
-        super().__init__()
-        self.fc_block = nn.Sequential(
-            nn.Linear(state_dim, hidden_dim)
-            ,nn.ReLU()
-            ,nn.Linear(hidden_dim, hidden_dim)
-            ,nn.ReLU()
-            ,nn.Linear(hidden_dim, action_dim)
-        )
+# # Q-network 정의
+# class QNetwork(nn.Module):
+#     def __init__(self, state_dim, hidden_dim, action_dim):
+#         super().__init__()
+#         self.fc_block = nn.Sequential(
+#             nn.Linear(state_dim, hidden_dim)
+#             ,nn.ReLU()
+#             ,nn.Linear(hidden_dim, hidden_dim)
+#             ,nn.ReLU()
+#             ,nn.Linear(hidden_dim, action_dim)
+#         )
 
+#     def forward(self, x):
+#         return self.fc_block(x)
+
+# (BaseLine) state를 input으로 입력받아 그 state의 value function(BaseLine)을 계산하는 함수
+class ValueEstimator(nn.Module):
+    def __init__(self, state_dim, hidden_dim, output_dim=1):
+        super(ValueEstimator, self).__init__()
+        self.linear1 = torch.nn.Linear(state_dim, hidden_dim)
+        self.linear2 = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.linear3 = torch.nn.Linear(hidden_dim, output_dim)
+        self.act = torch.nn.ReLU()        
+        
     def forward(self, x):
-        return self.fc_block(x)
+        x = self.act(self.linear1(x))
+        x = self.act(self.linear2(x))
+        x = self.linear3(x)
+        return x
+        
+    def estimate(self, state):
+        state = torch.FloatTensor(state)
+        return self.forward(state)
 
 
 
@@ -118,8 +137,8 @@ class QNetwork(nn.Module):
 # env = CustomGridWorld(grid_size=5, obstacles=obstacles)
 # env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps)
 # env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps, treasures=treasures)
-# env = CustomGridWorld(grid_size=4)
-env = CustomGridWorld(grid_size=5, traps=[], obstacles=[], treasures=[])
+env = CustomGridWorld(grid_size=4, reward_step=-1)
+# env = CustomGridWorld(grid_size=5, traps=[], obstacles=[], treasures=[])
 env.reset()
 env.render()
 
@@ -128,11 +147,11 @@ gamma = 0.9
 policy_network = PolicyNetwork(state_dim=2, hidden_dim=16, action_dim=4)
 policy_optimizer = optim.Adam(policy_network.parameters(), lr=1e-4)
 
-q_network = QNetwork(state_dim=2, hidden_dim=16, action_dim=4)
-q_optimizer = optim.Adam(q_network.parameters(), lr=1e-4)
+value_network = ValueEstimator(state_dim=2, hidden_dim=16, output_dim=1)
+value_optimizer = optim.Adam(value_network.parameters(), lr=1e-4)
 
 
-num_episodes = 100
+num_episodes = 300
 episode_idx = 0
 with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as pbar:
     for episode_idx in range(num_episodes):
@@ -142,45 +161,48 @@ with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as
 
         # Generate an episode
         trajectory = []
-        q_loss_list = []
+        value_loss_list = []
         policy_loss_list = []
  
         i = 0
         while (done is not True):
             # select action from policy
             cur_state_tensor = torch.tensor(env.cur_state).type(torch.float32)
-            with torch.no_grad():
-                action = policy_network.explore_action(cur_state_tensor)
-                # action = policy_network.explore_action(cur_state_tensor, possible_actions=env.get_possible_actions())
             
-            from_state, next_state, reward, done = env.step(action)
-            with torch.no_grad():
-                next_state_tensor = torch.tensor(next_state).type(torch.float32)
-                next_action = policy_network.explore_action(next_state_tensor)
-                next_q_value = q_network(next_state_tensor)
-                td_target = reward + gamma * (next_q_value[next_action] if not done else torch.tensor(0).type(torch.float32)) 
+            action_probs = policy_network.predict_prob(cur_state_tensor)
+            action = torch.multinomial(action_probs, 1).item()
 
-            # q_network
-            q_optimizer.zero_grad()
-            cur_q_value = q_network(cur_state_tensor)
-            q_loss = nn.functional.mse_loss(cur_q_value[action], td_target)
-            q_loss.backward()
-            q_optimizer.step()
-            
-            # Update policy network
+            from_state, next_state, reward, done = env.step(action)
+
+            # estimate value
+            cur_value = value_network(cur_state_tensor)
+            next_state_tensor = torch.tensor(next_state).type(torch.float32)
+            next_value = value_network(next_state_tensor) if not done else torch.tensor(0).type(torch.float32)
+
+            # Compute Advantage and Targets
+            td_target = reward + gamma * next_value.detach()
+            td_error = td_target - cur_value
+   
+            # policy loss
+            log_prob = torch.log(action_probs[action] + 1e-10) 
+            policy_loss = -log_prob * td_target
+
+            # value update
+            value_loss = nn.functional.mse_loss(cur_value, td_target)
+            # value_loss = td_error.pow(2)
+            value_optimizer.zero_grad()
+            value_loss.backward()
+            value_optimizer.step()
+
+            # policy loss update
             policy_optimizer.zero_grad()
-            action_outputs = policy_network(cur_state_tensor)
-            action_dist = Categorical(logits = action_outputs)
-            prob = action_dist.probs[action]
-            policy_loss = -torch.log(prob + 1e-10) * cur_q_value[action].detach()
             policy_loss.backward()
             policy_optimizer.step()
 
-            prob
 
             # save history
             trajectory.append([str(from_state), action, reward])
-            q_loss_list.append(q_loss.item())
+            value_loss_list.append(value_loss.item())
             policy_loss_list.append(policy_loss.item())
 
             i += 1
@@ -188,9 +210,8 @@ with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as
                 break
 
         if episode_idx % 1 == 0:
-            pbar.set_postfix(Q_loss=np.mean(q_loss_list), Policy_loss=np.mean(policy_loss_list), Num_steps=len(trajectory))
+            pbar.set_postfix(Value_loss=np.mean(value_loss_list), Policy_loss=np.mean(policy_loss_list), Num_steps=len(trajectory))
         pbar.update(1)
-
 
 
 # Simulation Test ---------------------------------------------------------------------------------
@@ -217,6 +238,5 @@ while (done is not True):
     if i >=30:
         break
 ################################################################################################################
-
 
 
