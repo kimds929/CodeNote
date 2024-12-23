@@ -46,7 +46,7 @@ except:
 
 ################################################################################################################
 
-# policy-network 정의
+# policy-network 정의 (Actor Network)
 class PolicyNetwork(nn.Module):
     def __init__(self, state_dim, hidden_dim, action_dim):
         super().__init__()
@@ -91,39 +91,21 @@ class PolicyNetwork(nn.Module):
         else:
             return self.greedy_action(x, possible_actions=possible_actions)
 
-# # Q-network 정의
-# class QNetwork(nn.Module):
-#     def __init__(self, state_dim, hidden_dim, action_dim):
-#         super().__init__()
-#         self.fc_block = nn.Sequential(
-#             nn.Linear(state_dim, hidden_dim)
-#             ,nn.ReLU()
-#             ,nn.Linear(hidden_dim, hidden_dim)
-#             ,nn.ReLU()
-#             ,nn.Linear(hidden_dim, action_dim)
-#         )
+# Q-network 정의 (Critic Network)
+class QNetwork(nn.Module):
+    def __init__(self, state_dim, hidden_dim, action_dim):
+        super().__init__()
+        self.fc_block = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, action_dim)
+        )
 
-#     def forward(self, x):
-#         return self.fc_block(x)
-
-# (BaseLine) state를 input으로 입력받아 그 state의 value function(BaseLine)을 계산하는 함수
-class ValueEstimator(nn.Module):
-    def __init__(self, state_dim, hidden_dim, output_dim=1):
-        super(ValueEstimator, self).__init__()
-        self.linear1 = torch.nn.Linear(state_dim, hidden_dim)
-        self.linear2 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.linear3 = torch.nn.Linear(hidden_dim, output_dim)
-        self.act = torch.nn.ReLU()        
-        
     def forward(self, x):
-        x = self.act(self.linear1(x))
-        x = self.act(self.linear2(x))
-        x = self.linear3(x)
-        return x
-        
-    def estimate(self, state):
-        state = torch.FloatTensor(state)
-        return self.forward(state)
+        return self.fc_block(x)
+
 
 
 
@@ -138,7 +120,6 @@ class ValueEstimator(nn.Module):
 # env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps)
 # env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps, treasures=treasures)
 env = CustomGridWorld(grid_size=4, reward_step=-1)
-# env = CustomGridWorld(grid_size=5, traps=[], obstacles=[], treasures=[])
 env.reset()
 env.render()
 
@@ -147,7 +128,7 @@ gamma = 0.9
 policy_network = PolicyNetwork(state_dim=2, hidden_dim=16, action_dim=4)
 policy_optimizer = optim.Adam(policy_network.parameters(), lr=1e-4)
 
-value_network = ValueEstimator(state_dim=2, hidden_dim=16, output_dim=1)
+value_network = QNetwork(state_dim=2, hidden_dim=16, action_dim=4)
 value_optimizer = optim.Adam(value_network.parameters(), lr=1e-4)
 
 
@@ -174,21 +155,24 @@ with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as
 
             from_state, next_state, reward, done = env.step(action)
 
-            # estimate value
-            cur_value = value_network(cur_state_tensor)
+            # estimate q_value
+            cur_action_values = value_network(cur_state_tensor)
+
             next_state_tensor = torch.tensor(next_state).type(torch.float32)
-            next_value = value_network(next_state_tensor) if not done else torch.tensor(0).type(torch.float32)
+            next_action_values = value_network(next_state_tensor) * (1-done)
+            
+            next_action = torch.argmax(next_action_values, dim=-1)
 
             # Compute Advantage and Targets
-            td_target = reward + gamma * next_value.detach()
-            td_error = td_target - cur_value
+            td_target = reward + gamma * next_action_values[next_action].detach()
+            td_error = td_target - cur_action_values[action]
    
             # policy loss
             log_prob = torch.log(action_probs[action] + 1e-10) 
             policy_loss = -log_prob * td_target
 
             # value update
-            value_loss = nn.functional.mse_loss(cur_value, td_target)
+            value_loss = nn.functional.mse_loss(cur_action_values[action], td_target)
             # value_loss = td_error.pow(2)
             value_optimizer.zero_grad()
             value_loss.backward()
@@ -238,5 +222,3 @@ while (done is not True):
     if i >=30:
         break
 ################################################################################################################
-
-

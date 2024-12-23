@@ -186,7 +186,8 @@ def epsilon_greedy_torch(state, model, epsilon=1e-1, device='cpu'):
 # env = CustomGridWorld(grid_size=5, obstacles=obstacles)
 # env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps)
 # env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps, treasures=treasures)
-env = CustomGridWorld(grid_size=5)
+# env = CustomGridWorld(grid_size=5)
+env = CustomGridWorld()
 env.reset()
 env.render()
 
@@ -217,51 +218,55 @@ loss_function = nn.SmoothL1Loss()
 
 
 num_episodes = 300
-for epoch in tqdm(range(num_episodes)):
-        # run episode
-    env.reset()
-    done = False
+with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as pbar:
+    for epoch in range(num_episodes):
+            # run episode
+        env.reset()
+        done = False
 
-    cumulative_reward = 0
-    i = 0
-    while (done is not True):
-        action, q_pred = epsilon_greedy_torch(state=env.cur_state, model=main_Qnetwork, epsilon=2e-1, device=device)
-        from_state, next_state, reward, done = env.step(action)
-        experience = (action, from_state, next_state, reward, done)
+        cumulative_reward = 0
+        i = 0
+        while (done is not True):
+            action, q_pred = epsilon_greedy_torch(state=env.cur_state, model=main_Qnetwork, epsilon=2e-1, device=device)
+            from_state, next_state, reward, done = env.step(action)
+            experience = (action, from_state, next_state, reward, done)
 
-        # buffer에 experience 저장
-        memory.push(experience)
-        cumulative_reward += reward
-        i += 1
-        if i >=100:
-            break
+            # buffer에 experience 저장
+            memory.push(experience)
+            cumulative_reward += reward
+            i += 1
+            if i >=100:
+                break
 
-    # 최소 요구 sample수가 만족 했을경우, Trainning 진행
-    if len(memory) >= sample_only_until:
-        sampled_exps = memory.sample()
-        actions = torch.tensor(np.stack([sample[0] for sample in sampled_exps])).type(torch.int64).view(-1,1)
-        states = torch.tensor(np.stack([sample[1] for sample in sampled_exps])).type(torch.float32)
-        next_states = torch.tensor(np.stack([sample[2] for sample in sampled_exps])).type(torch.float32)
-        rewards = torch.tensor(np.stack([sample[3]/100 for sample in sampled_exps])).type(torch.float32).view(-1,1)
-        dones = torch.tensor(np.stack([sample[4]/100 for sample in sampled_exps])).type(torch.float32).view(-1,1)
-        
-        with torch.no_grad():
-            q_max, q_max_idx = target_Qnetwork(next_states).max(dim=-1, keepdims=True)
-            q_target = rewards + gamma*q_max * (1-dones)
+        # 최소 요구 sample수가 만족 했을경우, Trainning 진행
+        if len(memory) >= sample_only_until:
+            sampled_exps = memory.sample()
+            actions = torch.tensor(np.stack([sample[0] for sample in sampled_exps])).type(torch.int64).view(-1,1)
+            states = torch.tensor(np.stack([sample[1] for sample in sampled_exps])).type(torch.float32)
+            next_states = torch.tensor(np.stack([sample[2] for sample in sampled_exps])).type(torch.float32)
+            rewards = torch.tensor(np.stack([sample[3]/100 for sample in sampled_exps])).type(torch.float32).view(-1,1)
+            dones = torch.tensor(np.stack([sample[4]/100 for sample in sampled_exps])).type(torch.float32).view(-1,1)
+            
+            with torch.no_grad():
+                q_max, q_max_idx = target_Qnetwork(next_states).max(dim=-1, keepdims=True)
+                q_target = rewards + gamma*q_max * (1-dones)
 
-        q_value = main_Qnetwork(states).gather(1, actions)        # gather : 1번째 axis에서 action위치의 값을 choose)
-        loss = loss_function(q_value, q_target)
+            q_value = main_Qnetwork(states).gather(1, actions)        # gather : 1번째 axis에서 action위치의 값을 choose)
+            loss = loss_function(q_value, q_target)
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-        with torch.no_grad():
-            print(f"\r (epoch {epoch}) loss :{loss.to('cpu'):.3f} | Cumulative_Reward: {cumulative_reward:.4f}")
-    
-    if epoch % target_update_interval == 0:
-        target_Qnetwork.load_state_dict(main_Qnetwork.state_dict())
-        print('target_network update')
+        if epoch % target_update_interval == 0:
+            target_Qnetwork.load_state_dict(main_Qnetwork.state_dict())
+            print('target_network update')
+
+        if episode_idx % 1 == 0:
+            pbar.set_postfix(Q_loss=f"{loss.to('cpu'):.3f}", Cumulative_Reward=f"{cumulative_reward:.4f}")
+        pbar.update(1)
+
+
 
 
 
@@ -279,7 +284,7 @@ while (done is not True):
         action = torch.argmax(q_pred).item()
         from_state, next_state, reward, done = env.step(action)
         env.render()
-        time.sleep(0.5)
+        time.sleep(0.2)
         clear_output(wait=True)
     i += 1
     if i >=30:
