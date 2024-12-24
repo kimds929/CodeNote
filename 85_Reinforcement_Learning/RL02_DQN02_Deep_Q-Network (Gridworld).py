@@ -144,7 +144,7 @@ class ReplayMemory:
 
 
 # Q-network 정의
-class QNetwork(nn.Module):
+class Critic(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
         self.fc_block = nn.Sequential(
@@ -199,11 +199,11 @@ target_update_interval = 30
 gamma = 0.9
 
 # main network
-main_Qnetwork = QNetwork(2, 16, 4)
+main_Qnetwork = Critic(2, 16, 4)
 main_Qnetwork.to(device)
 
 # target network
-target_Qnetwork = QNetwork(2, 16, 4)
+target_Qnetwork = Critic(2, 16, 4)
 target_Qnetwork.to(device)
 
 # memory
@@ -218,13 +218,12 @@ loss_function = nn.SmoothL1Loss()
 
 
 num_episodes = 300
-with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as pbar:
+with tqdm(total=num_episodes) as pbar:
     for epoch in range(num_episodes):
             # run episode
         env.reset()
         done = False
 
-        cumulative_reward = 0
         i = 0
         while (done is not True):
             action, q_pred = epsilon_greedy_torch(state=env.cur_state, model=main_Qnetwork, epsilon=2e-1, device=device)
@@ -233,7 +232,6 @@ with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as
 
             # buffer에 experience 저장
             memory.push(experience)
-            cumulative_reward += reward
             i += 1
             if i >=100:
                 break
@@ -245,7 +243,7 @@ with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as
             states = torch.tensor(np.stack([sample[1] for sample in sampled_exps])).type(torch.float32)
             next_states = torch.tensor(np.stack([sample[2] for sample in sampled_exps])).type(torch.float32)
             rewards = torch.tensor(np.stack([sample[3]/100 for sample in sampled_exps])).type(torch.float32).view(-1,1)
-            dones = torch.tensor(np.stack([sample[4]/100 for sample in sampled_exps])).type(torch.float32).view(-1,1)
+            dones = torch.tensor(np.stack([sample[4] for sample in sampled_exps])).type(torch.float32).view(-1,1)
             
             with torch.no_grad():
                 q_max, q_max_idx = target_Qnetwork(next_states).max(dim=-1, keepdims=True)
@@ -258,14 +256,15 @@ with tqdm(total=num_episodes, desc=f"Episode {episode_idx+1}/{num_episodes}") as
             loss.backward()
             optimizer.step()
 
+            if epoch % 1 == 0:
+                pbar.set_postfix(Q_loss=f"{loss.to('cpu'):.3f}", Len_episodes=f"{i}")
+            pbar.update(1)
+
         if epoch % target_update_interval == 0:
             target_Qnetwork.load_state_dict(main_Qnetwork.state_dict())
             print('target_network update')
 
-        if episode_idx % 1 == 0:
-            pbar.set_postfix(Q_loss=f"{loss.to('cpu'):.3f}", Cumulative_Reward=f"{cumulative_reward:.4f}")
-        pbar.update(1)
-
+     
 
 
 
@@ -291,3 +290,214 @@ while (done is not True):
         break
 
 ################################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+################################################################################################################
+# ( Actor-Critic Control ) ######################################################################################
+# policy-network 정의 (Actor Network)
+class Actor(nn.Module):
+    def __init__(self, state_dim, hidden_dim, action_dim):
+        super().__init__()
+        self.fc_block = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, action_dim)
+        )
+
+    def forward(self, x):
+        return self.fc_block(x)
+    
+    def predict_prob(self, x):
+        return nn.functional.softmax(self.forward(x), dim=-1)
+
+    def greedy_action(self, x, possible_actions=None):
+        with torch.no_grad():
+            action_prob = self.predict_prob(x)
+            result_tensor = torch.full_like(action_prob, float('-inf'))
+            if possible_actions is not None:
+                result_tensor[..., possible_actions] = action_prob[..., possible_actions]
+            else:
+                result_tensor = action_prob
+            return torch.argmax(result_tensor, dim=-1).item()
+
+    def explore_action(self, x, possible_actions=None):
+        with torch.no_grad():
+            action_logit = self.forward(x)
+            result_tensor = torch.full_like(action_logit, 0)
+            if possible_actions is not None:
+                result_tensor[..., possible_actions] = action_logit[..., possible_actions]
+            else:
+                result_tensor = action_logit
+            action_dist = Categorical(logits=result_tensor)
+            return action_dist.sample().item()
+
+    def get_action(self, x, possible_actions=None):
+        if self.training:
+            return self.explore_action(x, possible_actions=possible_actions)
+        else:
+            return self.greedy_action(x, possible_actions=possible_actions)
+
+
+# Q-network 정의
+class Critic(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super().__init__()
+        self.fc_block = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, hidden_dim)
+            ,nn.ReLU()
+            ,nn.Linear(hidden_dim, output_dim)
+        )
+
+    def forward(self, x):
+        return self.fc_block(x)
+
+
+
+# env = CustomGridWorld()
+# env = CustomGridWorld(grid_size=5)
+# env = CustomGridWorld(grid_size=5, traps=[], obstacles=[], treasures=[])
+# env = CustomGridWorld(grid_size=5, obstacles=obstacles)
+# env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps)
+# env = CustomGridWorld(grid_size=5, obstacles=obstacles, traps=traps, treasures=treasures)
+# env = CustomGridWorld(grid_size=5)
+env = CustomGridWorld()
+
+env.reset()
+env.render()
+
+memory_size = 1024
+batch_size = 64
+sample_only_until = 1000
+target_update_interval = 30
+gamma = 0.9
+
+# actor network
+actor_network = Actor(state_dim=2, hidden_dim=16, action_dim=4)
+actor_optimizer = optim.Adam(actor_network.parameters(), lr=1e-5)
+
+# main network
+main_critic_network = Critic(2, 16, 4)
+main_critic_network.to(device)
+critic_optimizer = optim.Adam(main_critic_network.parameters(), lr=1e-4)
+
+# target network
+target_critic_network = Critic(2, 16, 4)
+target_critic_network.to(device)
+
+# memory
+memory = ReplayMemory(max_size=memory_size, batch_size=batch_size)
+
+
+
+# loss_function = nn.MSELoss()
+loss_function = nn.SmoothL1Loss()
+# |x_i - y_i| < 1 : z_i = 0.5(x_i - y_i)^2
+# |x_i - y_i| >= 1 : z_i = |x_i - y_i| - 0.5
+
+
+
+num_episodes = 300
+with tqdm(total=num_episodes) as pbar:
+    for epoch in range(num_episodes):
+        # run episode
+        env.reset()
+        done = False
+
+        i = 0
+        while (done is not True):
+            # select action from policy
+            cur_state_tensor = torch.tensor(env.cur_state).type(torch.float32)
+            
+            action_probs = actor_network.predict_prob(cur_state_tensor)
+            action = torch.multinomial(action_probs, 1).item()
+            
+            from_state, next_state, reward, done = env.step(action)
+            experience = (action, from_state, next_state, reward, done)
+
+            # buffer에 experience 저장
+            memory.push(experience)
+            cumulative_reward += reward
+            i += 1
+            if i >=50:
+                break
+
+        # 최소 요구 sample수가 만족 했을경우, Trainning 진행
+        if len(memory) >= sample_only_until:
+            sampled_exps = memory.sample()
+            actions = torch.tensor(np.stack([sample[0] for sample in sampled_exps])).type(torch.int64).view(-1,1)
+            states = torch.tensor(np.stack([sample[1] for sample in sampled_exps])).type(torch.float32)
+            next_states = torch.tensor(np.stack([sample[2] for sample in sampled_exps])).type(torch.float32)
+            rewards = torch.tensor(np.stack([sample[3]/100 for sample in sampled_exps])).type(torch.float32).view(-1,1)
+            dones = torch.tensor(np.stack([sample[4] for sample in sampled_exps])).type(torch.float32).view(-1,1)
+            
+            with torch.no_grad():
+                next_q_max, next_q_max_idx = target_critic_network(next_states).max(dim=-1, keepdims=True)
+                td_target = rewards + gamma*next_q_max.detach() * (1-dones)
+
+            q_value = main_critic_network(states).gather(1, actions)        # gather : 1번째 axis에서 action위치의 값을 choose)
+            td_error = (td_target - q_value).detach()
+
+            # actor loss
+            actions_probs = actor_network.predict_prob(states)
+            log_probs = torch.log(actions_probs.gather(1, actions) + 1e-8)
+            # actor_loss = (-log_probs * td_target).mean()
+            actor_loss = (-log_probs * td_error).mean()      # base_line
+
+            # actor loss update
+            actor_optimizer.zero_grad()
+            actor_loss.backward()
+            actor_optimizer.step()
+
+             # critic loss
+            critic_loss = loss_function(q_value, td_target)
+
+            # critic loss update
+            critic_optimizer.zero_grad()
+            critic_loss.backward()
+            critic_optimizer.step()
+
+            if epoch % 1 == 0:
+                pbar.set_postfix(Actor_Loss=f"{actor_loss.to('cpu'):.3f}", Critic_Loss=f"{critic_loss.to('cpu'):.3f}", Len_episodes=f"{i}")
+            
+
+        if epoch % target_update_interval == 0:
+            target_critic_network.load_state_dict(main_critic_network.state_dict())
+            print('target_network update')
+        pbar.update(1)
+
+
+
+
+# Simulation Test ---------------------------------------------------------------------------------
+env.reset()
+# env.render()
+i = 0
+done = False
+while (done is not True):
+    
+    with torch.no_grad():
+        cur_state_tensor = torch.tensor(env.cur_state).type(torch.float32)
+        action = actor_network.greedy_action(cur_state_tensor)
+        from_state, next_state, reward, done = env.step(action)
+        env.render()
+        time.sleep(0.2)
+        clear_output(wait=True)
+    i += 1
+    if i >=30:
+        break
+
+################################################################################################################
+
