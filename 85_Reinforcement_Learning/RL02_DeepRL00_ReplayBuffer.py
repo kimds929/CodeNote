@@ -192,7 +192,7 @@ class ReplayMemory:
         if self.size == 0:
             return None, None, None  # 비어 있을 경우만 None 반환
 
-        batch_size = min(batch_size, self.size - pointer)
+        batch_size = min(batch_size, self.size - pointer) if batch_size is not None else self.size - pointer
         if batch_size <= 0:
             return [], [], np.array([])  # 빈 인덱스 방어 처리
 
