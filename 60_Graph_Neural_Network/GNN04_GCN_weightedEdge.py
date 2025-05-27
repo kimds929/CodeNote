@@ -134,7 +134,7 @@ class GCNConvLayer(MessagePassing):
         - out_channels (int): Output feature dimensionality.
         - improved (bool, optional): Whether to use the improved GCN normalization
             (adds self‐loops with weight=2.0). (default: False)
-        - cached (bool, optional): If True, caches the normalized adjacency
+        - cached (bool, optional): If True, caches the add self-loop, normalized adjacency
             (only use if the graph is static). (default: False)
         - add_self_loops (bool, optional): If True, adds self‐loops before
             normalization. (default: True)
