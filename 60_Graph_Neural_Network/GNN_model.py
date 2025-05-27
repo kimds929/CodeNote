@@ -143,7 +143,7 @@ class GCNConvLayer(MessagePassing):
                 edge_index, _ = add_self_loops(edge_index, num_nodes=N)
                 if use_edge_attr:
                     loop_attr = edge_attr.new_zeros(N, self.edge_channels)
-                    edge_attr  = torch.cat([edge_attr, loop_attr], dim=0)
+                    edge_attr  = torch.cat([edge_attr, loop_attr], dim=0)      # self‐loop zero-padding
             if self.normalize:
                 edge_index, norm = gcn_norm(
                     edge_index,

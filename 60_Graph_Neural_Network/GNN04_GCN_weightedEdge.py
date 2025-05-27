@@ -228,7 +228,7 @@ class GCNConvLayer(MessagePassing):
                 edge_index, _ = add_self_loops(edge_index, num_nodes=N)
                 if use_edge_attr:
                     loop_attr = edge_attr.new_zeros(N, self.edge_channels)
-                    edge_attr  = torch.cat([edge_attr, loop_attr], dim=0)
+                    edge_attr  = torch.cat([edge_attr, loop_attr], dim=0)   # self‐loop zero-padding
             if self.normalize:
                 edge_index, norm = gcn_norm(
                     edge_index,
@@ -261,14 +261,15 @@ class GCNConvLayer(MessagePassing):
 
 
 X = torch.randn(4, 8)
-A = np.array([
-    [0, 1, 0, 1],
-    [0, 0, 0, 1],
-    [1, 0, 0, 1],
-    [1, 1, 1, 0]
-    ])
+edge_index = torch.randint(0,4, size=(2,10))
+# A = np.array([
+#     [0, 1, 0, 1],
+#     [0, 0, 0, 1],
+#     [1, 0, 0, 1],
+#     [1, 1, 1, 0]
+#     ])
 
-edge_index = torch.IntTensor(adj_matrix_to_edge_index(A))
+# edge_index = torch.IntTensor(adj_matrix_to_edge_index(A))
 
 # CGN without EdgeWeights
 gcn_noweight = GCNConvLayer(in_channels=8, out_channels=4)
