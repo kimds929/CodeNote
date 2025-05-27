@@ -85,7 +85,7 @@ class GCNConvLayer(MessagePassing):
         # Node and (optional) edge transforms
         self.lin_node  = nn.Linear(in_channels, out_channels, bias=False)
         self.lin_edge  = nn.Linear(edge_channels, out_channels, bias=False) if edge_channels > 0 else None
-        self.lin_final = nn.Linear(out_channels, out_channels, bias=bias)
+        # self.lin_final = nn.Linear(out_channels, out_channels, bias=bias)
 
         # Buffers for caching static graph preprocessing
         self.register_buffer('_cached_edge_index', None)
@@ -99,7 +99,7 @@ class GCNConvLayer(MessagePassing):
         self.lin_node.reset_parameters()
         if self.lin_edge is not None:
             self.lin_edge.reset_parameters()
-        self.lin_final.reset_parameters()
+        # self.lin_final.reset_parameters()
         # clear caches
         self._cached_edge_index = None
         self._cached_norm       = None
@@ -122,8 +122,7 @@ class GCNConvLayer(MessagePassing):
                 # 2) Edge_attr padding
                 if use_edge_attr:
                     loop_attr = edge_attr.new_zeros(N, self.edge_channels)
-                    padded = torch.cat([edge_attr, loop_attr], dim=0)
-                    self._cached_edge_attr = padded
+                    self._cached_edge_attr = torch.cat([edge_attr, loop_attr], dim=0)
                 # 3) Normalization
                 ei_norm, norm = gcn_norm(
                     ei_loop,
@@ -139,7 +138,7 @@ class GCNConvLayer(MessagePassing):
             norm       = self._cached_norm
             edge_attr  = self._cached_edge_attr if self.edge_channels > 0 else None
         else:
-            # dynamic path
+            # dynamic processing
             if self.add_self_loops:
                 edge_index, _ = add_self_loops(edge_index, num_nodes=N)
                 if use_edge_attr:
@@ -157,25 +156,40 @@ class GCNConvLayer(MessagePassing):
                 norm = None
 
         # Node embedding
-        x_emb = self.lin_node(x)
-
+        node_emb = self.lin_node(x)
+        edge_emb = self.lin_edge(edge_attr) if use_edge_attr else None
+        norm = norm if norm is not None else x.new_ones(edge_index.size(1))
+        
         # Message passing
-        if use_edge_attr:
-            edge_emb = self.lin_edge(edge_attr)
-            if norm is not None:
-                edge_emb = edge_emb * norm.view(-1, 1)
-            out = self.propagate(edge_index, x=x_emb, edge_attr=edge_emb, size=size)
-        else:
-            norm = norm if norm is not None else x.new_ones(edge_index.size(1))
-            out = self.propagate(edge_index, x=x_emb, edge_attr=norm, size=size)
+        out = self.propagate(edge_index, x=node_emb, edge_attr=edge_emb, norm=norm, size=size)
+        return out
+        # return self.lin_final(out)
 
-        return self.lin_final(out)
-
-    def message(self, x_j: Tensor, edge_attr: Tensor) -> Tensor:
-        if edge_attr.dim() > 1:
-            return x_j + edge_attr
+    def message(self, x_j: Tensor, edge_attr: OptTensor, norm: Tensor) -> Tensor:
+        if edge_attr is not None:
+            return norm.view(-1, 1) * (x_j + edge_attr)
         else:
-            return x_j * edge_attr.view(-1, 1)
+            return norm.view(-1, 1) * x_j 
 
     def update(self, aggr_out: Tensor) -> Tensor:
         return aggr_out
+
+
+# X = torch.randn(4, 8)
+# edge_index = torch.randint(0,4, size=(2,10))
+
+# # CGN without EdgeWeights
+# gcn_noweight = GCNConvLayer(in_channels=8, out_channels=4)
+# gcn_noweight(X, edge_index)
+
+# # CGN with 1-dim EdgeWeights
+# edge_weight = torch.FloatTensor([0.46, 0.07, 0.83, 0.74, 0.37, 0.35, 0.79, 0.67, 0.17, 0.92]).unsqueeze(-1)  # 4개 간선의 가중치
+# gcn_weight1 = GCNConvLayer(in_channels=8, out_channels=4, edge_channels=1)
+# gcn_weight1(X, edge_index, edge_weight)
+# gcn_weight1(X, edge_index)
+
+# # CGN with N-dim EdgeWeights
+# edge_weight = torch.rand(edge_index.shape[-1], 5)
+# gcn_weight2 = GCNConvLayer(in_channels=8, out_channels=4, edge_channels=5)
+# gcn_weight2(X, edge_index, edge_weight)
+# gcn_weight2(X, edge_index)
