@@ -260,7 +260,7 @@ class GCNConvLayer(MessagePassing):
         return aggr_out
 
 
-X = torch.randn(4, 8)
+X = torch.randn(4, 8)   # node_feature
 edge_index = torch.randint(0,4, size=(2,10))
 # A = np.array([
 #     [0, 1, 0, 1],
