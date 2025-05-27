@@ -350,7 +350,7 @@ for iter in range(N_ITER):
             # buffer에 experience 저장
             memory.push(experience)
             i += 1
-            if i >=100:
+            if i >=1000:
                 break
     ################################################################################################
     # print(f"  2) dataset & learning")
