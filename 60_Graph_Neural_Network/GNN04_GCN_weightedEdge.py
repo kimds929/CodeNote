@@ -134,7 +134,7 @@ class GCNConvLayer(MessagePassing):
         - out_channels (int): Output feature dimensionality.
         - improved (bool, optional): Whether to use the improved GCN normalization
             (adds self‐loops with weight=2.0). (default: False)
-        - cached (bool, optional): If True, caches the add self-loop, normalized adjacency
+        - cached (bool, optional): If True, caches the normalized adjacency
             (only use if the graph is static). (default: False)
         - add_self_loops (bool, optional): If True, adds self‐loops before
             normalization. (default: True)
@@ -192,12 +192,12 @@ class GCNConvLayer(MessagePassing):
             self._cached_edge_attr = None
 
     def forward(self,
-                x: Tensor,
+                node: Tensor,
                 edge_index: Tensor,
                 edge_attr: OptTensor = None,
                 size: tuple = None) -> Tensor:
         use_edge_attr = (edge_attr is not None and self.edge_channels > 0)
-        N = x.size(self.node_dim)
+        N = node.size(self.node_dim)
 
         # Precompute and cache static processing once
         if self.cached:
@@ -215,7 +215,7 @@ class GCNConvLayer(MessagePassing):
                     num_nodes=N,
                     improved=self.improved,
                     add_self_loops=False,
-                    dtype=x.dtype)
+                    dtype=node.dtype)
                 self._cached_edge_index = ei_norm
                 self._cached_norm       = norm
             # reuse
@@ -228,7 +228,7 @@ class GCNConvLayer(MessagePassing):
                 edge_index, _ = add_self_loops(edge_index, num_nodes=N)
                 if use_edge_attr:
                     loop_attr = edge_attr.new_zeros(N, self.edge_channels)
-                    edge_attr  = torch.cat([edge_attr, loop_attr], dim=0)   # self‐loop zero-padding
+                    edge_attr  = torch.cat([edge_attr, loop_attr], dim=0)      # self‐loop zero-padding
             if self.normalize:
                 edge_index, norm = gcn_norm(
                     edge_index,
@@ -236,14 +236,14 @@ class GCNConvLayer(MessagePassing):
                     num_nodes=N,
                     improved=self.improved,
                     add_self_loops=False,
-                    dtype=x.dtype)
+                    dtype=node.dtype)
             else:
                 norm = None
 
         # Node embedding
-        node_emb = self.lin_node(x)
+        node_emb = self.lin_node(node)
         edge_emb = self.lin_edge(edge_attr) if use_edge_attr else None
-        norm = norm if norm is not None else x.new_ones(edge_index.size(1))
+        norm = norm if norm is not None else node.new_ones(edge_index.size(1))
         
         # Message passing
         out = self.propagate(edge_index, x=node_emb, edge_attr=edge_emb, norm=norm, size=size)
@@ -262,21 +262,13 @@ class GCNConvLayer(MessagePassing):
 
 X = torch.randn(4, 8)   # node_feature
 edge_index = torch.randint(0,4, size=(2,10))
-# A = np.array([
-#     [0, 1, 0, 1],
-#     [0, 0, 0, 1],
-#     [1, 0, 0, 1],
-#     [1, 1, 1, 0]
-#     ])
-
-# edge_index = torch.IntTensor(adj_matrix_to_edge_index(A))
 
 # CGN without EdgeWeights
 gcn_noweight = GCNConvLayer(in_channels=8, out_channels=4)
 gcn_noweight(X, edge_index)
 
 # CGN with 1-dim EdgeWeights
-edge_weight = torch.FloatTensor([0.46, 0.07, 0.83, 0.74, 0.37, 0.35, 0.79, 0.67]).unsqueeze(-1)  # 4개 간선의 가중치
+edge_weight = torch.FloatTensor([0.46, 0.07, 0.83, 0.74, 0.37, 0.35, 0.79, 0.67, 0.17, 0.92]).unsqueeze(-1)  # 4개 간선의 가중치
 gcn_weight1 = GCNConvLayer(in_channels=8, out_channels=4, edge_channels=1)
 gcn_weight1(X, edge_index, edge_weight)
 gcn_weight1(X, edge_index)
@@ -286,7 +278,6 @@ edge_weight = torch.rand(edge_index.shape[-1], 5)
 gcn_weight2 = GCNConvLayer(in_channels=8, out_channels=4, edge_channels=5)
 gcn_weight2(X, edge_index, edge_weight)
 gcn_weight2(X, edge_index)
-
 
 
 
@@ -312,6 +303,10 @@ import torch.optim as optim
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.utils import remove_self_loops, to_networkx
+
+
+
+# def generate_random_graphs(num_graphs=5, nodes=(30,8), edges=(None, 0) **kwargs)
 
 
 

@@ -107,12 +107,12 @@ class GCNConvLayer(MessagePassing):
             self._cached_edge_attr = None
 
     def forward(self,
-                x: Tensor,
+                node: Tensor,
                 edge_index: Tensor,
                 edge_attr: OptTensor = None,
                 size: tuple = None) -> Tensor:
         use_edge_attr = (edge_attr is not None and self.edge_channels > 0)
-        N = x.size(self.node_dim)
+        N = node.size(self.node_dim)
 
         # Precompute and cache static processing once
         if self.cached:
@@ -130,7 +130,7 @@ class GCNConvLayer(MessagePassing):
                     num_nodes=N,
                     improved=self.improved,
                     add_self_loops=False,
-                    dtype=x.dtype)
+                    dtype=node.dtype)
                 self._cached_edge_index = ei_norm
                 self._cached_norm       = norm
             # reuse
@@ -151,14 +151,14 @@ class GCNConvLayer(MessagePassing):
                     num_nodes=N,
                     improved=self.improved,
                     add_self_loops=False,
-                    dtype=x.dtype)
+                    dtype=node.dtype)
             else:
                 norm = None
 
         # Node embedding
-        node_emb = self.lin_node(x)
+        node_emb = self.lin_node(node)
         edge_emb = self.lin_edge(edge_attr) if use_edge_attr else None
-        norm = norm if norm is not None else x.new_ones(edge_index.size(1))
+        norm = norm if norm is not None else node.new_ones(edge_index.size(1))
         
         # Message passing
         out = self.propagate(edge_index, x=node_emb, edge_attr=edge_emb, norm=norm, size=size)
@@ -175,7 +175,7 @@ class GCNConvLayer(MessagePassing):
         return aggr_out
 
 
-X = torch.randn(4, 8)   # node_feature
+# X = torch.randn(4, 8)   # node_feature
 # edge_index = torch.randint(0,4, size=(2,10))
 
 # # CGN without EdgeWeights
@@ -193,3 +193,169 @@ X = torch.randn(4, 8)   # node_feature
 # gcn_weight2 = GCNConvLayer(in_channels=8, out_channels=4, edge_channels=5)
 # gcn_weight2(X, edge_index, edge_weight)
 # gcn_weight2(X, edge_index)
+
+
+
+
+
+###########################################################################
+# EGCN Layer (with/without edge vector weight)
+
+def scatter(src: torch.Tensor,
+            index: torch.LongTensor,
+            dim: int = 0,
+            dim_size: int = None,
+            reduce: str = 'sum') -> torch.Tensor:
+    """
+    Pure-PyTorch scatter function supporting sum, mean, amax, amin, prod.
+    - Requires PyTorch >= 2.0 for full reduce support via scatter_reduce_.
+    - Falls back to sum and mean for older versions.
+    """
+    # 1) dim_size 결정
+    if dim_size is None:
+        dim_size = int(index.max().item()) + 1
+
+    # 2) 출력 텐서 준비
+    out_shape = list(src.shape)
+    out_shape[dim] = dim_size
+    out = torch.zeros(*out_shape, dtype=src.dtype, device=src.device)
+
+    # 3) index 확장
+    if src.dim() == 1:
+        idx_exp = index
+    else:
+        view_shape = [1] * src.dim()
+        view_shape[dim] = src.size(dim)
+        idx_exp = index.view(view_shape).expand_as(src)
+
+    # 4) PyTorch 2.0+ scatter_reduce_ 사용
+    if hasattr(out, "scatter_reduce_"):
+        out.scatter_reduce_(dim, idx_exp, src, reduce=reduce, include_self=False)
+        return out
+
+    # 5) fallback for older PyTorch
+    if reduce == 'sum':
+        return out.scatter_add_(dim, idx_exp, src)
+    elif reduce == 'mean':
+        summed = out.scatter_add_(dim, idx_exp, src)
+        # count groups
+        ones = torch.ones_like(src)
+        count = torch.zeros(*out_shape, dtype=src.dtype, device=src.device)
+        count = count.scatter_add_(dim, idx_exp, ones)
+        return summed / count.clamp(min=1)
+    else:
+        raise NotImplementedError(f"Fallback for reduce='{reduce}' is not implemented.")
+    
+
+class EGConvLayer(nn.Module):
+    """
+    Equivariant Graph Convolution Layer (EGCL) as defined in #EGNN.
+    Implements formulas (3)~(6):
+      (3) m_{ij} = \phi_e(h_i, h_j, ||x_i - x_j||^2, a_{ij})
+      (4) x_i^{l+1} = x_i^l + C \sum_{j \neq i} (x_i - x_j) \phi_x(m_{ij})
+      (5) m_i = \sum_{j \neq i} m_{ij}
+      (6) h_i^{l+1} = \phi_h(h_i, m_i)
+      
+    Args:
+        in_features: Dimension of input node features
+        out_features: Dimension of output node features
+        hidden_features: Hidden dimension for MLPs
+        edge_attr_dim: Dimensionality of optional edge attributes
+        aggr: Aggregation method ('add', 'mean', etc.) for feature messages
+    """
+    def __init__(self, 
+                 in_features: int,
+                 out_features: int,
+                 hidden_features: int = None,
+                 edge_features: int = 0,
+                 aggr='sum'
+                 ):
+        super(EGConvLayer, self).__init__()
+        self.out_features = out_features or in_features
+        self.hidden_features = hidden_features if hidden_features is not None else max(in_features, out_features)
+        self.edge_features = edge_features
+        self.aggr = aggr
+        
+        # Edge MLP φ_e
+        self.concat_dim = 2*in_features + 1 + self.edge_features
+        self.phi_e = nn.Sequential(
+            nn.Linear(self.concat_dim, self.hidden_features),
+            nn.ReLU(),
+            nn.Linear(self.hidden_features, self.hidden_features)
+        )
+        # Scalar MLP φ_x (maps m_{ij} to a scalar weight)
+        self.phi_x = nn.Linear(self.hidden_features, 1)
+        
+        # Node MLP φ_h
+        self.phi_h = nn.Sequential(
+            nn.Linear(in_features + self.hidden_features, self.hidden_features),
+            nn.ReLU(),
+            nn.Linear(self.hidden_features, self.out_features)
+        )
+
+    def forward(self, node, coordinate, edge_index, edge_attr=None):
+        """
+        Args:
+            node (Tensor): [N, F] node features
+            coordinate (Tensor): [N, D] node coordinates
+            edge_index (LongTensor): [2, E] edge indices (source, target)
+            edge_attr (Tensor): [E, edge_features] edge attributes a_{ij}
+        Returns:
+            node (Tensor): [N, out_features] updated node features
+            coordinate (Tensor): [N, D] updated node coordinates
+        """
+        src, dst = edge_index  # j -> i
+        h_j, h_i = node[src], node[dst]
+        x_j, x_i = coordinate[src], coordinate[dst]
+
+        # (3) Compute distance feature ||x_i - x_j||²
+        dist = (x_i - x_j)
+        sqdist = dist.pow(2).sum(dim=1, keepdim=True)
+
+        concat_inputs = [h_i, h_j, sqdist]
+        if self.edge_features > 0:
+            concat_inputs.append(edge_attr)
+            
+        # Edge message m_ij = φ_e(...)
+        m_ij = self.phi_e(torch.cat(concat_inputs, dim=-1))
+
+        # (4) coordinate update φ_x(m_ij)
+        w_ij = self.phi_x(m_ij)  # scalar weights [E,1]
+        vec = dist * w_ij  # [E, D]
+
+        # normalization constant C = 1/(N-1)
+        N = node.size(0)       # node_size
+        C = 1.0 / (N - 1)
+
+        # aggregate coordinate updates per node i
+        delta_x = scatter(vec, dst, dim=0, reduce='sum') * C
+        x_new = coordinate + delta_x
+
+        # (5) message aggregation
+        m_i = scatter(m_ij, dst, dim=0, reduce=self.aggr)
+
+        # (6) feature update
+        h_new = self.phi_h(torch.cat([node, m_i], dim=1))
+
+        return h_new, x_new
+
+# X = torch.randn(4, 8)   # node_feature
+# edge_index = torch.randint(0,4, size=(2,10))
+# coordinates = torch.randn(4,2)
+
+# # CGN without EdgeWeights
+# gcn_noweight = EGConvLayer(in_features=8, out_features=4)
+# gcn_noweight(X, coordinates, edge_index)
+
+# # CGN with 1-dim EdgeWeights
+# edge_weight = torch.FloatTensor([0.46, 0.07, 0.83, 0.74, 0.37, 0.35, 0.79, 0.67, 0.17, 0.92]).unsqueeze(-1)  # 4개 간선의 가중치
+# gcn_weight1 = EGConvLayer(in_features=8, out_features=4, edge_features=1)
+# gcn_weight1(X, coordinates, edge_index, edge_weight)
+
+# # CGN with N-dim EdgeWeights
+# edge_weight = torch.rand(edge_index.shape[-1], 5)
+# gcn_weight2 = EGConvLayer(in_features=8, out_features=4, edge_features=5)
+# gcn_weight2(X, coordinates, edge_index, edge_weight)
+
+
+################################################################################################
