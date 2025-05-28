@@ -170,40 +170,6 @@ class EGConvLayer(nn.Module):
 
 
 
-# Simple example with 4 nodes, 8-dimensional features, 3D coordinates
-num_nodes = 4
-in_features = 8
-out_features = 8
-hidden_features =16
-edge_features = 2
-coord_dim = 2
-
-# Random node features X and coordinates coordinate
-node_X = torch.randn(num_nodes, in_features)     # 각 노드의 특성(feature) 벡터를 의미
-coord_X = torch.randn(num_nodes, coord_dim)       # 각 노드의 좌표(position)를 나타내며, E(n)-equivariant 연산의 입력으로 사용됨
-
-
-# Randomly generate 10 directed edges (with replacement)
-edge_index = torch.randint(0, num_nodes, size=(2, 10))
-
-# # No edge attributes in this example
-# edge_attr = torch.rand(edge_index.shape[-1], edge_features)
-
-# # Instantiate EGNN layer
-# layer = EGConvLayer(
-#     in_features=in_features,
-#     out_features=out_features,
-#     hidden_features=hidden_features,
-#     edge_features=edge_features
-# )
-
-
-# # Forward pass
-# H_out, x_out = layer(node_X, coord_X, edge_index, edge_attr)
-# print("Output feature shape:", H_out.shape)  # [4, 8]
-# print("Output coord shape:  ", x_out.shape)  # [4, 2]
-
-
 X = torch.randn(4, 8)   # node_feature
 edge_index = torch.randint(0,4, size=(2,10))
 coordinates = torch.randn(4,2)
