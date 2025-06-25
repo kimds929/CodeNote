@@ -5,7 +5,7 @@
 # MA(Moving average), 
 # ARMA(Autoregressive Moving average), 
 # ARIMA(Autoregressive Integrated Moving average) 
-
+import pandas as pd
 
 url_path = 'https://raw.githubusercontent.com/kimds929/CodeNote/main/99_DataSet/Data_TimeSeries'
 
