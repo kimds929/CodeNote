@@ -1,10 +1,69 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 import operator
 
+################################################################################################################
 
+def visualize_grid_probs(prob_map, env):
+    n_rows = env.unwrapped.nrow
+    n_cols = env.unwrapped.ncol
+    grid = env.unwrapped.desc.astype(str)
+    
+    
+    import matplotlib.cm as cm
+    # 방향: ← ↓ → ↑
+    dirs = [(-0.3, 0), (0, -0.3), (0.3, 0), (0, 0.3)]
+    color_dict = {'S': 'mediumseagreen', 'H':'blue', 'G':'red'}
 
+    fig, ax = plt.subplots(figsize=(8, 8))
+    norm = plt.Normalize(vmin=0.2, vmax=0.3)
+    cmap = cm.get_cmap('jet')
 
+    for i in range(n_rows):
+        for j in range(n_cols):
+            cx, cy = j, (n_rows-1) -i  # 좌측 상단이 index 0
+            cell_probs = prob_map[i, j]
+            max_dir = np.argmax(cell_probs)
+            
+            label = grid[i, j]
+            if label != 'F':
+                ax.text(cx, cy, label, fontsize=12, color=color_dict[label], ha='center', va='center', weight='bold')
+            for d, (dx, dy) in enumerate(dirs):
+                prob = cell_probs[d]
+                color = cmap(norm(prob))
+                ax.arrow(cx, cy, dx * prob * 2, dy * prob * 2,
+                        head_width=0.05, head_length=0.05,
+                        fc=color, ec=color, alpha=0.5)
+
+                # 색상 조건: max 확률이면 빨간색, 아니면 검정
+                text_color = 'red' if d == max_dir else 'black'
+                alpha = 1 if d == max_dir else 0.5
+                # 확률 수치 annotation
+                offset_x, offset_y = dx * 0.9, dy * 0.9
+                ax.text(cx + offset_x, cy + offset_y, f"{prob:.3f}",
+                        fontsize=9, ha='center', va='center', color=text_color, alpha=alpha)
+    # 컬러바 추가
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label('Action Probability')
+
+    # 축 및 스타일
+    ax.set_xticks(np.arange(n_cols))
+    ax.set_yticks(np.arange(n_rows))
+    ax.set_yticklabels(np.arange((n_rows-1),-1,-1))
+    ax.xaxis.set_ticks_position('top')     # x축 눈금을 위쪽으로
+    ax.xaxis.set_label_position('top')     # x축 라벨도 위쪽으로
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+    ax.set_xlim(-0.5, (n_cols-1) + 0.5)
+    ax.set_ylim(-0.5, (n_rows-1) + 0.5)
+    ax.set_aspect('equal')
+    ax.set_title("Policy Action Probabilities (← ↓ → ↑) with Values")
+    plt.tight_layout()
+    # plt.show()
+    plt.close()
+    return fig
 
 ################################################################################################################
 class ReplayMemory:
