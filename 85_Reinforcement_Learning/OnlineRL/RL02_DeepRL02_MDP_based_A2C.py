@@ -200,13 +200,15 @@ class Actor(nn.Module):
         logits = self.policy_network(embed_x)
         return logits
     
-    def execute_model(self, obs, actions=None, temperature=None):
+    def execute_model(self, obs, actions=None, temperature=1, deterministic=False):
         logits = self.forward_logits(obs)
         action_dist = Categorical(logits=logits)
         entropy = action_dist.entropy()
         
         if actions is None:
-            if temperature is None:
+            if deterministic is True:
+                action = torch.argmax(logits, dim=-1)
+            elif temperature is None:
                 action = torch.argmax(logits, dim=-1)
             else:
                 explore_dist = Categorical(logits=logits/temperature)
@@ -218,16 +220,16 @@ class Actor(nn.Module):
             log_prob = action_dist.log_prob(actions)
             return log_prob, entropy
     
-    def forward(self, obs, temperature=None):
-        action, log_prob, entropy = self.execute_model(obs, temperature=temperature)
+    def forward(self, obs, temperature=1, deterministic=False):
+        action, log_prob, entropy = self.execute_model(obs, temperature=temperature, deterministic=deterministic)
         return action, log_prob, entropy
     
-    def evaluate_actions(self, obs, actions, temperature=None):
-        log_prob, entropy = self.execute_model(obs, actions=actions, temperature=temperature)
+    def evaluate_actions(self, obs, actions, temperature=1, deterministic=False):
+        log_prob, entropy = self.execute_model(obs, actions=actions, temperature=temperature, deterministic=deterministic)
         return log_prob, entropy
     
-    def predict(self, obs, temperature=None):
-        action, log_prob, entropy = self.execute_model(obs, temperature=temperature)
+    def predict(self, obs, temperature=1, deterministic=False):
+        action, log_prob, entropy = self.execute_model(obs, temperature=temperature, deterministic=deterministic)
         return action
 
 
@@ -325,7 +327,7 @@ for episode in range(num_episodes):
     
 #     with torch.no_grad():        
 #         actor_network.eval()
-#         action, _, _ = actor_network(torch.LongTensor([obs]).to(device))
+#         action = actor_network.predict(torch.LongTensor([obs]).to(device), deterministic=True)
 #         action = action.item()  
         
 #         next_obs, reward, terminated, truncated, info = env.step(action)
