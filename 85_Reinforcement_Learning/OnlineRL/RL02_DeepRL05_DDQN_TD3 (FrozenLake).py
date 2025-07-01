@@ -86,17 +86,20 @@ import httpimport
 try:
     try:
         from Environments.RL00_Env01_FrozenLake_v1 import generate_frozenlake_map
-        # from utils.DS_RL import ReplayMemory
-        custom_map = generate_frozenlake_map(5,5, hole=0.2)
+        from DS_RL import frozenlake_visualize_grid_probs, ReplayMemory
+        custom_map = generate_frozenlake_map(5,5, hole=0.17)
     except:
         remote_url = 'https://raw.githubusercontent.com/kimds929/'
 
         with httpimport.remote_repo(f"{remote_url}/CodeNote/refs/heads/main/85_Reinforcement_Learning/Environments"):
             from RL00_Env01_FrozenLake_v1 import generate_frozenlake_map
-        custom_map = generate_frozenlake_map(5,5, hole=0.2)
+        custom_map = generate_frozenlake_map(5,5, hole=0.17)
+        
+        with httpimport.remote_repo(f"{remote_url}/CodeNote/refs/heads/main/85_Reinforcement_Learning/utils"):
+            from DS_RL import frozenlake_visualize_grid_probs, ReplayMemory
 except:
     custom_map=None
-
+    
 
 
 ##############################################################################################################
@@ -118,15 +121,13 @@ class Actor(nn.Module):
         logits = self.policy_network(embed_x)
         return logits
     
-    def execute_model(self, obs, actions=None, temperature=1, deterministic=False):
+    def execute_model(self, obs, actions=None, temperature=None):
         logits = self.forward_logits(obs)
         action_dist = Categorical(logits=logits)
         entropy = action_dist.entropy()
         
         if actions is None:
-            if deterministic is True:
-                action = torch.argmax(logits, dim=-1)
-            elif temperature is None:
+            if temperature is None:
                 action = torch.argmax(logits, dim=-1)
             else:
                 explore_dist = Categorical(logits=logits/temperature)
@@ -138,18 +139,17 @@ class Actor(nn.Module):
             log_prob = action_dist.log_prob(actions)
             return log_prob, entropy
     
-    def forward(self, obs, temperature=1, deterministic=False):
-        action, log_prob, entropy = self.execute_model(obs, temperature=temperature, deterministic=deterministic)
+    def forward(self, obs, temperature=None):
+        action, log_prob, entropy = self.execute_model(obs, temperature=temperature)
         return action, log_prob, entropy
     
-    def evaluate_actions(self, obs, actions, temperature=1, deterministic=False):
-        log_prob, entropy = self.execute_model(obs, actions=actions, temperature=temperature, deterministic=deterministic)
+    def evaluate_actions(self, obs, actions, temperature=None):
+        log_prob, entropy = self.execute_model(obs, actions=actions, temperature=temperature)
         return log_prob, entropy
     
-    def predict(self, obs, temperature=1, deterministic=False):
-        action, log_prob, entropy = self.execute_model(obs, temperature=temperature, deterministic=deterministic)
+    def predict(self, obs, temperature=None):
+        action, log_prob, entropy = self.execute_model(obs, temperature=temperature)
         return action
-    
     
 
 # Q-network 정의
@@ -213,8 +213,8 @@ target_Q2.load_state_dict(main_Q2.state_dict())
 memory = ReplayMemory(max_size=memory_size, batch_size=batch_size)
 
 
-# loss_function = nn.MSELoss()
-loss_function = nn.SmoothL1Loss()
+loss_function = nn.MSELoss()
+# loss_function = nn.SmoothL1Loss()
 
 num_episodes = 100
 total_step = 0
@@ -304,7 +304,6 @@ with tqdm(total=num_episodes) as pbar:
                         
                         # beta = np.logspace(1, -2, num=num_episodes)[episode].item()
                         # beta = np.linspace(10, 0.01, num=num_episodes)[episode].item()
-                        
                         beta = 0.1
                         actor_loss = -(log_prob * advantage.detach() + beta*entropy).mean()
                         
@@ -368,7 +367,7 @@ while (done is not True):
         # done = terminated or truncated
         
         obs_tensor = torch.LongTensor([obs]).to(device)
-        action = actor_main_network.predict(obs_tensor, deterministic=True)
+        action, log_prob, entropy  = actor_main_network(obs_tensor)
         action = action.item()
         next_obs, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
@@ -400,10 +399,10 @@ q1_probs = torch.softmax(main_Q1(torch.arange(env.observation_space.n)), dim=-1)
 q2_probs = torch.softmax(main_Q2(torch.arange(env.observation_space.n)), dim=-1).detach().to('cpu').numpy().reshape(env.unwrapped.nrow,env.unwrapped.ncol,env.action_space.n)
 
 
-visualize_grid_probs(actor_probs, env)
+# visualize_grid_probs(actor_probs, env)
 # visualize_grid_probs(q1_probs, env)
 # visualize_grid_probs(q2_probs, env)
-visualize_grid_probs((q1_probs + q2_probs)/2, env)
+# visualize_grid_probs((q1_probs + q2_probs)/2, env)
 
 
 

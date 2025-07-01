@@ -2,10 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import operator
+import torch
 
 ################################################################################################################
 
-def visualize_grid_probs(prob_map, env):
+def frozenlake_visualize_grid_probs(prob_map, env):
     n_rows = env.unwrapped.nrow
     n_cols = env.unwrapped.ncol
     grid = env.unwrapped.desc.astype(str)
@@ -64,6 +65,33 @@ def visualize_grid_probs(prob_map, env):
     # plt.show()
     plt.close()
     return fig
+
+
+################################################################################################################
+def pendulum_actor_evaluator(actor, device='cpu'):
+    # θ : -np.pi ~ -np.pi/2 : 4사분면 / -np.pi/2 ~ 0 : 1사분면 / 0 ~ np.pi/2 : 2사분면 / np.pi/2 ~ np.pi : 3사분면
+    # ang_velocity : -8(시계방향) ~ 8 (반시계방향)
+    # action : -2 (시계방향 힘) ~ 2 (반시계방향 힘)
+
+    radians = np.linspace(np.pi, -np.pi, num=9)
+    # degrees = np.degrees(radians)
+    ang_velocity = np.linspace(-8, 8, num=9)
+    grid = np.stack(np.meshgrid(radians, ang_velocity)).reshape(2,-1).T
+    grid_obs = np.concatenate([np.sin(grid[:, [0]]), np.cos(grid[:, [0]]),grid[:, [1]]], axis=1)
+
+    grid_obs_tensor = torch.FloatTensor(grid_obs).to(device)
+    pred_actions, _ = actor.predict(grid_obs_tensor)
+    if 'torch' in str(type(pred_actions)):
+        pred_actions = pred_actions.detach().to('cpu').numpy()
+    grid_obs_pred = np.concatenate([np.degrees(grid[:,[0]]), grid[:,[0]], grid[:, [1]], pred_actions], axis=1)
+
+    df_grid_obs_pred = pd.DataFrame(grid_obs_pred, columns=['degrees', 'radians','ang_velocity','pred_action'])
+
+    df_predict_tb = df_grid_obs_pred.groupby(['radians', 'ang_velocity'])['pred_action'].mean().unstack('radians')
+    df_predict_tb = df_grid_obs_pred.groupby(['degrees', 'ang_velocity'])['pred_action'].mean().unstack('degrees')
+    df_predict_tb = np.round(df_predict_tb,2)
+    df_predict_tb = df_predict_tb.sort_values('degrees', axis=1, ascending=False)
+    return df_predict_tb
 
 ################################################################################################################
 class ReplayMemory:
