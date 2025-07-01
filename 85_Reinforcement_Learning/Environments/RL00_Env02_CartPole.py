@@ -1,115 +1,83 @@
-# import gym
-# env = gym.make('CartPole-v1')
+import sys
+sys.path.append(r'D:\DataScience\★Git_CodeNote\85_Reinforcement_Learning')
 
-# for i_episode in range(20):
-#     observation = env.reset()
-#     for t in range(100):
-#         env.render()
-#         print(observation)
-#         action = env.action_space.sample()
-#         observation, reward, done, info = env.step(action)
-#         if done:
-#             print("Episode finished after {} timesteps".format(t+1))
-#             break
-# env.close()
-
-
-
+import os
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-import math
 
-class CustomCartPole:
-    def __init__(self):
-        # 물리 상수들
-        self.gravity = 9.8
-        self.mass_cart = 1.0
-        self.mass_pole = 0.1
-        self.total_mass = self.mass_cart + self.mass_pole
-        self.length = 0.5  # pole length
-        self.polemass_length = self.mass_pole * self.length
-        self.force_mag = 10.0
-        self.tau = 0.02  # time step for simulation
+from collections import defaultdict
 
-        # 상태 변수들 (카트 위치, 속도, 막대 각도, 각속도)
-        self.state = None
-        self.reset()
+import time
+from IPython.display import clear_output
+from tqdm.auto import tqdm
 
-    def reset(self):
-        # 상태 초기화 (작은 무작위 초기값 부여)
-        self.state = np.random.uniform(low=-0.05, high=0.05, size=(4,))
-        return self.state
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.distributions import Categorical
+from torch.utils.data import TensorDataset, DataLoader
 
-    def step(self, action):
-        # action = 0 (왼쪽으로 힘을 가함), action = 1 (오른쪽으로 힘을 가함)
-        x, x_dot, theta, theta_dot = self.state
-        force = self.force_mag if action == 1 else -self.force_mag
+# device
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-        costheta = math.cos(theta)
-        sintheta = math.sin(theta)
+################################################################################################################
 
-        # 물리 공식 계산
-        temp = (force + self.polemass_length * theta_dot ** 2 * sintheta) / self.total_mass
-        theta_acc = (self.gravity * sintheta - costheta * temp) / (self.length * (4.0 / 3.0 - self.mass_pole * costheta ** 2 / self.total_mass))
-        x_acc = temp - self.polemass_length * theta_acc * costheta / self.total_mass
+try:
+    try:
+        from Environments.RL00_Env01_FrozenLake_v1 import generate_frozenlake_map
+        from DS_RL import visualize_grid_probs, ReplayMemory
+        custom_map = generate_frozenlake_map(5,5, hole=0.17)
+    except:
+        remote_url = 'https://raw.githubusercontent.com/kimds929/'
 
-        # 새로운 상태 갱신
-        x = x + self.tau * x_dot
-        x_dot = x_dot + self.tau * x_acc
-        theta = theta + self.tau * theta_dot
-        theta_dot = theta_dot + self.tau * theta_acc
-        self.state = (x, x_dot, theta, theta_dot)
-
-        # 완료 여부 (극이 일정 각도를 넘으면 실패)
-        done = bool(
-            x < -5
-            or x > 5
-            or theta < -20 * math.pi / 180
-            or theta > 20 * math.pi / 180
-        )
-
-        return np.array(self.state), done
-
-    def render(self):
-        # 상태 시각화
-        x, _, theta, _ = self.state
-
-        plt.figure(figsize=(5, 5))
-        ax = plt.gca()
-        ax.clear()
-
-        # 바닥 선
-        ax.add_patch(Rectangle((-2.4, -0.05), 4.8, 0.1, color='gray'))
-
-        # 카트
-        cart_width = 0.4
-        cart_height = 0.2
-        ax.add_patch(Rectangle((x - cart_width / 2, 0), cart_width, cart_height, color='blue'))
-
-        # 막대 (극)
-        pole_x = x + self.length * math.sin(theta)
-        pole_y = cart_height + self.length * math.cos(theta)
-        ax.plot([x, pole_x], [cart_height, pole_y], color='red', linewidth=5)
-
-        ax.set_xlim(-2.4, 2.4)
-        ax.set_ylim(-0.5, 1.5)
-        plt.pause(0.001)
+        with httpimport.remote_repo(f"{remote_url}/CodeNote/refs/heads/main/85_Reinforcement_Learning/Environments"):
+            from RL00_Env01_FrozenLake_v1 import generate_frozenlake_map
+        custom_map = generate_frozenlake_map(5,5, hole=0.17)
+        
+        with httpimport.remote_repo(f"{remote_url}/CodeNote/refs/heads/main/85_Reinforcement_Learning/utils"):
+            from DS_RL import visualize_grid_probs, ReplayMemory
+except:
+    custom_map=None
 
 
-# # 간단한 시뮬레이션
-# env = CustomCartPole()
-# state = env.reset()
-# env.render()
+################################################################################################################
 
-# from IPython.display import clear_output
-# for _ in range(200):
-#     env.render()
-#     action = np.random.choice([0, 1])  # 임의의 행동 선택
-#     state, done = env.step(action)
-#     if done:
-#         break
-#     clear_output(wait=True)
-# plt.show()
 
+# pip install gymnasium[classic-control]
+# pip install pygame
+
+import gymnasium as gym
+
+
+# 환경 생성
+env = gym.make("CartPole-v1", render_mode="rgb_array")  # render_mode='human'은 화면에 직접 그리기용
+obs, info = env.reset()
+plt.imshow(env.render())
+
+print(env.observation_space)
+# Cart_Position, Cart_Velocity, Pole_Angle, Pole_Angular_Velocity
+print(env.action_space)
+# {0: 왼쪽 힘, 1: 오른쪽 힘}
+
+obs, info = env.reset()
+done=False
+i=0
+for _ in range(500):
+    action = env.action_space.sample()
+    next_obs, reward, terminated, truncated, info = env.step(action)
+    
+    done = terminated or truncated
+    
+    print(reward)
+    plt.figure()
+    plt.imshow(env.render())
+    plt.show()
+    time.sleep(0.1)
+    clear_output(wait=True)
+    
+    obs = next_obs
+    i += 1
+    if done or i >=50:
+        break
