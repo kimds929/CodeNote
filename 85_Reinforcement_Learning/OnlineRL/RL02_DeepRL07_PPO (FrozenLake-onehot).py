@@ -42,6 +42,9 @@ class Actor(nn.Module):
             ,nn.Tanh()
             ,nn.Linear(hidden_dim, action_dim)
         )
+    
+    def forward_logits(self, obs):
+        return self.network(obs)
 
     def execute_model(self, obs, actions=None, deterministic=False):
         action_logits = self.network(obs)   # compute logits
@@ -304,10 +307,10 @@ import gymnasium as gym
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-env = gym.make("FrozenLake-v1", is_slippery=False, render_mode="rgb_array") 
+env = gym.make("FrozenLake-v1", desc=custom_map, is_slippery=False, render_mode="rgb_array") 
+# env = gym.make("FrozenLake-v1", is_slippery=False, render_mode="rgb_array") 
 obs, info = env.reset()
 plt.imshow(env.render())
-
 
 clip_eps = 0.1
 gamma = 0.99
@@ -320,10 +323,10 @@ c_2_ent_coef = 0.0         # Atari : 0.01, MujoCo : 0.0
 max_grad_norm = 0.5
 batch_size = 64
 
-policy_network = Actor(state_dim=16, hidden_dim=16, action_dim=4).to(device)
+policy_network = Actor(state_dim=env.observation_space.n, hidden_dim=16, action_dim=4).to(device)
 policy_optimizer = optim.Adam(policy_network.parameters(), lr=3e-4)
 
-value_network = Critic(state_dim=16, hidden_dim=16).to(device)
+value_network = Critic(state_dim=env.observation_space.n, hidden_dim=16).to(device)
 value_optimizer = optim.Adam(value_network.parameters(), lr=3e-4)
 
 memory = ReplayMemory()
@@ -507,4 +510,22 @@ plt.show()
 
 
 ############################################################
-    
+
+################################################################################################################
+################################################################################################################
+
+
+
+# ← ↓ → ↑
+policy_network.forward_logits(torch.eye(env.observation_space.n).to(device))
+# env.step(3)
+
+allgrid_logits = policy_network.forward_logits(torch.eye(env.observation_space.n).to(device))
+allgrid_logits
+allgrid_probs = (torch.exp(allgrid_logits) / torch.exp(allgrid_logits).sum(dim=-1, keepdim=True)).to('cpu').detach().numpy()
+
+
+actor_probs = allgrid_probs.reshape(env.unwrapped.nrow,env.unwrapped.ncol,env.action_space.n).copy()
+actor_probs.shape
+frozenlake_visualize_grid_probs(actor_probs, env)
+
