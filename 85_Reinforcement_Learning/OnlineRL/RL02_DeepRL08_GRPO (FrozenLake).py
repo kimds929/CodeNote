@@ -25,32 +25,10 @@ from IPython.display import clear_output
 
 print(f"CUDA available: {torch.cuda.is_available()}")
 
+
 ################################################################################################################
 ################################################################################################################
 # [ FrozenLake ] ###############################################################################################
-
-import httpimport
-
-
-try:
-    try:
-        from Environments.RL00_Env01_FrozenLake_v1 import generate_frozenlake_map
-        from DS_RL import frozenlake_visualize_grid_probs, ReplayMemory
-        custom_map = generate_frozenlake_map(5,5, hole=0.17)
-    except:
-        remote_url = 'https://raw.githubusercontent.com/kimds929/'
-
-        with httpimport.remote_repo(f"{remote_url}/CodeNote/refs/heads/main/85_Reinforcement_Learning/Environments"):
-            from RL00_Env01_FrozenLake_v1 import generate_frozenlake_map
-        custom_map = generate_frozenlake_map(5,5, hole=0.17)
-        
-        with httpimport.remote_repo(f"{remote_url}/CodeNote/refs/heads/main/85_Reinforcement_Learning/utils"):
-            from DS_RL import frozenlake_visualize_grid_probs, ReplayMemory
-except:
-    custom_map=None
-
-
-
 
 ################################################################################################################
 
@@ -314,6 +292,26 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 print(device)
 
 ###########################################################################################################
+import httpimport
+
+
+try:
+    try:
+        from Environments.RL00_Env01_FrozenLake_v1 import generate_frozenlake_map
+        from DS_RL import frozenlake_visualize_grid_probs, ReplayMemory
+        custom_map = generate_frozenlake_map(5,5, hole=0.17)
+    except:
+        remote_url = 'https://raw.githubusercontent.com/kimds929/'
+
+        with httpimport.remote_repo(f"{remote_url}/CodeNote/refs/heads/main/85_Reinforcement_Learning/Environments"):
+            from RL00_Env01_FrozenLake_v1 import generate_frozenlake_map
+        custom_map = generate_frozenlake_map(5,5, hole=0.17)
+        
+        with httpimport.remote_repo(f"{remote_url}/CodeNote/refs/heads/main/85_Reinforcement_Learning/utils"):
+            from DS_RL import frozenlake_visualize_grid_probs, ReplayMemory
+except:
+    custom_map=None
+    
 # ( CustomPPO with FrozenLake_v1 ) ########################################################################
 # import gymnasium as gym
 # from stable_baselines3 import PPO
