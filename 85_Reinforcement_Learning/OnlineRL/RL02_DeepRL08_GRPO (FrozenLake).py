@@ -294,7 +294,6 @@ print(device)
 ###########################################################################################################
 import httpimport
 
-
 try:
     try:
         from Environments.RL00_Env01_FrozenLake_v1 import generate_frozenlake_map
@@ -422,7 +421,6 @@ for iter in range(N_ITER):
         
         for epoch in range(N_EPOCHS):
             for batch_data in data_loader:
-                # break
                 # 현재 policy, value 평가: evaluate value,log_prob, entropy
                 obss, actions, old_logits, advantages, returns = batch_data
                 
@@ -447,13 +445,13 @@ for iter in range(N_ITER):
                 # ② (Entrophy Loss)
                 entropy_loss = -new_entropy.mean()
                 
-                # (KL-Divergence Loss)
+                # ③ (KL-Divergence Loss)
                 old_p = torch.log_softmax(old_logits.detach(), dim=-1).exp()
                 old_log_p = torch.log_softmax(old_logits.detach(), dim=-1)
                 new_log_p = torch.log_softmax(new_logits, dim=-1)
                 kl = (old_p * (old_log_p - new_log_p)).sum(dim=-1).mean()                
                 
-                # (Final loss)
+                # (Final Actor loss)
                 actor_loss = policy_loss + c_ent_coef*entropy_loss + c_kl_coef*kl
                 
                 # (backpropagation)

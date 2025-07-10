@@ -15,6 +15,4 @@ group_means = group_sums / group_counts
 group_sq_diffs = np.bincount(g, weights=(x-group_means[g])**2)
 group_stds = np.sqrt(group_sq_diffs / group_counts)
 
-group_stds
-
 normalized = (x - group_means[g]) / (group_stds[g] + 1e-8)
