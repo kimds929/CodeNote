@@ -109,25 +109,14 @@ plt.imshow(env.render())
 env_mdp = env.unwrapped.P
 policy = np.ones((25,4)) / np.ones((25,4)).sum(axis=-1, keepdims=True)
 V = np.zeros(25).astype(np.float32)
+alpha = 0.1
 gamma = 0.9
-threshold = 0.01
+threshold = 1e-5
+T = 1
+
 
 while True:
     # Policy Evaluation ===================================================================
-    # (V: State Value Ver.) -----------------------------------------------
-    # while True:
-    #     Delta = 0
-    #     for state in range(env.observation_space.n):
-    #         v = V[state]
-    #         vs = 0
-    #         for action, next_info in env_mdp[state].items():
-    #             for prob, next_state, reward, done in next_info:
-    #                 vs += policy[state][action] * (reward + gamma * V[next_state]) * prob
-    #         V[state] = vs
-    #         Delta = max(Delta, abs(v - V[state]))
-    #     if Delta < threshold:
-    #         break
-    
     # (Q: Action Value Ver.) -------------------------------------------------------
     while True:
         Delta = 0
@@ -138,31 +127,35 @@ while True:
             for action, next_info in env_mdp[state].items():
                 for prob, next_state, reward, done in next_info:
                     q[action] += prob * (reward + gamma * V[next_state])
-            V[state] = np.sum(policy[state] * q)
+            entropy = -np.sum(policy[state] * np.log(policy[state] + 1e-8))     # ★ entropy : -∑P·log(P)
+            V[state] = np.sum(policy[state] * q) + alpha*entropy      # V = ∑ P·Q + H
             Delta = max(Delta, abs(v - V[state]))
         if Delta < threshold:
             break
     # ===================================================================================
 
-    policy_stable = True
     # Policy Improvement ================================================================
+    policy_stable = True
     for state in range(env.observation_space.n):
-        old_action = np.argmax(policy[state])
+        old_action_dist = policy[state].copy()
+        
         q = np.zeros(env.action_space.n)
         for action, next_info in env_mdp[state].items():
             for prob, next_state, reward, done in next_info:
                 q[action] += prob * (reward + gamma * V[next_state])
-        new_action = np.argmax(q)
-        policy[state] = np.eye(env.action_space.n)[new_action]
-        if old_action != new_action:
+        logits = q/T
+        logits = logits - np.max(logits)  # for numerical stability
+        policy[state] = np.exp(logits) / np.exp(logits).sum()     # softmax
+
+        if not np.allclose(old_action_dist, policy[state], atol=threshold):
             policy_stable = False
     # ===================================================================================
     if policy_stable:
         break
-    
+
 
 visualize_grid_probs(policy.reshape(5,5,4), env)
-V.reshape(5,5)
+# V.reshape(5,5)
 
 
 # Simulation Test ---------------------------------------------------------------------------------

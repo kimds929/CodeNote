@@ -1,18 +1,9 @@
+import numpy as np
+import matplotlib.pyplot as plt
 
-a = np.arange(12)
-b = np.random.randint(0,3, size=12)
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-s = np.stack([a,b]).T
-s
-
-x = s[:,0]
-g = s[:,1]
-
-group_counts = np.bincount(g)
-group_sums = np.bincount(g, weights=x)
-group_means = group_sums / group_counts
-
-group_sq_diffs = np.bincount(g, weights=(x-group_means[g])**2)
-group_stds = np.sqrt(group_sq_diffs / group_counts)
-
-normalized = (x - group_means[g]) / (group_stds[g] + 1e-8)
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
