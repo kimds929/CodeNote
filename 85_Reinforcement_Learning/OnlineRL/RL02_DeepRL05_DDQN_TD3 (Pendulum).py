@@ -121,8 +121,6 @@ class ReplayMemory:
 ###########################################################################################################
 
 
-
-
 # pip install gymnasium[classic-control]
 # pip install pygame
 
@@ -214,7 +212,7 @@ ou_noise = OrnsteinUhlenbeckActionNoise(
     mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
 )
 
-# DDPG 모델 생성
+# TD3 모델 생성
 model = TD3(
     "MlpPolicy",                # MLP 정책 사용
     env=env,
@@ -233,10 +231,10 @@ model = TD3(
 model.learn(total_timesteps=10000)
 
 # 학습된 모델 저장
-# model.save("ddpg_pendulum")
+# model.save("TD3_pendulum")
 
 # 저장된 모델 불러오기
-# model = DDPG.load("ddpg_pendulum", env=env)
+# model = TD3.load("TD3", env=env)
 
 
 
