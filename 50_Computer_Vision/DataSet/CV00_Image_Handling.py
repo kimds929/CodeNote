@@ -413,186 +413,186 @@ class EvaluateClassifier():
 
 
 
-# 이미지 불러오기
-import os
-import numpy as np
-import matplotlib.pyplot as plt
-import cv2 as cv
-from PIL import Image   # PIL는 이미지를 load 할 때 이용
-from PIL import ImageGrab
+# # 이미지 불러오기
+# import os
+# import numpy as np
+# import matplotlib.pyplot as plt
+# import cv2 as cv
+# from PIL import Image   # PIL는 이미지를 load 할 때 이용
+# from PIL import ImageGrab
 
-# 경로설정 ###############################################################
-save_path = 'D:/작업방/업무 - 자동차 ★★★/Workspace_Python/DataSet_Image'
-os.getcwd()
-
-
-# Clipboard로부터 이미지 불러오기 ###############################################################
-img_pil = ImageGrab.grabclipboard()
-
-# 파일로부터 이미지 불러오기 ###############################################################
-# (pyplot)  # (H, W, C) # Channel : RGBA
-img_plt = plt.imread(f'{save_path}/Example/example_001.png')
-print(type(img_plt), img_plt.shape) # <class 'numpy.ndarray'> (269, 2020, 4) 
-
-# show
-plt.imshow(img_plt)
-
-# (cv2) # (H, W, C) # Channel : BRG
-img_cv = cv.imread(f'./DataSet_Image/Example/example_001.png')  # 한글경로는 Load불가
-print(type(img_cv), img_cv.shape) # <class 'numpy.ndarray'> (269, 2020, 3)  
-
-# * mode
-# cv.IMREAD_UNCHANGED : 원본 사용
-# cv.IMREAD_GRAYSCALE : 1 채널, 그레이스케일 적용
-# cv.IMREAD_COLOR : 3 채널, BGR 이미지 사용
-# cv.IMREAD_ANYDEPTH : 이미지에 따라 정밀도를 16/32비트 또는 8비트로 사용
-# cv.IMREAD_ANYCOLOR : 가능한 3 채널, 색상 이미지로 사용
-# cv.IMREAD_REDUCED_GRAYSCALE_2 : 1 채널, 1/2 크기, 그레이스케일 적용
-# cv.IMREAD_REDUCED_GRAYSCALE_4 : 1 채널, 1/4 크기, 그레이스케일 적용
-# cv.IMREAD_REDUCED_GRAYSCALE_8 : 1 채널, 1/8 크기, 그레이스케일 적용
-# cv.IMREAD_REDUCED_COLOR_2 : 3 채널, 1/2 크기, BGR 이미지 사용
-# cv.IMREAD_REDUCED_COLOR_4 : 3 채널, 1/4 크기, BGR 이미지 사용
-# cv.IMREAD_REDUCED_COLOR_8 : 3 채널, 1/8 크기, BGR 이미지 사용
-img_cv_origin = cv.imread(f'./DataSet_Image/Example/example_001.png', cv.IMREAD_UNCHANGED)  # 원본
-img_cv_bgr = cv.imread(f'./DataSet_Image/Example/example_001.png', cv.IMREAD_COLOR)     # 3채널 BGR
-img_cv_gray = cv.imread(f'./DataSet_Image/Example/example_001.png', cv.IMREAD_GRAYSCALE)  # 1채널 Grayscale
-print(f"origin: {img_cv_origin.shape} / bgr: {img_cv_bgr.shape} / gray {img_cv_gray.shape}")
-
-# show
-plt.imshow(img_cv)
+# # 경로설정 ###############################################################
+# save_path = 'D:/작업방/업무 - 자동차 ★★★/Workspace_Python/DataSet_Image'
+# os.getcwd()
 
 
-# imshow (별도 윈도우 창에서 실행)
-cv.imshow('Show Image', img_cv)
-cv.waitKey(0)           # time마다 키 입력상태를 받아옵니다. 0일 경우, 지속적으로 검사하여 해당 구문을 넘어가지 않습니다.
-cv.destroyAllWindows()  # 모든 윈도우창을 닫습니다.
+# # Clipboard로부터 이미지 불러오기 ###############################################################
+# img_pil = ImageGrab.grabclipboard()
+
+# # 파일로부터 이미지 불러오기 ###############################################################
+# # (pyplot)  # (H, W, C) # Channel : RGBA
+# img_plt = plt.imread(f'{save_path}/Example/example_001.png')
+# print(type(img_plt), img_plt.shape) # <class 'numpy.ndarray'> (269, 2020, 4) 
+
+# # show
+# plt.imshow(img_plt)
+
+# # (cv2) # (H, W, C) # Channel : BRG
+# img_cv = cv.imread(f'./DataSet_Image/Example/example_001.png')  # 한글경로는 Load불가
+# print(type(img_cv), img_cv.shape) # <class 'numpy.ndarray'> (269, 2020, 3)  
+
+# # * mode
+# # cv.IMREAD_UNCHANGED : 원본 사용
+# # cv.IMREAD_GRAYSCALE : 1 채널, 그레이스케일 적용
+# # cv.IMREAD_COLOR : 3 채널, BGR 이미지 사용
+# # cv.IMREAD_ANYDEPTH : 이미지에 따라 정밀도를 16/32비트 또는 8비트로 사용
+# # cv.IMREAD_ANYCOLOR : 가능한 3 채널, 색상 이미지로 사용
+# # cv.IMREAD_REDUCED_GRAYSCALE_2 : 1 채널, 1/2 크기, 그레이스케일 적용
+# # cv.IMREAD_REDUCED_GRAYSCALE_4 : 1 채널, 1/4 크기, 그레이스케일 적용
+# # cv.IMREAD_REDUCED_GRAYSCALE_8 : 1 채널, 1/8 크기, 그레이스케일 적용
+# # cv.IMREAD_REDUCED_COLOR_2 : 3 채널, 1/2 크기, BGR 이미지 사용
+# # cv.IMREAD_REDUCED_COLOR_4 : 3 채널, 1/4 크기, BGR 이미지 사용
+# # cv.IMREAD_REDUCED_COLOR_8 : 3 채널, 1/8 크기, BGR 이미지 사용
+# img_cv_origin = cv.imread(f'./DataSet_Image/Example/example_001.png', cv.IMREAD_UNCHANGED)  # 원본
+# img_cv_bgr = cv.imread(f'./DataSet_Image/Example/example_001.png', cv.IMREAD_COLOR)     # 3채널 BGR
+# img_cv_gray = cv.imread(f'./DataSet_Image/Example/example_001.png', cv.IMREAD_GRAYSCALE)  # 1채널 Grayscale
+# print(f"origin: {img_cv_origin.shape} / bgr: {img_cv_bgr.shape} / gray {img_cv_gray.shape}")
+
+# # show
+# plt.imshow(img_cv)
+
+
+# # imshow (별도 윈도우 창에서 실행)
+# cv.imshow('Show Image', img_cv)
+# cv.waitKey(0)           # time마다 키 입력상태를 받아옵니다. 0일 경우, 지속적으로 검사하여 해당 구문을 넘어가지 않습니다.
+# cv.destroyAllWindows()  # 모든 윈도우창을 닫습니다.
 
 
 
 
-# (PIL)  # (H, W, C) # Channel : RGBA
-img_pil = Image.open(f'{save_path}/Example/example_001.png')
-img_pil = Image.open(f'{save_path}/Example/example_001.png')
-np_pil = np.array(img_pil)
+# # (PIL)  # (H, W, C) # Channel : RGBA
+# img_pil = Image.open(f'{save_path}/Example/example_001.png')
+# img_pil = Image.open(f'{save_path}/Example/example_001.png')
+# np_pil = np.array(img_pil)
 
-print(type(img_pil), np_pil.shape)  # <class 'PIL.PngImagePlugin.PngImageFile'> (269, 2020, 4)  
+# print(type(img_pil), np_pil.shape)  # <class 'PIL.PngImagePlugin.PngImageFile'> (269, 2020, 4)  
 
-# show
-img_pil
-plt.imshow(img_pil)
-
-
-# 이미지 Library간 Transform ###############################################################
-img_cv2 = cv.cvtColor(img_plt, cv.COLOR_RGB2BGR)
-img_cv2 = cv.cvtColor(np.array(np_pil), cv.COLOR_RGB2BGR) # PIL → cv2
+# # show
+# img_pil
+# plt.imshow(img_pil)
 
 
-# 이미지저장 ###############################################################
-# (pyplot)
-plt.imsave(f'{save_path}/Example/example_001_plt.png', img_plt)
-
-# (cv)
-cv.imwrite(f'./DataSet_Image/Example/example_001_cv.png', img_cv)  # 한글경로는 Save불가
-
-# (PIL)
-img_pil.save(f'{save_path}/Example/example_001_pil.png')
+# # 이미지 Library간 Transform ###############################################################
+# img_cv2 = cv.cvtColor(img_plt, cv.COLOR_RGB2BGR)
+# img_cv2 = cv.cvtColor(np.array(np_pil), cv.COLOR_RGB2BGR) # PIL → cv2
 
 
-# Transpose ###############################################################
-r = np.ones((10,20))* 0.1
-g = np.ones((10,20))* 0.5
-b = np.ones((10,20))* 0.9
-img_sample_chw = np.array([r, g, b])
-print(img_sample_chw.shape)
+# # 이미지저장 ###############################################################
+# # (pyplot)
+# plt.imsave(f'{save_path}/Example/example_001_plt.png', img_plt)
 
-# (C, H, W) → (H, W, C)
-img_sampe_hwc = np.transpose(img_sample_chw, [1, 2, 0])
-plt.imshow(img_sampe_hwc)
+# # (cv)
+# cv.imwrite(f'./DataSet_Image/Example/example_001_cv.png', img_cv)  # 한글경로는 Save불가
 
-print(img_sampe_hwc.shape)
-
-# (H, W, C) → (C, H, W)
-img_sampe_chw = np.transpose(img_sampe_hwc, [2, 0, 1])
-print(img_sampe_chw.shape)
+# # (PIL)
+# img_pil.save(f'{save_path}/Example/example_001_pil.png')
 
 
-# element Split ###############################################################
+# # Transpose ###############################################################
+# r = np.ones((10,20))* 0.1
+# g = np.ones((10,20))* 0.5
+# b = np.ones((10,20))* 0.9
+# img_sample_chw = np.array([r, g, b])
+# print(img_sample_chw.shape)
 
-# rgb 분리, 결합
-r, g, b, a = cv.split(img_plt)  # pyplot
-b,g,r = cv.split(img_cv)        # cv
-r, g, b, a = cv.split(np.array(img_pil))    # PIL
+# # (C, H, W) → (H, W, C)
+# img_sampe_hwc = np.transpose(img_sample_chw, [1, 2, 0])
+# plt.imshow(img_sampe_hwc)
 
-img_rgb = cv.merge((r,g,b))
-img_rgb = np.transpose(np.array([r, g, b]), [1,2,0])
-plt.imshow(img_rgb)
+# print(img_sampe_hwc.shape)
 
-r, g, b = np.split(img_rgb)
+# # (H, W, C) → (C, H, W)
+# img_sampe_chw = np.transpose(img_sampe_hwc, [2, 0, 1])
+# print(img_sampe_chw.shape)
 
 
+# # element Split ###############################################################
+
+# # rgb 분리, 결합
+# r, g, b, a = cv.split(img_plt)  # pyplot
+# b,g,r = cv.split(img_cv)        # cv
+# r, g, b, a = cv.split(np.array(img_pil))    # PIL
+
+# img_rgb = cv.merge((r,g,b))
+# img_rgb = np.transpose(np.array([r, g, b]), [1,2,0])
+# plt.imshow(img_rgb)
+
+# r, g, b = np.split(img_rgb)
 
 
 
 
 
 
-# # 이미지 차원축소
-# img.mean(2).shape
 
 
-# # 이미지 해상도 변경(resize)
-# plt.imshow(cv.resize(img, (100,70)))
+# # # 이미지 차원축소
+# # img.mean(2).shape
 
 
-
-
-
-# import torch
+# # # 이미지 해상도 변경(resize)
+# # plt.imshow(cv.resize(img, (100,70)))
 
 
 
 
-###########################
 
-r = np.array(
-    [[255, 155, 85, 0],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
-    [0, 100, 120, 0]]
-    )
-
-g = np.array(
-    [[0, 0, 0, 0],
-    [250, 135, 75, 15],
-    [0, 0, 0, 0],
-    [0, 110, 0, 140]]
-    )
-
-b = np.array(
-    [[0, 0, 0, 0],
-    [0, 0, 0, 0],
-    [245, 175, 105, 0],
-    [0, 0, 130, 150]]
-    )
-
-# * matplotlib/Pillow/cv2: (4, 4, 3)
-
-
-img_rgb = cv2.merge((r,g,b))
-# img_rgb.shape
-img_rgb = np.transpose( np.array([r,g,b]) , [1,2,0])
-
-img_pillow = Image.fromarray(img_rgb.astype(np.uint8))
-# img_pillow = Image.fromarray(np.array([r,g,b]).astype(np.uint8))
-img_pillow.resize((100,100))
-
-
-plt.imshow(img_rgb)
-plt.imshow(np.array([r,g,b]))
+# # import torch
 
 
 
-# imshow (별도 윈도우 창에서 실행)
-# cv2.imshow('Show Image', img_rgb)
-# cv2.waitKey(0)           # time마다 키 입력상태를 받아옵니다. 0일 경우, 지속적으로 검사하여 해당 구문을 넘어가지 않습니다.
-# cv2.destroyAllWindows()  # 모든 윈도우창을 닫습니다.
+
+# ###########################
+
+# r = np.array(
+#     [[255, 155, 85, 0],
+#     [0, 0, 0, 0],
+#     [0, 0, 0, 0],
+#     [0, 100, 120, 0]]
+#     )
+
+# g = np.array(
+#     [[0, 0, 0, 0],
+#     [250, 135, 75, 15],
+#     [0, 0, 0, 0],
+#     [0, 110, 0, 140]]
+#     )
+
+# b = np.array(
+#     [[0, 0, 0, 0],
+#     [0, 0, 0, 0],
+#     [245, 175, 105, 0],
+#     [0, 0, 130, 150]]
+#     )
+
+# # * matplotlib/Pillow/cv2: (4, 4, 3)
+
+
+# img_rgb = cv.merge((r,g,b))
+# # img_rgb.shape
+# img_rgb = np.transpose( np.array([r,g,b]) , [1,2,0])
+
+# img_pillow = Image.fromarray(img_rgb.astype(np.uint8))
+# # img_pillow = Image.fromarray(np.array([r,g,b]).astype(np.uint8))
+# img_pillow.resize((100,100))
+
+
+# plt.imshow(img_rgb)
+# plt.imshow(np.array([r,g,b]))
+
+
+
+# # imshow (별도 윈도우 창에서 실행)
+# # cv2.imshow('Show Image', img_rgb)
+# # cv2.waitKey(0)           # time마다 키 입력상태를 받아옵니다. 0일 경우, 지속적으로 검사하여 해당 구문을 넘어가지 않습니다.
+# # cv2.destroyAllWindows()  # 모든 윈도우창을 닫습니다.
