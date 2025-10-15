@@ -6,8 +6,11 @@ from matplotlib import font_manager, rc
 font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/malgun.ttf").get_name()
 rc('font', family=font_name)
 import seaborn as sns
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="seaborn")
 
 import scipy as sp
+from scipy.stats import norm, f_oneway
 
 from IPython.core.display import display, HTML
 
@@ -18,10 +21,14 @@ import re
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import matplotlib.font_manager as fm
 from matplotlib import font_manager, rc    # 한글폰트사용
 font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/malgun.ttf").get_name()
 rc('font', family=font_name)
+
+from tqdm.notebook import tqdm
+from tqdm import tqdm_notebook
 
 
 
@@ -702,8 +709,6 @@ class Capability():
     def __str__(self):
         self.__repr__()
         return str(self.info)
-
-
 
 
 
@@ -1768,6 +1773,693 @@ class DataHandler:
 
 
 
+# (class) Data-Frame Information Plot
+class SummaryPlot():
+    def __init__(self, data, save_data=True):
+        self.numeric_cols, self.obejct_cols, self.time_cols = map(lambda x: x.columns, dtypes_split(data, return_type='tuple_data'))
+        self.missing_cols = len(data) == data.isna().sum(0)
+        self.nunique_cols = data.nunique()
+
+        self.save_data = save_data
+        if save_data:
+            self.data = data
+
+    def attribute_plot(self, data, x, obejct_cols, numeric_cols, time_cols, nunique_cols, missing_cols, max_object):
+        plt.title(x)
+        if missing_cols[x]:
+            plt.plot()
+        else:
+            if x in obejct_cols:
+                if nunique_cols[x] == len(data):
+                    plt.plot()
+                    plt.text(-0.02, 0, 'Unique Value', fontsize=13)
+                elif nunique_cols[x] > max_object:
+                    data_value_counts = data[x].value_counts()
+                    maxbar_value_counts = data_value_counts[:max_object]
+                    maxbar_value_counts['other'] = data_value_counts[max_object:].sum()
+                    maxbar_value_counts.plot.bar(color='mediumseagreen', edgecolor='grey')
+                else:
+                    data[x].value_counts().plot.bar(color='mediumseagreen', edgecolor='grey')
+            elif x in numeric_cols:
+                if nunique_cols[x] == 1:
+                    fitted_line = None
+                else:
+                    fitted_line = sp.stats.norm
+                sns.distplot(data[x], fit=fitted_line, kde=None, hist_kws={'edgecolor':'grey'}, fit_kws={'color':(1,0.5,0.5)})
+            elif x in x in time_cols:
+                plt.hist(data[x], edgecolor='grey', color='palegoldenrod')
+
+    def summary_plot(self, on, dtypes='all', data=False, max_object=10, return_plot=False):
+        if type(data)==bool and data == False:
+            if self.save_data:
+                data = self.data
+            else:
+                raise('data must be need.')
+       
+        columns = []
+        if dtypes == 'all':
+            columns = on.copy()
+        else:
+            if dtypes == 'numeric':
+                for on_cols in on:
+                    if on_cols in self.numeric_cols:
+                        columns.append(on_cols)
+            elif dtypes == 'object':
+                for on_cols in on:
+                    if on_cols in self.obejct_cols:
+                        columns.append(on_cols)
+            elif dtypes == 'time':
+                for on_cols in on:
+                    if on_cols in self.time_cols:
+                        columns.append(on_cols)
+       
+        ncols = len(columns)
+
+        fig_ncols = 6 if ncols > 6 else ncols
+        fig_nrows = ((ncols // 6)+1) if ncols > 6 else 0.4
+
+        if len(columns) >= 100:
+            continue_YN = input(f'{len(on)} features are selected. Continue? (Y/N)')
+       
+        if len(columns) < 100 or continue_YN == 'Y':
+            fig = plt.figure(figsize=(fig_ncols * 4, fig_nrows * 5))
+            fig.subplots_adjust(hspace=1)   # 위아래, 상하좌우 간격
+            for idx, col in tqdm_notebook( enumerate(columns, 1) ):
+                # print(x, end=' ')         # Debugging Check
+                plt.subplot(int(fig_nrows)+1, fig_ncols, idx)
+                self.attribute_plot(data=data, x=col,
+                    obejct_cols=self.obejct_cols, numeric_cols=self.numeric_cols, time_cols=self.time_cols,
+                    nunique_cols=self.nunique_cols, missing_cols=self.missing_cols,
+                    max_object=max_object)
+                # if col in self.numeric_cols and norm:
+                #     plt.plot(data[col].name, 'cpk', data=cpk_line(data[col]), color='red', alpha=0.5)
+            plt.show()
+            if return_plot:
+                return fig
+
+
+
+
+
+# (class) Data-Frame Information
+class DF_Summary:
+    size_units = {'0':'bytes' ,'1':'KB', '2':'MB', '3':'GB', '4':'TB', '5':'PB'}
+
+    def __init__(self, data, options=['dtype', 'missing', 'info', 'sample'], n_samples=20, display_counts=10):
+        # data_save
+        self.data = data
+
+        # <head> ***
+            # data_memory
+        self.memory_usage = data.memory_usage().sum()
+        data_unit = int(np.log2(self.memory_usage)/10)
+        self.size_unit = DF_Summary.size_units[str(data_unit)]
+        self.data_size = str(format(self.memory_usage / 2**(data_unit*10), '.1f')) + '+ ' + self.size_unit
+
+            # data_shape
+        self.shape = data.shape
+       
+        # <body> ***
+        self.summary = pd.DataFrame()
+
+        # dtype
+        self.dtype = data.dtypes
+        if 'dtype' in options:
+            self.dtype.name = 'dtype'
+            self.summary = pd.concat([self.summary, self.dtype], axis=1)  # **
+
+        # missing_value
+        if 'missing' in options:
+            col_miss = data.isna().sum(axis=0)
+            self.all_missing = len(data) == col_miss
+
+            col_non_miss = (data.isna()==False).sum(axis=0)
+            col_miss_ratio = (col_miss / (col_miss + col_non_miss)*100).apply(lambda x: round(x,1))
+            self.missing = col_miss.to_frame().apply(lambda x: '-' if x[0] == 0 else str(format(x[0], ',')) + ' (' + format(str(col_miss_ratio[x.name]), '4s') +'%)' , axis=1)
+            self.missing = self.missing
+            self.missing.name = 'missing'
+            self.summary = pd.concat([self.summary, self.missing], axis=1)   # **
+       
+        # column infomation
+        if 'info' in options:
+            data_unique = data.T.apply(lambda x: list(x.value_counts().index.astype(self.dtype[x.name])),axis=1)
+            data_unique_length = data_unique.apply(lambda x: len(x))
+
+            num_data, obj_data, time_data = dtypes_split(data, return_type='tuple_data')
+
+            # number **
+            if num_data.shape[1] > 0:
+                self.describe = num_data.describe()
+                num_describe = self.describe.T
+                self.decimal = num_describe['50%'].apply(lambda x: np.nan if np.isnan(x) else self.fun_Decimalpoint(x))
+
+                self.num_info = num_describe.apply(lambda x: str(data_unique_length[x.name]) + ' counts' if data_unique_length[x.name] <= display_counts else self.num_describe(x, self.decimal, self.dtype), axis=1)
+            else:
+                self.num_info = pd.Series()
+
+            # object **
+            if obj_data.shape[1] > 0:
+                # obj_info = obj_data.apply(lambda x : self.obj_describe(x, self.shape[0]) ,axis=0).to_frame()
+                self.obj_info = data_unique_length[obj_data.columns].apply(lambda x:
+                                            'unique' if x == self.shape[0] else str(x) + ' levels')
+            else:
+                self.obj_info = pd.Series()
+
+            # time **
+            if time_data.shape[1] > 0:
+                self.time_info = time_data.agg(['min','max']).T.apply(lambda x: x['min'].strftime('%Y-%m-%d') + ' ~ ' + x['max'].strftime('%Y-%m-%d') ,axis=1)
+            else:
+                self.time_info = pd.Series()
+            
+            print(self.obj_info.shape, self.num_info.shape, self.time_info.shape)
+            self.info = pd.concat([self.obj_info, self.num_info, self.time_info], axis=0)[data.columns]
+            self.info.name = 'info'
+            self.summary = pd.concat([self.summary, self.info], axis=1)   # **
+
+                # sample_data
+        if 'sample' in options:
+            if 'info' in options:
+                self.sample = data_unique
+                self.sample_print = self.sample.apply(lambda x: str(x)[:n_samples])
+            else:
+                self.sample = data.sample(3).T.apply(lambda x: list(x) if str(self.dtype[x.name]) == 'object' else list(map(eval('np.'+str(self.dtype[x.name])), x)),axis=1) #.apply(lambda x: list(x), axis=1)  
+                self.sample_print = self.sample.to_frame().apply(lambda x: str(x[0]).replace(']', ''), axis=1).apply(lambda x: x[:20]+' ...')  #.to_frame()
+            self.sample.name = 'sample'
+            self.sample_print.name = 'sample'
+            self.summary = pd.concat([self.summary, self.sample_print], axis=1)   # **
+
+            # print-out
+        print(self)
+        # pd.set_option('display.expand_frame_repr',False)        # print-out option : not new-line
+        # print(f'{self.data_size}, {str(self.shape[1])} columns, {str(self.shape[0])} obs')
+        # print(self.summary)
+        # pd.reset_option('display.expand_frame_repr')            # print-out option : reset
+       
+    def __str__(self):
+        print(f'{self.data_size}  |  {str(format(self.shape[1], ","))} columns  {str(format(self.shape[0], ","))} obs')
+        display(HTML(self.summary._repr_html_()))
+        return ''
+   
+    def fun_Decimalpoint(self, value):
+        if value == 0:
+            return 3
+        point_log10 = np.floor(np.log10(abs(value)))
+        point = int((point_log10 - 3)* -1) if point_log10 >= 0 else int((point_log10 - 2)* -1)
+        return point
+
+    # object variables describe function
+    def obj_describe(self, x, len_data):
+        x_levles = list(set(x))
+        len_levels = len(x_levles)
+
+        if len_levels == len_data:
+            return 'unique_value'
+        else:
+            return str(len_levels) + ' levels, ' + str(x_levles)[:20]
+
+    # numeric variables describe function
+    def num_describe(self, x, decimal_list, dtype_list):
+        x_name = x.name
+
+        if np.isnan(float(decimal_list[x_name])):
+            return np.nan
+        else:
+            x_dtype = dtype_list[x_name]
+            x_decimal = int(decimal_list[x_name])
+            if 'int' in str(x_dtype):
+                x_min = int(x['min'])
+                x_max = int(x['max'])
+                x_50 = int(x['50%'])
+                if x_max - x_min == 1:
+                    return '2 numbers, ' + str([x_min, x_max])
+                else:
+                    mean_str = format(format(int(x['mean']), ','), '6s')
+                    std_str = format(format(round(x['std'], 1), ','), '6s')
+                    min_str = format(format(int(x_min), ','), '6s')
+                    max_str = format(format(int(x_max), ','), '6s')
+            else:
+                mean_str = format(format(round(x['mean'], x_decimal-1), ','), '6s')
+                std_str = format(format(round(x['std'], x_decimal), ','), '6s')
+                min_str = format(format(round(x['min'], x_decimal-1), ','), '6s')
+                max_str = format(format(round(x['max'], x_decimal-1), ','), '6s')
+            return mean_str + ' (' + std_str + ') ' + min_str + ' ~ ' + max_str
+
+    # draw_summay_plot
+    def summary_plot(self, on=False, dtypes='all', max_object=10, return_plot=False):
+        plot_instance = SummaryPlot(self.data, save_data=False)
+
+        if type(on) == bool and on == False:
+            columns = self.data.columns
+        else:
+            columns = on
+
+        self.plot = plot_instance.summary_plot(data=self.data, on=columns,
+                dtypes=dtypes, max_object=max_object, return_plot=True)
+        if return_plot:
+            return self.plot
+
+
+
+
+# Describe Numeric Series Data
+# class Describe()
+class Describe():
+    def __init__(self, x=False, mode='series'):
+        self.x = False if type(x) == bool and x == False else x
+        self.mode = mode
+   
+    def set_x(self, x):
+        self.x = x
+
+    def calc_sigma(self, x=False, sigma=3):
+        if type(x)==bool and x==False:
+            x = self.x
+        else:
+            self.x = x
+
+        df_describe = x.agg(['count','mean', 'std', 'min', 'max'])
+
+        uf_sigma = df_describe['mean'] + sigma * df_describe['std']
+        lf_sigma = df_describe['mean'] - sigma * df_describe['std']
+
+        self.sigmaOutlier = pd.Series({'lf_sigma': lf_sigma, 'uf_sigma': uf_sigma})
+        self.sigmaDescribe = pd.concat([df_describe, self.sigmaOutlier], axis=0)
+
+        self.df_describe = df_describe
+        self.uf_sigma = uf_sigma
+        self.lf_sigma = lf_sigma
+        return self.sigmaDescribe
+
+    def calc_quantile(self, x=False, q=[0, 0.01, 0.02, 0.03, 0.05, 0.1 , 0.25, 0.5 , 0.75, 0.9 , 0.95, 0.97, 0.98, 0.99, 1]):
+        if type(x)==bool and x==False:
+            x = self.x
+        else:
+            self.x = x
+        # if x
+
+        q_list = []
+
+        for q_i in np.array(q):
+            q_list.append(Quantile(q_i))
+        quantiles = x.agg(q_list)
+        
+       
+        iqr = quantiles['q75'] - quantiles['q25']
+
+        self.uof_box = quantiles['q75'] + 3 * iqr    # upper inner fence
+        self.uif_box = quantiles['q75'] + 1.5 * iqr    # upper inner fence
+        self.lif_box = quantiles['q25'] - 1.5 * iqr    # lower outer fence
+        self.lof_box = quantiles['q25'] - 3 * iqr    # lower outer fence
+
+        self.boxOutlier = pd.Series({'lof_box': self.lof_box, 'lif_box': self.lif_box,
+                                    'uif_box': self.uif_box, 'uof_box': self.uof_box})
+        self.boxDescribe = pd.concat([quantiles, self.boxOutlier])
+
+        self.quantiles = quantiles
+        self.iqr = iqr
+        return self.boxDescribe
+
+    def describe(self, x=False, sigma=3, q=[0, 0.01, 0.02, 0.03, 0.05, 0.1 , 0.25, 0.5 , 0.75, 0.9 , 0.95, 0.97, 0.98, 0.99, 1]):
+        if type(x)==bool and x==False:
+            x = self.x
+        else:
+            self.x = x
+
+        self.calc_quantile(x, q)
+        self.calc_sigma(x, sigma)
+
+        self.summary = pd.concat([self.sigmaDescribe, self.boxDescribe])
+        self.outlier = pd.concat([self.sigmaOutlier, self.boxOutlier])
+        self.all = pd.concat([self.sigmaDescribe, self.boxDescribe])
+        if self.mode.lower() == 'series':
+            return self.all
+        if self.mode.lower() == 'dict':
+            return self.all.to_dict()
+        return self.sigmaDescribe
+   
+    def __call__(self, x):
+        if type(x)==bool and x==False:
+            x = self.x
+        else:
+            self.x = x
+        return self.describe(x=x)
+
+
+
+# Series에 특정 format형태의 연산결과를 agg function을 활용해 사용자 정의 형태로 리턴
+# class AggFormating
+class AggFormating:
+    """
+    < input >
+        ※ Appliable functions: 'min', 'max', 'std', 'mode', 'q??'
+    < output >
+    """
+    def __init__(self, return_format=None, decimal=None, decimal_revision=0, thousand_format=True):
+        self.return_format = return_format
+        self.decimal = decimal
+        self.decimal_revision = decimal_revision
+        self.thousand_format = thousand_format
+            
+    def format(self, x, return_format=None, decimal=None, decimal_revision=None, thousand_format=None):
+        if return_format is None:
+            return_format = self.return_format
+        if decimal is None:
+            decimal = self.decimal
+        if decimal_revision is None:
+            decimal_revision = self.decimal_revision
+        if thousand_format is None:
+            thousand_format = self.thousand_format
+
+        positions = [(o.start(),c.end()) for o,c in zip(re.finditer('{', return_format), re.finditer('}', return_format))]
+        q_start = [qo.start() for qo in re.finditer('{q', return_format)]
+
+        string_list = []
+        start_index = 0
+        q_positions = []
+
+        calc_result = {}
+
+        for i, (o, c) in enumerate(positions):
+            string_list.append(return_format[start_index:o])    
+
+            start_index = c
+            formula_str = return_format[o+1:c-1]
+            # operation
+            while True:
+                q_search = re.search('q[0-9][0-9]', formula_str)
+                if bool(q_search):
+                    q_start = q_search.start()
+                    q_instance = Quantile(q = float(formula_str[q_start+1:q_start+3])/100)
+                    formula_str = formula_str[:q_start] + str(x.agg(q_instance)) + formula_str[q_start+3:]
+                else:
+                    break
+            formula_str = re.sub('mean', str(x.mean()), formula_str)
+            formula_str = re.sub('std', str(x.std()), formula_str)
+            try:
+                formula_str = re.sub('mode', str(x.mode()[0]), formula_str)
+            except:
+                pass
+            formula_str = re.sub('min', str(x.min()), formula_str)
+            formula_str = re.sub('max', str(x.max()), formula_str)
+            
+            
+            # auto_formating
+            if 'nan' in formula_str:
+                formula_result = ''
+            elif decimal == 'auto':
+                formula_result = auto_formating(eval(formula_str), decimal_revision=decimal_revision, return_type='str', thousand_format=thousand_format)
+            elif decimal < 1:
+                formula_result = str(int(round(eval(formula_str), decimal)))
+            elif decimal is not None:
+                formula_result = str(round(eval(formula_str), decimal))
+            else:
+                formula_result = str(eval(formula_str))
+
+            string_list.append(formula_result)
+        string_list.append(return_format[start_index:])
+
+        self.agg_format = ''.join(string_list)
+        return self.agg_format
+
+    def __call__(self, x, return_format=None, decimal=None, decimal_revision=None, thousand_format=None):
+        if return_format is None:
+            return_format = self.return_format
+        if decimal is None:
+            decimal = self.decimal
+        if decimal_revision is None:
+            decimal_revision = self.decimal_revision
+        if thousand_format is None:
+            thousand_format = self.thousand_format
+
+        self.format(x=x, return_format=return_format, decimal=decimal, decimal_revision=decimal_revision, thousand_format=thousand_format)
+        return self.agg_format
+        # return x.mean()
+
+
+
+
+# outlier calculate
+# class OutlierColumns  (Apply Just One Column)
+class OutlierColumns():
+    def __init__(self, x=False):
+        self.x = False if type(x) == bool and x == False else x
+
+    def set_x(self, x):
+        self.x = x
+
+    def make_outlier_table(self, x=False, sigma=3):
+        if type(x) == bool and x == False:
+            x = self.x
+        else:
+            x = x
+            self.x = x
+
+        x_describe = Describe(x)
+        x_describe.describe(sigma=sigma)
+        self.describ_instance = x_describe
+
+        ol_dict = {}
+        for of, ov in x_describe.outlier.items():
+            if 'l' in of:
+                ol_dict[of] = list(x[x < ov].index)
+            elif 'u' in of:
+                ol_dict[of] = list(x[x > ov].index)
+        ol_vector = pd.Series(ol_dict)
+
+        def vector_to_groupframe(vector):
+            gf = vector.to_frame().reset_index()
+            gf['ul'] = gf['index'].apply(lambda x: x[0])
+            gf['index'] = gf['index'].apply(lambda x: x[1:])
+            gf = gf.set_index(['index','ul']).unstack('ul')
+            gf.columns = ['l', 'u']
+            return gf
+
+        self.outlier_index_tb = vector_to_groupframe(ol_vector)
+        self.outlier_tb = vector_to_groupframe(x_describe.outlier)
+        self.outlier_len = self.outlier_index_tb.applymap(len)
+
+    def filter(self, x=False, sigma=3, method=['sigma', 'of_box']):
+
+        if type(x) == bool and x == False:
+            x = self.x
+        else:
+            self.x = x
+
+        self.make_outlier_table(x=x, sigma=sigma)
+        filter_criteria = list(map(lambda x: True if sum(list(map(lambda y: y in x, method))) else False, self.outlier_tb.index))
+        outlier_criteria = self.outlier_tb[filter_criteria]
+        outlier_lf = outlier_criteria['l'].min()
+        outlier_uf = outlier_criteria['u'].max()
+
+        outlier = x[(x < outlier_lf) | (outlier_uf < x)]
+        normal = x[ (outlier_lf < x) & (x < outlier_uf)]
+
+        self.outlier_criteria = outlier_criteria
+        self.outlier_lf = outlier_lf
+        self.outlier_uf = outlier_uf
+        self.outlier = outlier
+        self.normal = normal
+
+    def outlier_plot(self, title=False, norm=True):
+        try:
+            self.outlier_criteria
+            self.outlier_lf
+            self.outlier_uf
+        except:
+            self.filter(self, x=self.x, sigma=3, method=['sigma', 'of_box'])
+
+        outlier_color = {'f_sigma':(0,0,0), 'if_box':(0.8,0.6,0), 'of_box':(0.7,0.4,0)}
+
+        N, bins, patches = plt.hist(self.x, bins=30, color='skyblue', edgecolor='grey')
+        for i in np.argwhere((bins < self.outlier_lf) | (self.outlier_uf < bins)).ravel():
+            if i >= len(patches):
+                patches[-1].set_facecolor([1,0,0.5,0.7])
+            else:
+                patches[i].set_facecolor([1,0,0.5,0.7])
+        bin_max, bin_min = bins.max(), bins.min()
+        bin_padding = (bin_max-bin_min)*0.05
+        plt.xlim(bin_min-bin_padding, bin_max+bin_padding)
+        # lower_fence
+        for li, lf in self.outlier_criteria['l'].items():
+            plt.axvline(lf, ls='--', alpha=0.3, color=outlier_color[li], label='l'+li)
+        # upper_fence
+        for ui, uf in self.outlier_criteria['u'].items():
+            plt.axvline(uf, ls='--', alpha=0.3, color=outlier_color[ui], label='u'+ui)
+        plt.axvline(self.outlier_lf, ls='--', color=[1,0,0.5], alpha=0.7)
+        plt.axvline(self.outlier_uf, ls='--', color=[1,0,0.5], alpha=0.7)
+        plt.legend()
+        plt.xlabel(self.x.name)
+
+        if title:
+            plt.title(title)
+        elif self.title:
+            plt.title(self.title)
+        if norm:
+            plt.plot(self.x.name, 'cpk', data=cpk_line(self.x), color='red', alpha=0.5)
+
+    def fit(self, x=False, sigma=3, method=['sigma', 'of_box'], plot=False):
+        if type(x) == bool and x == False:
+            x = self.x
+        else:
+            self.x = x
+
+        self.filter(x=x, sigma=sigma, method=method)
+
+        if type(plot)==bool and plot==False:
+            self.title = False
+            self.norm = True
+        else:
+            if bool(plot) and plot==True:
+                plot_options = {}
+            else:
+                plot_options = plot
+
+            if 'title' not in plot_options.keys():
+                plot_options['title'] = False
+                self.title=False
+            if 'norm' not in plot_options.keys():
+                plot_options['norm'] = True
+                self.norm=True
+            self.outlier_plot(**plot_options)
+        return (self.normal, self.outlier)
+
+
+
+# outlier Remove
+# class Outlier  (Apply Overall DataFrame)
+class Outlier():
+    def __init__(self, data=False, sigma=3, method=['sigma', 'of_box']):
+        self.data = False if type(data) == bool and data == False else data
+        self.sigma = sigma
+        self.method = method
+    
+    def fit(self, data=False, on=False, plot=False, **kwargs):
+        if type(data) == bool and data == False:
+            data = self.data
+        else:
+            self.data = data
+        if type(on) == bool and on==False:
+            on = data.columns
+
+        if 'sigma' in kwargs.keys():
+            self.sigma = kwargs['sigma']
+        if 'method' in kwargs.keys():
+            self.method = kwargs['method']
+
+        ncols = len(on)
+        data_num, data_obj, data_time = dtypes_split(data, return_type='tuple_data')
+
+        if plot:            
+            fig_ncols = 4 if ncols > 4 else ncols
+            fig_nrows = ((ncols // 4)+1) if ncols > 4 else 0.8
+            fig = plt.figure(figsize=(fig_ncols * 5, fig_nrows * 4))
+            fig.subplots_adjust(hspace=0.3)   # 위아래, 상하좌우 간격
+        
+        outlier_criteria_dict={}
+        outlier_dict = {}
+        target_cols = list(set(on) & set(list(data_num.columns)))
+        for idx, col in enumerate(target_cols, 1):
+            if plot:
+                plt.subplot(int(fig_nrows)+1, fig_ncols, idx)
+            olc = OutlierColumns()
+            normal, outlier = olc.fit(data_num[col], sigma=self.sigma,
+                                    method=self.method, plot=plot)
+            outlier_criteria_dict[col] = olc.outlier_criteria
+            outlier_dict[col] = list(outlier.index)
+
+        if plot:
+            plt.show()
+            self.plot = fig
+
+        self.columns = on
+        self.data_obj = data_obj
+        self.data_num = data_num
+        self.outlier_tb = pd.Series(outlier_dict)
+        self.outlier_len = self.outlier_tb.apply(len)
+        self.outlier_criteria = outlier_criteria_dict
+        self.OutlierCoulumns_Obj = olc
+    
+    def outlier_plot(self, data=False, on=False, return_plot=False, **kwargs):
+        if type(data) == bool and data == False:
+            data = self.data
+        else:
+            self.data = data
+        if type(on) == bool and on==False:
+            on = data.columns
+        
+        try:
+            self.plot
+            plt.show()
+
+            if return_plot:
+                return self.plot
+        except:
+            if 'sigma' in kwargs.keys():
+                self.sigma = kwargs['sigma']
+            if 'method' in kwargs.keys():
+                self.method = kwargs['method']
+
+            ncols = len(on)
+            data_num, data_obj, data_time = dtypes_split(data, return_type='tuple_data')
+      
+            fig_ncols = 4 if ncols > 4 else ncols
+            fig_nrows = ((ncols // 4)+1) if ncols > 4 else 0.8
+            fig = plt.figure(figsize=(fig_ncols * 5, fig_nrows * 4))
+            fig.subplots_adjust(hspace=0.3)   # 위아래, 상하좌우 간격
+
+            target_cols = list(set(on) & set(list(data_num.columns)))
+            for idx, col in enumerate(target_cols, 1):
+                plt.subplot(int(fig_nrows)+1, fig_ncols, idx)
+                olc = OutlierColumns()
+                normal, outlier = olc.fit(data_num[col], sigma=self.sigma,
+                                        method=self.method, plot=True)
+            plt.show()
+            
+            if return_plot:
+                return fig
+
+    def transform(self, on=False, plot=False):
+        if type(on) == bool and on==False:
+            on = list(self.data_num.columns)
+        target_cols = list(set(on) & set(list(self.outlier_tb.index)))
+        
+        outlier_idx = np.array(list(set(self.outlier_tb[target_cols].values.sum())))
+        self.result = self.data_num.drop(outlier_idx, axis=0)
+
+        if plot:
+            self.outlier_plot(data=self.data_num, on=target_cols)
+
+            ncols = len(target_cols)
+            fig_ncols = 4 if ncols > 4 else ncols
+            fig_nrows = ((ncols // 4)+1) if ncols > 4 else 0.8
+            fig = plt.figure(figsize=(fig_ncols * 5, fig_nrows * 4))
+            fig.subplots_adjust(hspace=0.3)   # 위아래, 상하좌우 간격
+            
+            for idx, col in enumerate(target_cols, 1):
+                plt.subplot(int(fig_nrows)+1, fig_ncols, idx)
+                plt.hist(self.result[col], bins=30, color='skyblue', edgecolor='grey')
+                plt.plot(col, 'cpk', data=cpk_line(self.result[col]), color='red', alpha=0.5)
+            plt.show()
+        
+        print(f'(Result) Data_Length: {len(self.data):,} → {len(self.result):,}  ({len(self.data) - len(self.result):,} rows removed)')
+        return self.result
+
+    def fit_transform(self, data=False, on=False, plot=False, **kwargs):
+        if type(data) == bool and data == False:
+            data = self.data
+        else:
+            self.data = data
+        if type(on) == bool and on==False:
+            on = data.columns
+        
+        self.fit(data=data, on=on, plot=False, **kwargs)
+        return self.transform(on=on, plot=plot)
+
+
+
+
+
+
 
 
 
@@ -1871,19 +2563,20 @@ def ttest_each(data, x, group, equal_var=False, decimal_point=4, return_result='
         group_unique = data[group].sort_values(by=group).drop_duplicates()
         # group_index_names = group_unique.apply(lambda x: ', '.join([f"{idx}: {v}" for idx, v in zip(x.index, x)]),axis=1).tolist()
         group_index = pd.MultiIndex.from_frame(group_unique)
-        groups = group.copy()
+        data_group = data.groupby(group)
     else:
         if type(group) == list:
             group_unique = data[group[0]].drop_duplicates()
-            groups = group.copy()
+            
         elif type(group) == str:
             group_unique = data[group].drop_duplicates()
-            groups = [group].copy()
+            group = [group]
+        data_group = data.groupby(group[0])
         # group_index_names = group_unique.copy()
         group_index = group_unique.to_list().copy()
+        # group_index = [(g,) for g in group_unique]
     # print(group_index)
     # print(groups)
-
     group_table = pd.DataFrame(np.zeros(shape=(len(group_index), len(group_index))), index=group_index, columns=group_index)
     group_table[group_table== 0] = np.nan
     
@@ -1894,8 +2587,10 @@ def ttest_each(data, x, group, equal_var=False, decimal_point=4, return_result='
     table_plot = group_table.copy()
 
     groups_dict = {}
-    for gi, gv in data.groupby(groups):
+    for gi, gv in data_group:
         groups_dict[gi] = np.array(gv[x])
+    # print("group_index:", group_index)
+    # print("groups_dict.keys():", list(groups_dict.keys()))
 
     vector_table_list = []
     for g in combinations(group_index, 2):
@@ -1983,7 +2678,7 @@ def jitter(x, ratio=0.6, method='uniform', sigma=5, transform=True):
 
 # -----------------------------------------------------------------------------------------------------
 # Dist_Box Plot Graph Function
-def distbox(data, on, group=None, figsize=[5,5], title='auto', bins=None,
+def distbox(data, on, group=None, figsize='auto', title='auto', bins='auto',
             mean_line=None, axvline=None, lsl=None, usl=None, xscale='linear',
             xlim=None, ylim=None,
             equal_var=False, return_plot='close'):
@@ -1992,48 +2687,82 @@ def distbox(data, on, group=None, figsize=[5,5], title='auto', bins=None,
     # title = 'abc'
     normal_data = data.copy()
     # box_colors = ['steelblue','orange']
-    box_colors = sns.color_palette()
-
-    figs, axes = plt.subplots(2, 1, gridspec_kw={'height_ratios': [3, 1]}, figsize=figsize)
     
+    
+    if group is None:
+        n_groups = 1
+    else:
+        if group is not None and type(group) == str:
+            group = [group]
+        n_groups = normal_data.groupby(group).ngroups
 
+    if figsize == 'auto':
+        hist_plot_size = 5 * 3/4
+        box_plot_size = (n_groups // 4+1) * 5/4
+        
+        set_figsize = [5, hist_plot_size + box_plot_size]
+        height_ratios = [hist_plot_size, box_plot_size]
+        # height_ratios = [3,1]
+    else:
+        set_figsize = figsize
+        height_ratios = [3,1]
+
+    figs, axes = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratios}, figsize=set_figsize)
+    box_colors = list(sns.color_palette()) * (n_groups//10 + 1)
+
+    # print(group)
     # distplot
     if title is not None and title != 'auto':
         figs.suptitle(title, fontsize=13)
     elif title == 'auto':
         title_name = on + '_Plot'
         if group is not None:
-            title_name += ' (group: ' + group + ')'
+            if type(group) == list:
+                group_str ='(' + ', '.join(group) + ')'
+            else:
+                group_str = group
+            title_name += ' (group: ' + group_str + ')'
         figs.suptitle(title_name, fontsize=13)
 
     if group is not None:
         # group_mean
         group_mean = normal_data.groupby(group)[on].mean()
+        # print(group_mean)
         len_group_mean = len(group_mean)
         group_mean.sort_index(ascending=True, inplace=True)
 
         # distplot
+        group_order = []
         data_group = []
+        
         for i, (gi, gv) in enumerate(normal_data.groupby(group)):
+            group_label = tuple(map(str,gi))
+            group_order.append( group_label )
             data_group.append(gv[on].dropna())
             try:
-                sns.distplot(gv[on], label=gi, ax=axes[0], bins=bins)
+                # sns.distplot(gv[on], label=gi, ax=axes[0], bins=bins)     # (previous version)
+                sns.histplot(data=gv[on], label=group_label, ax=axes[0], bins=bins,
+                            kde=True,  stat='density', alpha=0.5,  element='step')
                 if mean_line is not None:
-                    axes[0].axvline(x=group_mean[gi], c=box_colors[i], alpha=0.5)
+                    axes[0].axvline(x=group_mean[gi], c=box_colors[i%10], alpha=0.5)
             except:
                 pass
-        axes[0].legend()
+        axes[0].legend(loc='upper left', bbox_to_anchor=(1,1))
         axes[0].set_xscale(xscale)
         
         # boxplot
-        boxes = sns.boxplot(x=on, y=group, data=normal_data, 
-                orient='h', color='white', linewidth=1, ax=axes[1],
-                order=sorted(normal_data[group].unique()) )
+        normal_data['group'] = normal_data[group].astype(str).agg(', '.join, axis=1).apply(lambda x: f'({x})')
+        
+        group_order_labels = list(map(lambda x: '('+', '.join(x)+')', group_order))
+        normal_data['group'] = pd.Categorical(normal_data['group'], categories=group_order_labels, ordered=True)
+
+        boxes = sns.boxplot(x=on, y='group', data=normal_data, 
+                orient='h', color='white', linewidth=1, ax=axes[1], order=group_order_labels)
         axes[1].set_xscale(xscale)
 
         # mean_point
         axes[1].scatter(x=group_mean, y=list(range(0,len_group_mean)), 
-                        color=box_colors[:len_group_mean], edgecolors='white', s=70)
+                        color=box_colors[:len_group_mean], edgecolors='white', s=70, zorder=10)
         
         if len(data_group) == 2:
             pavlues = sp.stats.ttest_ind(*data_group, equal_var=equal_var).pvalue
@@ -2058,15 +2787,18 @@ def distbox(data, on, group=None, figsize=[5,5], title='auto', bins=None,
         group_mean, group_std = normal_data[on].agg(['mean','std'])
 
         # distplot
-        sns.distplot(normal_data[on], ax=axes[0], bins=bins)
+        # sns.distplot(normal_data[on], ax=axes[0], bins=bins)       # (previous version)
+        sns.histplot(data=normal_data[on], ax=axes[0], bins=bins,
+                     kde=True, stat='density', alpha=0.5, element='step')
+
         if mean_line:
             axes[0].axvline(x=group_mean, c=box_colors[0], alpha=0.5)
         # boxplot
         axes[0].set_xscale(xscale)
-        boxes = sns.boxplot(data=normal_data, x=[on], orient='h', color='white', linewidth=1, ax=axes[1])
+        boxes = sns.boxplot(data=normal_data, x=on, y=group, orient='h', color='white', linewidth=1, ax=axes[1])
         
         # mean_points
-        plt.scatter(x=group_mean, y=[0], color=box_colors[0], edgecolors='white', s=70)
+        plt.scatter(x=group_mean, y=[0], color=box_colors[0], edgecolors='white', s=70, zorder=10)
         axes[1].set_xscale(xscale)
 
         summary_dict = normal_data[on].agg(['count','mean', 'std']).apply(lambda x: auto_formating(x)).to_dict()
@@ -2305,6 +3037,182 @@ def violin_box_plot(x=None, y=None, data=None, group=None, figsize=None,
     elif return_plot is True:
         plt.close()
         return fig
+
+
+
+
+
+
+def group_plots(data, x=None, group=None, xlabel=None, group_labels=None, 
+                figsize=None, title=None, display_pvalue=True, color='steelblue', alpha=0.5, bins=30, hist_width=0.5, xlabel_rotation=0, return_plot=True,
+                box_plot=True, violin_plot=False, norm_dist=False, hist_plot=False, mean_points=True,
+                box_kwargs={}, voline_kwargs={}, norm_kwarg={}, hist_kwars={}):
+    # data preprocessing → to_statistics_dataframe
+    if x is None and group is None:
+        if type(data) == list:
+            data_list = data
+            # df_statistics = pd.DataFrame(data).T.describe().T[['count','mean','std','min','max']]
+            df_statistics = pd.DataFrame(data).T.describe().T[['count','mean','std']]
+            indices = range(1,len(data)+1)
+        else:
+            data_list = [np.array(data).ravel()]
+            df_statistics = pd.DataFrame(data).describe().T[['count','mean','std']]
+            indices = [1]
+        if xlabel is None:
+            xlabel = 'value'
+    else:
+        if group is None:
+            data_list = [np.array(data[x]).ravel()]
+            df_statistics = data[[x]].describe().T[['count','mean','std']]
+            indices = [1]
+        else:
+            data_group = data.groupby(group)[x]
+            data_list = list(map(lambda z: data.loc[z][x].to_numpy(), data_group.groups.values()))
+            df_statistics = data_group.describe()[['count','mean','std']]
+            indices = range(1,len(df_statistics.index)+1)
+        if xlabel is None:
+            xlabel = x
+    
+    # (group label) -----------------------------------------------------------------------------------------
+    if group_labels is None:
+            group_labels = [f'group {idx}' for idx in df_statistics.index]
+            group_indices = [str(i) for i in df_statistics.index]
+
+    df_statistics['count'] = df_statistics['count'].astype(int)
+    df_statistics.index = group_labels
+
+    # df_statistics_display = df_statistics.applymap(lambda x: auto_formating(x))
+    try:
+        df_statistics_display = df_statistics.applymap(lambda x: auto_formating(x))
+    except:
+        df_statistics_display = df_statistics.copy()
+
+    # group_label statistics ---------------------------------------------------------------------------------------------
+    display_groups = []
+    for ei, dv in enumerate(df_statistics_display.to_dict('records')):
+        group_label = group_labels[ei]
+        statistics_str = ', '.join([f"{k}: {v}" for k, v in dv.items()])
+        display_group = f"({group_label}) {statistics_str}"
+        display_groups.append(display_group)
+
+    join_display_groups = '\n'.join(display_groups)
+    
+    if len(data_list) > 1 and display_pvalue is True:
+        if len(data_list) == 2:
+            pavlues = sp.stats.ttest_ind(*data_list, equal_var=False).pvalue
+        else:
+            pavlues = sp.stats.f_oneway(*data_list).pvalue
+
+        p_value = 'NaN' if pavlues == 'nan' else round(pavlues,3)
+        display_group_label = f"[{xlabel}]\n{join_display_groups}\n → p-value : {p_value}"
+    else:
+        display_group_label = f"[{xlabel}]\n{join_display_groups}"
+
+
+    # (figure) ---------------------------------------------------------------------------------------------
+    if return_plot is True:
+        fig = plt.figure(figsize=figsize)
+    else:
+        plt.figure(figsize=figsize)
+    
+    if title is not None:
+        plt.title(title)
+
+    # (Box plot) ---------------------------------------------------------------------------------------------
+    if box_plot is True:
+        box_face_color = mcolors.to_rgba(color, alpha=alpha/10)  # alpha=0.5로 지정
+        box_edge_color = mcolors.to_rgba(color, alpha=alpha)  # alpha=0.5로 지정
+        plt.boxplot(data_list, vert=True, widths=0.2, patch_artist=True,
+                        boxprops=dict(facecolor=box_face_color, color=box_edge_color),
+                        medianprops=dict(color='red'))
+
+    # (violine_plot) ---------------------------------------------------------------------------------------------
+    if violin_plot is True:
+        parts = plt.violinplot(data_list, positions=indices, vert=True, widths=0.5, showmeans=False, showmedians=False, showextrema=False)
+        violin_face_color = mcolors.to_rgba(color, alpha=alpha/10)  # alpha=0.5로 지정
+        violin_edge_color = mcolors.to_rgba(color, alpha=alpha)  # alpha=0.5로 지정
+        for pc in parts['bodies']:
+            pc.set_facecolor(violin_face_color)
+            # pc.set_facecolor('none')
+            pc.set_edgecolor(violin_edge_color)      # 외곽선 색상
+            pc.set_linewidth(2)           # 외곽선 두께
+
+    # (norm dist) ---------------------------------------------------------------------------------------------
+    if norm_dist is True:
+        for i, d in enumerate(data_list, start=1):
+            mu, sigma = np.mean(d), np.std(d)
+            ymin, ymax = np.min(d), np.max(d)
+            y = np.linspace(ymin, ymax, 1000)
+            pdf = norm.pdf(y, mu, sigma)/2 * (ymax-ymin)
+            pdf_scaled = pdf * 0.2  # boxplot의 두께에 맞게 스케일
+
+            # boxplot이 x=i에 위치하므로, x축 기준으로 곡선을 그려줌
+            plt.plot(i + pdf_scaled, y, color=color, alpha=alpha)
+            plt.plot(i - pdf_scaled, y, color=color, alpha=alpha)
+            plt.fill_betweenx(y, i - pdf_scaled, i + pdf_scaled, color=color, alpha=alpha/10)
+
+    # (histogram) ---------------------------------------------------------------------------------------------
+    if hist_plot is True:
+        for i, d in enumerate(data_list, start=1):
+            # 히스토그램 계산
+            counts, bin = np.histogram(d, bins=bins, density=True)
+            counts_norm = counts/counts.max()*0.8
+            # 히스토그램을 세로로 누이기 위해 x축을 조정
+            # boxplot이 x=i에 있으므로, hist는 i+hist_width 만큼 오른쪽에 그림
+            x_left = i 
+            # 각 bin에 대해 사각형 그리기
+            for c, b0, b1 in zip(counts_norm, bin[:-1], bin[1:]):
+                c = 0 if np.isnan(c) else c
+                # 오른쪽
+                plt.fill_betweenx([b0, b1], x_left, x_left + c*hist_width, color=color, alpha=alpha, edgecolor='gray')
+                # 왼쪽
+                plt.fill_betweenx([b0, b1], x_left, x_left - c*hist_width, color=color, alpha=alpha, edgecolor='gray')
+
+    # mean point ---------------------------------------------------------------------------------------------
+    if mean_points is True:
+        for i, d in enumerate(data_list, start=1):
+            mu = np.mean(d)
+            # 평균 위치에 빨간 점 찍기
+            plt.scatter(i, mu, color='red', edgecolors='gray', s=60, zorder=10, label='Mean' if i==1 else "")
+
+    # ---------------------------------------------------------------------------------------------
+
+    plt.ylabel(xlabel)
+    plt.xticks(indices, group_indices, rotation=xlabel_rotation)
+    plt.xlabel(display_group_label, fontsize=12, loc='left')
+
+    if return_plot:
+        plt.close()
+        return fig
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2978,7 +3886,7 @@ class FeatureInfluence():
         for ic in conditions_dict:
             f = plt.figure()
             self.plot_element(x=ic, train_X=train_X, grid_X=self.influence_dict_all[ic], conditions={ic:'min~max'},
-                estimator=estimator, encoder=encoder, encoderX=encoderX, encoderY=encoderY, y_name=y_name, return_plot=False)
+                estimator=estimator, encoder=encoder, encoderX=encoderX, encoderY=encoderY, y_name=y_name, n_points=n_points, return_plot=False)
             plt.ylim(y_min_total*0.95, y_max_total*1.05)
             plt.close()
             self.feature_plot[ic] = f
@@ -3015,7 +3923,7 @@ class FeatureInfluence():
         for idx, ic in enumerate(conditions_dict, 1):
             plt.subplot(int(fig_nrows)+1, fig_ncols, idx)
             self.plot_element(x=ic, train_X=train_X, grid_X=self.influence_dict_all[ic], conditions={ic:'min~max'},
-                estimator=estimator, encoder=encoder, encoderX=encoderX, encoderY=encoderY, y_name=y_name, return_plot=False)
+                estimator=estimator, encoder=encoder, encoderX=encoderX, encoderY=encoderY, y_name=y_name, n_points=n_points, return_plot=False)
             plt.ylim(y_min_total*0.95, y_max_total*1.05)
         if summary_plot:
             plt.show()
@@ -3032,6 +3940,40 @@ class FeatureInfluence():
             print_DataFrame(self.summary_table)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+############################################################################################################################################################################
+####### DS_DeepLearning ############################################################################################################################################################
+############################################################################################################################################################################
 
 import time
 from IPython.display import clear_output
@@ -3167,8 +4109,342 @@ class EarlyStopping():
 
 
 
+import torch
+
+# DeepLearning MDL Predict
+class PredictDL():
+    def __init__(self, model, input='torch', device='cpu'):
+        self.model = model
+        self.input = input
+        self.device = device
+    
+    def predict(self, x):
+        if self.input == 'torch':
+            self.model.eval()
+            return self.model(torch.FloatTensor(np.array(x)).to(self.device)).to('cpu').detach().numpy().ravel()
+
+
+# -----------------------------------------------------------------------------------
+from six.moves import cPickle
+import os
+import time
+import numpy as np
+import pandas as pd
+import torch
+
+from datetime import datetime
+
+from IPython.display import clear_output, display, update_display
+from sklearn.model_selection import train_test_split
+
+
+class TorchDataLoader():
+    def __init__(self, *args, split_size=(0.7, 0.1, 0.2), random_state=None, **kwargs):
+        self.args = args
+        assert (np.array(list(map(len, self.args)))/len(self.args[0])).all() == True, 'Arguments must have same length'
+        self.idx = np.arange(len(self.args[0]))
+        
+        self.split_size = [s/np.sum(split_size) for s in split_size]
+        
+        self.train_test_split_size = None
+        self.train_valid_split_size = None
+        
+        if len(self.split_size) == 2:
+            self.train_test_split_size = self.split_size
+        elif len(self.split_size) == 3:
+            self.train_test_split_size = [self.split_size[0]+self.split_size[1], self.split_size[2]]
+            self.train_valid_split_size = [s/self.train_test_split_size[0] for s in self.split_size[:2]]
+        
+        self.random_state = random_state
+        self.kwargs = kwargs
+        
+        self.torch_data = None
+        self.dataset = None
+        self.dataloader = None
+        
+    def split(self, dtypes=None, random_state=None):
+        random_state = self.random_state if random_state is None else random_state
+        self.train_idx, self.test_idx = train_test_split(self.idx, test_size=self.train_test_split_size[-1], random_state=random_state)
+        self.index = (self.train_idx, self.test_idx)
+        if self.train_valid_split_size is not None:
+            self.train_idx, self.valid_idx = train_test_split(self.train_idx, test_size=self.train_valid_split_size[-1], random_state=random_state)
+            self.index = (self.train_idx, self.valid_idx, self.test_idx)
+        
+        [print(len(index), end=', ') for index in self.index]
+        print()
+        if dtypes is None:
+            self.torch_data = tuple([tuple([torch.tensor(arg[idx]) for idx in self.index]) for arg in self.args])
+        else:
+            self.torch_data = tuple([tuple([torch.tensor(arg[idx]).type(dtype) for idx in self.index]) for arg, dtype in zip(self.args, dtypes)])
+    
+    def make_dataset(self, dtypes=None, random_state=None):
+        if self.torch_data is None:
+            self.split(dtypes, random_state)
+            
+        self.dataset = tuple([torch.utils.data.TensorDataset(*data) for data in zip(*self.torch_data)])
+
+    def make_dataloader(self, dtypes=None, random_state=None, **kwargs):
+        if self.dataset is None:
+            self.make_dataset(dtypes, random_state)
+        if len(kwargs) > 0:
+            self.kwargs = kwargs
+            
+        self.dataloader = tuple([torch.utils.data.DataLoader(dataset, **self.kwargs) for dataset in self.dataset])
+        
+        for sample in self.dataloader[0]:
+            break
+        self.sample = sample
+
+
+
+class TorchModeling():
+    def __init__(self, model, device='cpu'):
+        self.now_date = datetime.strftime(datetime.now(), '%y%m%d_%H')
+
+        self.model = model.to(device)
+        self.device = device
+        self.t = 1
+
+        self.train_losses = []
+        self.train_metrics = []
+        self.valid_losses = []
+        self.valid_metrics = []
+        self.test_losses = []
+        self.test_metrics = [] 
+
+        self.train_info = []
+        self.test_info = []
+    
+    def get_save_path(self):
+        return f"{os.getcwd()}/{self.now_date}_{self.model._get_name()}"
+
+    def fun_decimal_point(self, value):
+        if type(value) == str or type(value) == int:
+            return value
+        else:
+            if value == 0:
+                return 3
+            try:
+                point_log10 = np.floor(np.log10(abs(value)))
+                point = int((point_log10 - 3)* -1) if point_log10 >= 0 else int((point_log10 - 2)* -1)
+            except:
+                point = 0
+            return np.round(value, point)
+
+    def compile(self, optimizer, loss_function, metric_function=None, scheduler=None,
+                early_stop_loss=None, early_stop_metrics=None):
+        """
+        loss_function(model, x, y) -> loss
+        """
+        self.optimizer = optimizer
+        self.loss_function = loss_function
+        self.metrics_function = metric_function
+        self.scheduler = scheduler
+        self.early_stop_loss = early_stop_loss
+        self.early_stop_metrics = early_stop_metrics
+
+    def recompile(self, optimizer=None, loss_function=None, metric_function=None, scheduler=None,
+                early_stop_loss=None, early_stop_metrics=None):
+        if scheduler is not None:
+            self.scheduler = scheduler
+            self.scheduler.optimizer = self.optimizer
+
+        if optimizer is not None:
+            self.optimizer = optimizer
+
+            if self.scheduler is not None:
+                self.scheduler.optimizer = self.optimizer
+
+        if loss_function is not None:
+            self.loss_function = loss_function
+        
+        if metric_function is not None:
+            self.metrics_function = metric_function
+
+        if early_stop_loss is not None:
+            self.early_stop_loss.patience = early_stop_loss.patience
+            self.early_stop_loss.optimize = early_stop_loss.optimize
+            early_stop_loss.load(self.early_stop_loss)
+            self.early_stop_loss = early_stop_loss
+
+        if early_stop_metrics is not None:
+            self.early_stop_metrics.patience = early_stop_metrics.patience
+            self.early_stop_metrics.optimize = early_stop_metrics.optimize
+            early_stop_metrics.load(self.early_stop_metrics)
+            self.early_stop_metrics = early_stop_metrics
+
+    def train_model(self, train_loader, valid_loader=None, epochs=10, tqdm_display=False,
+                early_stop=True, save_parameters=False, display_earlystop_result=False):
+        final_epcohs = self.t + epochs - 1
+        # [START of Epochs Loop] ############################################################################################
+        epochs_iter = tqdm(range(self.t, self.t + epochs), desc="Epochs", total=epochs, position=0, leave=True) if tqdm_display else range(self.t, self.t + epochs)
+        for epoch in epochs_iter:
+            print_info = {}
+
+            # train Loop --------------------------------------------------------------
+            self.model.train()
+            train_epoch_loss = []
+            train_epoch_metrics = []
+            train_iter = tqdm(enumerate(train_loader), desc="Train Batch", total=len(train_loader), position=1, leave=False) if tqdm_display else enumerate(train_loader)
+            for batch_idx, (batch_x, batch_y) in train_iter:
+                batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                self.optimizer.zero_grad()
+                loss = self.loss_function(self.model, batch_x, batch_y)
+                loss.backward()
+                self.optimizer.step()
+            
+                with torch.no_grad():
+                    train_epoch_loss.append( loss.to('cpu').detach().numpy() )
+                    if self.metrics_function is not None:
+                        train_epoch_metrics.append( self.metric_f(self.model, batch_x, batch_y) )
+
+            with torch.no_grad():
+                print_info['train_loss'] = np.mean(train_epoch_loss)
+                self.train_losses.append(print_info['train_loss'])
+                if self.metrics_function is not None:
+                    print_info['train_metrics'] = np.mean(train_epoch_metrics)
+                    self.train_metrics.append(print_info['train_metrics'])
+
+            # scheduler ---------------------------------------------------------
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            with torch.no_grad():
+                # valid Loop ---------------------------------------------------------
+                if valid_loader is not None and len(valid_loader) > 0:
+                    self.model.eval()
+                    valid_epoch_loss = []
+                    valid_epoch_metrics = []
+                    valid_iter = tqdm(enumerate(valid_loader), desc="Valid Batch", total=len(valid_loader), position=1, leave=False) if tqdm_display else enumerate(valid_loader)
+                    for batch_idx, (batch_x, batch_y) in valid_iter:
+                        batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                        
+                        loss = self.loss_function(self.model, batch_x, batch_y)
+                    
+                        valid_epoch_loss.append( loss.to('cpu').detach().numpy() )
+                        if self.metrics_function is not None:
+                            valid_epoch_metrics.append( self.metric_f(self.model, batch_x, batch_y) )
+
+                    print_info['valid_loss'] = np.mean(valid_epoch_loss)
+                    self.valid_losses.append(print_info['valid_loss'])
+                    if self.metrics_function is not None:
+                        print_info['valid_metrics'] = np.mean(valid_epoch_metrics)
+                        self.valid_metrics.append(print_info['valid_metrics'])
+            
+                # print_info ---------------------------------------------------------
+                self.train_info.append(print_info)
+                print_sentences = ",  ".join([f"{k}: {str(self.fun_decimal_point(v))}" for k, v in print_info.items()])
+                
+                # print(f"[Epoch: {epoch}/{final_epcohs}] {print_sentences}")
+                if final_epcohs - epoch + 1 == epochs:
+                    display(f"[Epoch: {epoch}/{final_epcohs}] {print_sentences}", display_id="epoch_result")
+                else:
+                    update_display(f"[Epoch: {epoch}/{final_epcohs}] {print_sentences}", display_id="epoch_result")
+
+                # early_stop ---------------------------------------------------------
+                early_stop_TF = None
+                if self.early_stop_loss is not None:
+                    score = print_info['valid_loss'] if (valid_loader is not None and len(valid_loader) > 0) else print_info['train_loss']
+                    reference_score = print_info['train_loss'] if (valid_loader is not None and len(valid_loader) > 0) else None
+                    params = self.model.state_dict() if save_parameters else None
+                    early_stop_TF = self.early_stop_loss.early_stop(score=score, reference_score=reference_score,save=params, verbose=0)
+
+                    if save_parameters:
+                        path_save_loss = f"{self.get_save_path()}_earlystop_loss.pth"
+                        cPickle.dump(self.early_stop_loss, open(path_save_loss, 'wb'))      # save earlystop loss
+
+                if self.metrics_function is not None and self.early_stop_metrics is not None:
+                    score = print_info['valid_metrics'] if (valid_loader is not None and len(valid_loader) > 0) else print_info['train_metrics']
+                    reference_score = print_info['train_metrics'] if (valid_loader is not None and len(valid_loader) > 0) else None
+                    params = self.model.state_dict() if save_parameters else None
+                    self.early_stop_loss.early_stop(score=score, reference_score=reference_score, save=params, verbose=0)
+
+                    if save_parameters:
+                        path_save_metrics = f"{self.get_save_path()}_earlystop_metrics.pth"
+                        cPickle.dump(self.early_stop_metrics, open(path_save_metrics, 'wb'))      # save earlystop metrics
+
+                # save_parameters ---------------------------------------------------------
+                if save_parameters:
+                    path_save_weight = f"{self.get_save_path()}_weights.pth"
+                    cPickle.dump(self.model.state_dict(), open(path_save_weight, 'wb'))      # save earlystop weights
+
+                # step update ---------------------------------------------------------
+                self.t += 1
+
+                # early_stop break ---------------------------------------------------------
+                if early_stop is True and early_stop_TF == 'break':
+                        break
+        
+        if display_earlystop_result:
+            if self.early_stop_loss is not None:
+                display(self.early_stop_loss.plot)
+            if self.metrics_function is not None and self.early_stop_metrics is not None:
+                display(self.early_stop_metrics.plot)
+        # [END of Epochs Loop] ############################################################################################
+
+    def test_model(self, test_loader, tqdm_display=False):
+        with torch.no_grad():
+            print_info = {"epoch":self.t-1}
+            # test Loop ---------------------------------------------------------
+            if test_loader is not None and len(test_loader) > 0:
+                self.model.eval()
+                test_epoch_loss = []
+                test_epoch_metrics = []
+                test_iter = tqdm(enumerate(test_loader), desc="Valid Batch", total=len(test_loader), position=1, leave=False) if tqdm_display else enumerate(test_loader)
+                for batch_idx, (batch_x, batch_y) in test_iter:
+                    batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                    
+                    loss = self.loss_function(self.model, batch_x, batch_y)
+                
+                    test_epoch_loss.append( loss.to('cpu').detach().numpy() )
+                    if self.metrics_function is not None:
+                        test_epoch_metrics.append( self.metric_f(self.model, batch_x, batch_y) )
+
+                print_info['test_loss'] = np.mean(test_epoch_loss)
+                self.test_losses.append(print_info['test_loss'])
+                if self.metrics_function is not None:
+                    print_info['test_metrics'] = np.mean(test_epoch_metrics)
+                    self.test_metrics.append(print_info['test_metrics'])
+            print_sentences = ",  ".join([f"{k}: {str(self.fun_decimal_point(v))}" for k, v in print_info.items() if k != 'epoch'])
+            print(f"[After {self.t-1} epoch test performances] {print_sentences}")
+            self.test_info.append(print_info)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ############################################################################################################################################################################
-####### DS_Plot ############################################################################################################################################################
+####### DS_MLPlot ############################################################################################################################################################
 ############################################################################################################################################################################
 
 
