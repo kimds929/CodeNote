@@ -558,25 +558,43 @@ test_x_np = (tests_x_np_norm * X_std) + X_mean
 last_values = test_x_np[np.arange(len(tests_X_tensor_set[0])), tests_X_tensor_set[2]-1]
 
 
+
+plt.figure(figsize=(6, 4))
+TP, FN, TN, FP = [0]*4
 for lx, ly, p, tests_x, true_y in zip(tests_X_tensor_set[2].numpy(), last_values, pred_test_y_prob.numpy().reshape(-1), test_x_np, tests_y_tensor.numpy()):
+    label = None
     if true_y == 1:
         if p < 0.5:
-            plt.plot(tests_x, color='red',alpha=0.5)
+            if FN == 0:
+                label='FN'
+            plt.plot(tests_x, color='red',alpha=0.5, label=label)
             plt.scatter(lx-1, ly, s=3, color='darkred')
-            plt.text(lx-1, ly, f"{p:.2f}")
+            plt.text(lx-1, ly, f"{p:.2f}", color='red')
+            FN += 1
         else:
-            plt.plot(tests_x, color='orange',alpha=0.5)
+            if TP == 0:
+                label='TP'
+            plt.plot(tests_x, color='orange',alpha=0.5, label=label)
             plt.scatter(lx-1, ly, s=3, color='brown')
             plt.text(lx-1, ly, f"{p:.2f}")
+            TP += 1
     else:
         if p > 0.5:
-            plt.plot(tests_x, color='green',alpha=0.5)
+            if FP == 0:
+                label='FP'
+            plt.plot(tests_x, color='green',alpha=0.5, label=label)
             plt.scatter(lx-1, ly, s=3, color='darkred')
             plt.text(lx-1, ly, f"{p:.2f}")
+            FP +=1
         else:
-            plt.plot(tests_x, color='steelblue',alpha=0.1)
-        
-
+            if TN == 0:
+                label='TN'
+            plt.plot(tests_x, color='steelblue',alpha=0.1, label=label)
+            TN +=1
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, 0), ncol=4)
+plt.xticks([])
+plt.yticks([])
+plt.show()
 
 
 
