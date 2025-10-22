@@ -417,7 +417,7 @@ class AttentionPoolingLayer(nn.Module):
             attn_weights = attn_weights / denom
         
         # 가중합
-        pooled = torch.sum(x * attn_weights.unsqueeze(-1), dim=1)  # (B, d_model)
+        pooled = torch.sum(x * attn_weights.unsqueeze(-1), dim=-2)  # (B, d_model)
         return pooled, attn_weights
 # ----------------------------------------------------------------------------------------
 
@@ -465,24 +465,27 @@ class TimeSeriesModel(nn.Module):
         self.classification_head = nn.Linear(d_model, 1)
         
     def forward(self, x, mask=None):
+        # x : (B, T)
+        x_unsqueeze = x.unsqueeze(-1)   # x_unsqueeze : (B, T, 1)
+        
         # (embedding)
-        x_embed = self.embedding_layer(x.unsqueeze(-1))
-        x_embed_pe = self.pe(x_embed)
+        x_embed = self.embedding_layer(x_unsqueeze)     # x_embed : (B, T, d_model)
+        x_embed_pe = self.pe(x_embed)       # x_embed_pe : (B, T, d_model)
         
         # (encoder)
         if mask is not None:    # True=PAD
             src_key_padding_mask = ~mask
         else:
             src_key_padding_mask = ~torch.ones_like(x).to(torch.bool) 
-        encoder_out = self.encoder(x_embed_pe, src_key_padding_mask=src_key_padding_mask)
+        encoder_out = self.encoder(x_embed_pe, src_key_padding_mask=src_key_padding_mask)   # encoder_out : (B, T, d_model)
         
         # (information pooling)
-        # pool_out = torch.mean(encoder_out, dim=-2)    # Global Average Pooling (GAP)
-        # pool_out, _ = torch.max(encoder_out, dim=-2)    # Global Max Pooling (GAP)
-        pool_out, _ = self.attn_pool_layer(encoder_out)      # Attention Poolin
-
+        # pool_out = torch.mean(encoder_out, dim=-2)    # Global Average Pooling (GAP)   # pool_out : (B, d_model)
+        # pool_out, _ = torch.max(encoder_out, dim=-2)    # Global Max Pooling (GMP)   # pool_out : (B, d_model)
+        pool_out, _ = self.attn_pool_layer(encoder_out)      # Attention Pooling (AP)   # pool_out : (B, d_model)
+        
         # (classification head)
-        out = self.classification_head(pool_out)
+        out = self.classification_head(pool_out)   # out : (B, 1)
         return out
 
 
@@ -520,17 +523,17 @@ with torch.no_grad():
     
     pred_torch = (pred_test_y_prob > threshold).to(torch.int64)
     true_torch = tests_y_tensor.view(-1,1).to('cpu')
-    conf = confusion_matrix(pred_torch, true_torch)
+    conf = confusion_matrix(true_torch, pred_torch)
     
-    precision, recall, _ = precision_recall_curve(pred_torch, true_torch)
+    precision, recall, _ = precision_recall_curve(true_torch, pred_torch)
     pr_auc = auc(recall, precision)
     roc_auc = roc_auc_score(true_torch, pred_torch)
     
     
-    cls_report = classification_report(pred_torch, true_torch)
+    cls_report = classification_report(true_torch, pred_torch)
     
     print('confusion_matrix')
-    print(conf)
+    print(conf.T)
     print(f" - PR-AUC : {pr_auc:.3f}")
     print(f" - ROC-AUC : {roc_auc:.3f}")
     print(cls_report)
