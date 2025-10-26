@@ -14,16 +14,23 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 
 try:
-    from DS_Torch import TorchDataLoader, TorchModeling, AutoML
+    from DS_Torch import TorchDataLoader, TorchModeling, AutoML, early
+    from DS_DeepLearning import EarlyStopping
 except:
+    remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
     try:
         import httpimport
         with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
             from DS_Torch import TorchDataLoader, TorchModeling, AutoML
+            from DS_DeepLearning import EarlyStopping
     except:
         import requests
-        remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_Torch.py", verify=False)
+        exec(response.text)
+        
+        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_DeepLearning.py", verify=False)
+        exec(response.text)
+
 
 #########################################################################################
 device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -41,7 +48,7 @@ group_size = 3
 # rng = np.random.RandomState(5)
 rng = np.random.RandomState(1)
 mu_list = rng.rand(group_size)*8 -4
-sigma_list = rng.rand(group_size)*0.5
+sigma_list = rng.rand(group_size)*0.7
 
 data_sample = []
 for mu, sigma in zip(mu_list, sigma_list):
@@ -83,7 +90,7 @@ class UnknownFuncion():
 
     def forward(self, x):
         if (self.normalize) and (self.y_mu is not None) and (self.y_std is not None):
-            return self.true_f(x) + self.error_scale * torch.randn((x.shape[0],1))
+            return self.true_f(x) + self.error_scale * torch.randn((x.shape[0], 1))
         else:
             return self.true_f(x) + self.true_f(x).mean()*self.error_scale * torch.randn((x.shape[0],1))
 
@@ -92,7 +99,7 @@ class UnknownFuncion():
 
 
 # f = UnknownFuncion()
-f = UnknownFuncion(n_polynorm=2)
+f = UnknownFuncion(n_polynorm=2, theta_scale=100, error_scale=0.1)
 # f = UnknownFuncion(n_polynorm=3)
 # f = UnknownFuncion(n_polynorm=4)
 # f = UnknownFuncion(n_polynorm=5)
@@ -128,29 +135,60 @@ train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
 
 ###################################################################################################
-def visualize_validate(model, X_train, y_train, xmin=-6, xmax=6):
-    # 예측 및 불확실성 계산
+def visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, steps=100, f=None, return_plot=True):
     model.eval()
-    X_test = torch.linspace(xmin, xmax, steps=100).unsqueeze(1)
 
-    mu_pred, sigma_pred = model(X_test)
-    # mu_pred, sigma_pred = model(X_test, alpha=0)
-    mu_pred = mu_pred.view(-1)
-    sigma_pred = sigma_pred.view(-1)
+    # 모델 파라미터에서 device/dtype 추론
+    p = next(model.parameters())
+    device = p.device
+    dtype = p.dtype
+
+    # 테스트 입력을 모델과 동일한 device/dtype으로 생성
+    X_test = torch.linspace(xmin, xmax, steps=steps, device=device, dtype=dtype).unsqueeze(1)
+
+    with torch.no_grad():
+        # 모델 추론
+        mu_pred, sigma_pred = model(X_test)
+        mu_pred = mu_pred.view(-1)
+        sigma_pred = sigma_pred.view(-1)
+
+        # 필요 시 true 함수도 동일 디바이스에서 계산
+        true_y = None
+        if f is not None and hasattr(f, "true_f") and callable(f.true_f):
+            true_y = f.true_f(X_test.detach().to('cpu').numpy()).view(-1)
+
+    # ----- 플로팅을 위해 CPU/NumPy로 변환 -----
+    # 학습 데이터가 GPU에 있을 수 있으므로 CPU로 이동
+    X_train_cpu = X_train.detach().cpu().view(-1)
+    y_train_cpu = y_train.detach().cpu().view(-1)
+
+    X_test_cpu = X_test.squeeze(1).detach().cpu()
+    mu_cpu = mu_pred.detach().cpu()
+    sig_cpu = sigma_pred.detach().cpu()
+    lower_cpu = (mu_cpu - 2 * sig_cpu)
+    upper_cpu = (mu_cpu + 2 * sig_cpu)
 
     fig = plt.figure(figsize=(10, 6))
-    plt.plot(X_train, y_train, 'o', label="Training Data")
-    plt.plot(X_test, mu_pred.detach(), color='steelblue', label="Mean Prediction")
-    plt.plot(X_test, f.true_f(X_test), color='orange', label='true')
+    plt.plot(X_train_cpu.numpy(), y_train_cpu.numpy(), 'o', label="Training Data")
+    plt.plot(X_test_cpu.numpy(), mu_cpu.numpy(), label="Mean Prediction")
+
+    if true_y is not None:
+        plt.plot(X_test_cpu.numpy(), true_y.detach().cpu().numpy(), label='true')
+
     plt.fill_between(
-        X_test.squeeze().detach(),
-        (mu_pred.view(-1) - 2 * sigma_pred).detach(),
-        (mu_pred.view(-1) + 2 * sigma_pred).detach(),
+        X_test_cpu.numpy(),
+        lower_cpu.numpy(),
+        upper_cpu.numpy(),
         alpha=0.2,
         label="Uncertainty (±2 std)"
     )
     plt.legend()
-    return fig
+
+    if return_plot is True:
+        plt.close()
+        return fig
+    else:
+        plt.show()
 
 ###################################################################################################
 
@@ -226,24 +264,67 @@ class EmbeddingBlock(nn.Module):
 
 #############################################################################
 
-def gen_pseudo_data(x, window_alpha=3, max_ord=5, max_samples=1e+6):
-    x_shape = x.shape
-    # n_of_gen = int( min(max_samples, (x_shape[0]*2*window_alpha) ** min( torch.sqrt(torch.tensor(x_shape[-1])), torch.tensor(max_ord)).item() ) )
-    n_of_gen = int( x_shape[0] * np.sqrt(x_shape[1]) )
-    # print(n_of_gen)
-    gen_shape = [n_of_gen, *x_shape[1:]]
-    # print(gen_shape)
+class PseudoData():
+    def __init__(self, window_alpha=2, window_beta=0.5, feature_gamma=0.5,  max_samples=1e+6):
+        self.window_alpha = window_alpha
+        self.window_beta = window_beta
+        self.feature_gamma = feature_gamma
+        self.max_samples = max_samples
+        
+    def gen_pseudo_data(self, x, window_alpha=None, window_beta=None, feature_gamma=None, max_samples=None):
+        window_alpha = self.window_alpha if window_alpha is None else window_alpha
+        window_beta = self.window_beta if window_beta is None else window_beta
+        feature_gamma = self.feature_gamma if feature_gamma is None else feature_gamma
+        max_samples = self.max_samples if max_samples is None else max_samples
+
+        device = x.device
+        dtype = x.dtype
+        
+        x_shape = x.shape
+        n_of_gen = int( min(max_samples, x_shape[0] * (window_alpha ** window_beta) * (x_shape[1] ** feature_gamma) ) )
+        gen_shape = [n_of_gen, *x_shape[1:]]
+        
+        # 모든 연산은 x와 동일 device/dtype에서 진행
+        reduce_dims = torch.arange(x.ndim, device=device).tolist()[:-1]  # 마지막 feature 축 제외
+        x_min = x.amin(dim=reduce_dims)
+        x_max = x.amax(dim=reduce_dims)
+        x_window = x_max - x_min
+
+        x_windowmin = x_min - x_window * window_alpha
+        # x_windowmax = x_max + x_window * window_alpha
+        gen_rand = torch.rand(gen_shape, device=device, dtype=dtype)    # # 난수 생성 시점에 device/dtype을 명시
+        x_gen = ( x_windowmin + gen_rand * x_window *(1 + 2 *window_alpha) ).to(x.device)
+        return x_gen
+
+
+# def loss_function(model, batch, optimizer=None):
+#     # --------------------------------------------------
+#     x, y = batch
+#     mu, std = model(x)
+#     # loss_truth = nn.functional.mse_loss(mu, y)
+#     # loss_truth = 1/2 * (mu - y)**2
+
+#     # loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
+#     loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
+#     # return loss_truth
     
-    x_min = x.amin(dim=torch.arange(x.ndim)[:-1].tolist())
-    x_max = x.amax(dim=torch.arange(x.ndim)[:-1].tolist())
-    x_window = x_max - x_min
+#     # --------------------------------------------------
+#     pseudo_X = pseudo_data.gen_pseudo_data(x)
+#     pseudo_mu, pseudo_std = model(pseudo_X)
+    
+#     y_pseudo_true = torch.ones_like(pseudo_std) *std.mean().detach() * pseudo_data.window_alpha
+#     loss_pseudo = (pseudo_std - y_pseudo_true) **2      # MSE Loss
+#     max_loss_pseudo = loss_pseudo.detach().max()
+#     if max_loss_pseudo == 0:
+#         loss_pseudo = torch.mean(loss_pseudo)  
+#         p=1
+#     else:
+#         loss_pseudo = torch.mean( loss_pseudo/max_loss_pseudo * torch.abs(loss_truth.detach().mean()) )
+#         p=0.7
+#     # --------------------------------------------------
+#     loss = p * loss_truth + (1-p)* loss_pseudo
 
-    x_windowmin = x_min - x_window * window_alpha
-    x_windowmax = x_max + x_window * window_alpha
-    x_gen = ( x_windowmin + torch.rand(gen_shape) * x_window *(1 + 2 *window_alpha) ).to(x.device)
-    return x_gen
-
-
+#     return loss
 
 
 #############################################################################
@@ -288,35 +369,99 @@ if succeed:
 
     model = EnsembleNN01(1,64).to(device)
     sum(p.numel() for p in model.parameters() if p.requires_grad)
-    # model(torch.rand(10,2).to(device))
+    # model(torch.rand(10,1).to(device))
     optimizer = optim.Adam(model.parameters(), lr=1e-3) 
+    pseudo_data = PseudoData(window_alpha=4)
+    
 
-    def loss_function(model, x, y):
+    def loss_function(model, batch, optimizer=None):
         # --------------------------------------------------
+        x, y = batch
         mu, std = model(x)
-        # loss_truth = torch.nn.functional.mse_loss(mu, y)
-        # loss_truth = 1/2 * (mu - y)**2
+        
+        mse_loss = lambda pred,y : ((pred - y)**2).mean()
 
-        # loss_truth = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
-        loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
-        # return loss_truth
+        loss_truth = mse_loss(mu, y)
+        # loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
         # --------------------------------------------------
-        pseudo_X = gen_pseudo_data(x)
+        pseudo_X = pseudo_data.gen_pseudo_data(x)
         pseudo_mu, pseudo_std = model(pseudo_X)
-        y_pseudo_true = torch.ones_like(pseudo_std) * torch.quantile(pseudo_std, 0.75).detach().item()
-        loss_pseudo = (pseudo_std - y_pseudo_true) **2      # MSE Loss
-        max_loss_pseudo = loss_pseudo.detach().max()
-        if max_loss_pseudo == 0:
-            loss_pseudo = torch.mean(loss_pseudo)  
-            p=1
-        else:
-            loss_pseudo = torch.mean( loss_pseudo/max_loss_pseudo * torch.abs(loss_truth.detach().mean()) )
-            p=0.9
+        
+        gamma_ = 0.1     # observe uncertainty coefficient
+        lambda_ = 0.1   # unobserve uncertainty coefficient
+        p = 0.9
+        std_target = gamma_* y.std() 
+        pseudo_std_target = lambda_*( y.std() + torch.abs(pseudo_X - x.mean())* pseudo_data.window_alpha )
+        loss_pseudo = p* mse_loss(std, std_target)+ (1-p)*mse_loss(pseudo_std, pseudo_std_target)
         # --------------------------------------------------
         loss = p * loss_truth + (1-p)* loss_pseudo
 
         return loss
 
+
+    tm1 = TorchModeling(model, device=device)
+    tm1.compile(optimizer=optimizer
+                ,loss_function = loss_function
+                # ,loss_function = weighted_gaussian_loss
+                # , scheduler=scheduler
+                , early_stop_loss = EarlyStopping(patience=100)
+                )
+    tm1.train_model(train_loader=train_loader, epochs=100)
+
+    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
+    ##################################################################
+
+
+
+# Last 2Layer Ensemble
+if succeed:
+    class EnsembleNN02(nn.Module):
+        def __init__(self, input_dim, hidden_dim=32, n_ensemble=5):
+            super().__init__()
+
+            self.shared_block = nn.Sequential(
+                    # EmbeddingBlock(input_dim, flatten=True),
+                    # nn.ReLU(),
+                    nn.Linear(input_dim, hidden_dim),
+                    nn.ReLU(),
+                )
+            self.ensemble_blocks = nn.ModuleList()
+            for _ in range(n_ensemble):
+                block = nn.Sequential(
+                    nn.Linear(hidden_dim, hidden_dim*2),
+                    nn.ReLU(),
+                    # nn.Linear(hidden_dim*2, hidden_dim*2),
+                    # nn.ReLU(),
+                    nn.Linear(hidden_dim*2, 1)
+                )
+                self.ensemble_blocks.append(block)
+
+            # 모든 Linear 레이어 weight를 uniform 초기화
+            for block in self.ensemble_blocks:
+                for layer in block:
+                    if isinstance(layer, nn.Linear):
+                        torch.nn.init.uniform_(layer.weight, a=-0.1, b=0.1)  # 범위 [-0.1, 0.1]
+                        torch.nn.init.zeros_(layer.bias)  # bias는 0으로 초기화
+
+        def forward(self, x):
+            latent = self.shared_block(x)
+            outputs = []
+            for block in self.ensemble_blocks:
+                outputs.append(block(latent))
+
+            outputs_cat = torch.cat(outputs, dim=-1)  # (batch, n_ensemble)
+
+            mu = outputs_cat.mean(dim=-1, keepdims=True)
+            std = outputs_cat.std(dim=-1, keepdims=True)
+
+            return mu, std
+
+    model = EnsembleNN02(1,64).to(device)
+    sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # model(torch.rand(10,2).to(device))
+    optimizer = optim.Adam(model.parameters(), lr=1e-3) 
+
+    pseudo_data = PseudoData()
 
     tm1 = TorchModeling(model, device=device)
     tm1.compile(optimizer=optimizer
@@ -329,95 +474,6 @@ if succeed:
 
     visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
     ##################################################################
-
-
-
-
-
-class EnsembleNN02(nn.Module):
-    def __init__(self, input_dim, hidden_dim=32, n_ensemble=5):
-        super().__init__()
-
-        self.shared_block = nn.Sequential(
-                # EmbeddingBlock(input_dim, flatten=True),
-                # nn.ReLU(),
-                nn.Linear(input_dim, hidden_dim),
-                nn.ReLU(),
-            )
-        self.ensemble_blocks = nn.ModuleList()
-        for _ in range(n_ensemble):
-            block = nn.Sequential(
-                nn.Linear(hidden_dim, hidden_dim*2),
-                nn.ReLU(),
-                # nn.Linear(hidden_dim*2, hidden_dim*2),
-                # nn.ReLU(),
-                nn.Linear(hidden_dim*2, 1)
-            )
-            self.ensemble_blocks.append(block)
-
-        # 모든 Linear 레이어 weight를 uniform 초기화
-        for block in self.ensemble_blocks:
-            for layer in block:
-                if isinstance(layer, nn.Linear):
-                    torch.nn.init.uniform_(layer.weight, a=-0.1, b=0.1)  # 범위 [-0.1, 0.1]
-                    torch.nn.init.zeros_(layer.bias)  # bias는 0으로 초기화
-
-    def forward(self, x):
-        latent = self.shared_block(x)
-        outputs = []
-        for block in self.ensemble_blocks:
-            outputs.append(block(latent))
-
-        outputs_cat = torch.cat(outputs, dim=-1)  # (batch, n_ensemble)
-
-        mu = outputs_cat.mean(dim=-1, keepdims=True)
-        std = outputs_cat.std(dim=-1, keepdims=True)
-
-        return mu, std
-
-model = EnsembleNN02(1,64).to(device)
-sum(p.numel() for p in model.parameters() if p.requires_grad)
-# model(torch.rand(10,2).to(device))
-optimizer = optim.Adam(model.parameters(), lr=1e-3) 
-
-def loss_function(model, x, y):
-    # --------------------------------------------------
-    mu, std = model(x)
-    # loss_truth = torch.nn.functional.mse_loss(mu, y)
-    # loss_truth = 1/2 * (mu - y)**2
-
-    # loss_truth = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
-    loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
-    # return loss_truth
-    # --------------------------------------------------
-    pseudo_X = gen_pseudo_data(x)
-    pseudo_mu, pseudo_std = model(pseudo_X)
-    y_pseudo_true = torch.ones_like(pseudo_std) * torch.quantile(pseudo_std, 0.75).detach().item()
-    loss_pseudo = (pseudo_std - y_pseudo_true) **2      # MSE Loss
-    max_loss_pseudo = loss_pseudo.detach().max()
-    if max_loss_pseudo == 0:
-        loss_pseudo = torch.mean(loss_pseudo)  
-        p=1
-    else:
-        loss_pseudo = torch.mean( loss_pseudo/max_loss_pseudo * torch.abs(loss_truth.detach().mean()) )
-        p=0.9
-    # --------------------------------------------------
-    loss = p * loss_truth + (1-p)* loss_pseudo
-
-    return loss
-
-
-tm1 = TorchModeling(model, device=device)
-tm1.compile(optimizer=optimizer
-            ,loss_function = loss_function
-            # ,loss_function = weighted_gaussian_loss
-            # , scheduler=scheduler
-            # , early_stop_loss = EarlyStopping(patience=5)
-            )
-tm1.train_model(train_loader=train_loader, epochs=100)
-
-visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
-##################################################################
 
 
 
@@ -524,24 +580,7 @@ if succeed:
     # model(torch.rand(10,2))
     optimizer = optim.Adam(model.parameters(), lr=1e-3) 
 
-
-    def loss_function(model, x, y):
-        # --------------------------------------------------
-        mu, std = model(x)
-        # loss_truth = torch.nn.functional.mse_loss(mu, y)
-        loss_truth = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
-        # return loss_truth
-        # --------------------------------------------------
-        pseudo_X = gen_pseudo_data(x)
-        pseudo_mu, pseudo_std = model(pseudo_X)
-        y_pseudo_true = torch.ones_like(pseudo_std) * torch.quantile(pseudo_std, 0.75).detach().item()
-        loss_pseudo = F.mse_loss(pseudo_std, y_pseudo_true)    
-        loss_pseudo = loss_pseudo/loss_pseudo.detach().max() * torch.abs(loss_truth.detach().mean())
-        # --------------------------------------------------
-        p=0.9
-        loss = p * loss_truth + (1-p)* loss_pseudo
-        return loss
-
+    pseudo_data = PseudoData()
 
     tm1 = TorchModeling(model)
     tm1.compile(optimizer=optimizer
@@ -553,8 +592,6 @@ if succeed:
     tm1.train_model(train_loader=train_loader, epochs=50)
 
     ##################################################################
-
-
 
     # visualize
     n_grid = 30
@@ -708,27 +745,110 @@ if fail:
     # model(torch.rand(10,1).to(device))
     optimizer = optim.Adam(model.parameters(), lr=1e-3) 
 
+    tm1 = TorchModeling(model, device=device)
+    tm1.compile(optimizer=optimizer
+                ,loss_function = loss_function
+                # ,loss_function = weighted_gaussian_loss
+                # , scheduler=scheduler
+                # , early_stop_loss = EarlyStopping(patience=5)
+                )
+    tm1.train_model(train_loader=train_loader, epochs=100)
 
-    def loss_function(model, x, y):
-        # --------------------------------------------------
-        mu, std = model(x)
-        # loss_truth = torch.nn.functional.mse_loss(mu, y)
-        # loss_truth = 1/2 * (mu - y)**2
+    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
 
-        # loss_truth = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
-        loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
-        # return loss_truth
-        # --------------------------------------------------
-        pseudo_X = gen_pseudo_data(x)
-        pseudo_mu, pseudo_std = model(pseudo_X)
-        y_pseudo_true = torch.ones_like(pseudo_std) * torch.quantile(pseudo_std, 0.75).detach().item()
-        loss_pseudo = F.mse_loss(pseudo_std, y_pseudo_true)    
-        loss_pseudo = loss_pseudo/loss_pseudo.detach().max() * torch.abs(loss_truth.detach().mean())
-        # --------------------------------------------------
-        p=0.9
-        loss = p * loss_truth + (1-p)* loss_pseudo
-        return loss
 
+
+
+
+
+
+
+####################################################################################
+####################################################################################
+
+# Bayesian Neural Network
+if fail:
+    # ------------------------------------------------------------------------------
+    # Bayesian Linear Layer
+    class BayesianLinear(nn.Module):
+        def __init__(self, in_features, out_features, n_models=5):
+            super().__init__()
+            self.in_features = in_features
+            self.out_features = out_features
+            self.n_models = n_models
+            
+            # Weight mean and log variance
+            self.weight_mu = nn.Parameter(torch.Tensor(out_features, in_features))
+            self.weight_std = nn.Parameter(torch.Tensor(out_features, in_features))
+            
+            # Bias mean and log variance
+            self.bias_mu = nn.Parameter(torch.Tensor(out_features))
+            self.bias_std = nn.Parameter(torch.Tensor(out_features))
+
+            # # initialize parameters
+            nn.init.uniform_(self.weight_mu, -0.1, 0.1)
+            nn.init.zeros_(self.weight_std)
+
+            nn.init.uniform_(self.bias_mu, -0.1, 0.1)
+            nn.init.zeros_(self.bias_std)
+        
+        def forward(self, x):
+            return self.forward_stochastic(x)
+
+        def forward_stochastic(self, x):
+            # Reparameterization trick
+            weight_std = nn.functional.softplus(self.weight_std)
+            bias_std = nn.functional.softplus(self.bias_std) 
+            
+            # Sample from normal distribution
+            weight_eps = torch.randn_like(self.weight_mu)
+            bias_eps = torch.randn_like(self.bias_mu)
+                
+            weight = self.weight_mu + weight_std * weight_eps   # re-parameterization_trick
+            bias = self.bias_mu + bias_std * bias_eps      # re-parameterization_trick
+            return x @ weight.T + bias
+
+        def forward_deterministic(self, x):
+            return x @ self.weight_mu.T + self.bias_mu
+
+        def forward_ensemble(self, x, n_models=None):
+            n_models = self.n_models if n_models is None else n_models
+            outputs = []
+            for _ in range(n_models):
+                outputs.append( self.forward_stochastic(x) )
+            outputs_stack = torch.stack(outputs, dim=-1)
+            mu = outputs_stack.mean(dim=-1)
+            std = outputs_stack.std(dim=-1)
+            return mu, std
+        
+
+
+    # BNN model : ensemble only when evaluation
+    class BNN_Model(nn.Module):
+        def __init__(self, input_dim, hidden_dim, n_models=5):
+            super().__init__()
+            self.n_models = n_models
+            self.bayes_block = nn.Sequential(
+                    # EmbeddingBlock(input_dim, flatten=True),
+                    # nn.ReLU(),
+                    nn.Linear(input_dim, hidden_dim),
+                    nn.ReLU(),
+                    # BayesianLinear(hidden_dim, hidden_dim*2),
+                    nn.Linear(hidden_dim, hidden_dim*2),
+                    nn.ReLU(),
+                )
+            self.bayes_head = BayesianLinear(hidden_dim*2, 1, n_models)
+        
+        def forward(self, x, n_models=None):
+            n_models = self.n_models if n_models is None else n_models
+            latent = self.bayes_block(x)
+            mu, std = self.bayes_head.forward_ensemble(latent)
+            return mu, std
+
+    model = BNN_Model(1,64).to(device)
+    sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # model(torch.rand(10,1))
+    optimizer = optim.Adam(model.parameters(), lr=1e-3) 
 
     tm1 = TorchModeling(model, device=device)
     tm1.compile(optimizer=optimizer
@@ -737,142 +857,9 @@ if fail:
                 # , scheduler=scheduler
                 # , early_stop_loss = EarlyStopping(patience=5)
                 )
-    tm1.train_model(train_loader=train_loader, epochs=300)
+    tm1.train_model(train_loader=train_loader, epochs=100)
 
-    visualize_validate(model, X_train, y_train, xmin=-8, xmax=8)
-
-
-
-
-
-
-
-
-####################################################################################
-####################################################################################
-
-# ------------------------------------------------------------------------------
-# Bayesian Linear Layer
-class BayesianLinear(nn.Module):
-    def __init__(self, in_features, out_features, n_models=5):
-        super().__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.n_models = n_models
-        
-        # Weight mean and log variance
-        self.weight_mu = nn.Parameter(torch.Tensor(out_features, in_features))
-        self.weight_std = nn.Parameter(torch.Tensor(out_features, in_features))
-        
-        # Bias mean and log variance
-        self.bias_mu = nn.Parameter(torch.Tensor(out_features))
-        self.bias_std = nn.Parameter(torch.Tensor(out_features))
-
-        # # initialize parameters
-        nn.init.uniform_(self.weight_mu, -0.1, 0.1)
-        nn.init.zeros_(self.weight_std)
-
-        nn.init.uniform_(self.bias_mu, -0.1, 0.1)
-        nn.init.zeros_(self.bias_std)
-    
-    def forward(self, x):
-        return self.forward_stochastic(x)
-
-    def forward_stochastic(self, x):
-        # Reparameterization trick
-        weight_std = nn.functional.softplus(self.weight_std)
-        bias_std = nn.functional.softplus(self.bias_std) 
-        
-        # Sample from normal distribution
-        weight_eps = torch.randn_like(self.weight_mu)
-        bias_eps = torch.randn_like(self.bias_mu)
-            
-        weight = self.weight_mu + weight_std * weight_eps   # re-parameterization_trick
-        bias = self.bias_mu + bias_std * bias_eps      # re-parameterization_trick
-        return x @ weight.T + bias
-
-    def forward_deterministic(self, x):
-        return x @ self.weight_mu.T + self.bias_mu
-
-    def forward_ensemble(self, x, n_models=None):
-        n_models = self.n_models if n_models is None else n_models
-        outputs = []
-        for _ in range(n_models):
-            outputs.append( self.forward_stochastic(x) )
-        outputs_stack = torch.stack(outputs, dim=-1)
-        mu = outputs_stack.mean(dim=-1)
-        std = outputs_stack.std(dim=-1)
-        return mu, std
-    
-
-
-# BNN model : ensemble only when evaluation
-class BNN_Model(nn.Module):
-    def __init__(self, input_dim, hidden_dim, n_models=5):
-        super().__init__()
-        self.n_models = n_models
-        self.bayes_block = nn.Sequential(
-                # EmbeddingBlock(input_dim, flatten=True),
-                # nn.ReLU(),
-                nn.Linear(input_dim, hidden_dim),
-                nn.ReLU(),
-                # BayesianLinear(hidden_dim, hidden_dim*2),
-                nn.Linear(hidden_dim, hidden_dim*2),
-                nn.ReLU(),
-            )
-        self.bayes_head = BayesianLinear(hidden_dim*2, 1, n_models)
-    
-    def forward(self, x, n_models=None):
-        n_models = self.n_models if n_models is None else n_models
-        latent = self.bayes_block(x)
-        mu, std = self.bayes_head.forward_ensemble(latent)
-        return mu, std
-
-
-
-model = BNN_Model(1,64).to(device)
-sum(p.numel() for p in model.parameters() if p.requires_grad)
-# model(torch.rand(10,1))
-optimizer = optim.Adam(model.parameters(), lr=1e-3) 
-
-
-def loss_function(model, x, y):
-    # --------------------------------------------------
-    mu, std = model(x)
-    # loss_truth = torch.nn.functional.mse_loss(mu, y)
-    # loss_truth = 1/2 * (mu - y)**2
-
-    # loss_truth = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
-    loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
-    return loss_truth
-    # # --------------------------------------------------
-    # pseudo_X = gen_pseudo_data(x)
-    # pseudo_mu, pseudo_std = model(pseudo_X)
-    # y_pseudo_true = torch.ones_like(pseudo_std) * torch.quantile(pseudo_std, 0.75).detach().item()
-    # loss_pseudo = (pseudo_std - y_pseudo_true) **2      # MSE Loss
-    # max_loss_pseudo = loss_pseudo.detach().max()
-    # if max_loss_pseudo == 0:
-    #     loss_pseudo = torch.mean(loss_pseudo)  
-    #     p=1
-    # else:
-    #     loss_pseudo = torch.mean( loss_pseudo/max_loss_pseudo * torch.abs(loss_truth.detach().mean()) )
-    #     p=0.9
-    # # --------------------------------------------------
-    # loss = p * loss_truth + (1-p)* loss_pseudo
-
-    # return loss
-
-
-tm1 = TorchModeling(model, device=device)
-tm1.compile(optimizer=optimizer
-            ,loss_function = loss_function
-            # ,loss_function = weighted_gaussian_loss
-            # , scheduler=scheduler
-            # , early_stop_loss = EarlyStopping(patience=5)
-            )
-tm1.train_model(train_loader=train_loader, epochs=300)
-
-visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
+    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
 
 
 
@@ -886,88 +873,63 @@ visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
 
 
 ########################################################################
-class EnsembleBayesianNN(nn.Module):
-    def __init__(self, input_dim, hidden_dim=32, n_ensemble=5):
-        super().__init__()
-        self.shared_block = nn.Sequential(
-                # EmbeddingBlock(input_dim, flatten=True),
-                # nn.ReLU(),
-                BayesianLinear(input_dim, hidden_dim),
-                nn.ReLU(),
-                
-            )
-        self.ensemble_blocks = nn.ModuleList()
-        for _ in range(n_ensemble):
-            block = nn.Sequential(
-                nn.Linear(hidden_dim, hidden_dim*2),
-                nn.ReLU(),
-                nn.Linear(hidden_dim*2, 1),
-            )
-            self.ensemble_blocks.append(block)
+# Ensemble + Bayesian Neural Network
+if fail:
+    class EnsembleBayesianNN(nn.Module):
+        def __init__(self, input_dim, hidden_dim=32, n_ensemble=5):
+            super().__init__()
+            self.shared_block = nn.Sequential(
+                    # EmbeddingBlock(input_dim, flatten=True),
+                    # nn.ReLU(),
+                    BayesianLinear(input_dim, hidden_dim),
+                    nn.ReLU(),
+                    
+                )
+            self.ensemble_blocks = nn.ModuleList()
+            for _ in range(n_ensemble):
+                block = nn.Sequential(
+                    nn.Linear(hidden_dim, hidden_dim*2),
+                    nn.ReLU(),
+                    nn.Linear(hidden_dim*2, 1),
+                )
+                self.ensemble_blocks.append(block)
 
-        # 모든 Linear 레이어 weight를 uniform 초기화
-        for block in self.ensemble_blocks:
-            for layer in block:
-                if isinstance(layer, nn.Linear):
-                    torch.nn.init.uniform_(layer.weight, a=-0.1, b=0.1)  # 범위 [-0.1, 0.1]
-                    torch.nn.init.zeros_(layer.bias)  # bias는 0으로 초기화
+            # 모든 Linear 레이어 weight를 uniform 초기화
+            for block in self.ensemble_blocks:
+                for layer in block:
+                    if isinstance(layer, nn.Linear):
+                        torch.nn.init.uniform_(layer.weight, a=-0.1, b=0.1)  # 범위 [-0.1, 0.1]
+                        torch.nn.init.zeros_(layer.bias)  # bias는 0으로 초기화
 
-    def forward(self, x):
-        latent = self.shared_block(x)
-        outputs = []
-        for block in self.ensemble_blocks:
-            outputs.append(block(latent))
+        def forward(self, x):
+            latent = self.shared_block(x)
+            outputs = []
+            for block in self.ensemble_blocks:
+                outputs.append(block(latent))
 
-        outputs_cat = torch.cat(outputs, dim=-1)  # (batch, n_ensemble)
+            outputs_cat = torch.cat(outputs, dim=-1)  # (batch, n_ensemble)
 
-        mu = outputs_cat.mean(dim=-1, keepdims=True)
-        std = outputs_cat.std(dim=-1, keepdims=True)
+            mu = outputs_cat.mean(dim=-1, keepdims=True)
+            std = outputs_cat.std(dim=-1, keepdims=True)
 
-        return mu, std
+            return mu, std
 
-model = EnsembleBayesianNN(1,64).to(device)
-sum(p.numel() for p in model.parameters() if p.requires_grad)
-# model(torch.rand(10,1).to(device))
-optimizer = optim.Adam(model.parameters(), lr=1e-3) 
+    model = EnsembleBayesianNN(1,64).to(device)
+    sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # model(torch.rand(10,1).to(device))
+    optimizer = optim.Adam(model.parameters(), lr=1e-3) 
 
-def loss_function(model, x, y):
-    # --------------------------------------------------
-    mu, std = model(x)
-    # loss_truth = torch.nn.functional.mse_loss(mu, y)
-    # loss_truth = 1/2 * (mu - y)**2
+    tm1 = TorchModeling(model, device=device)
+    tm1.compile(optimizer=optimizer
+                ,loss_function = loss_function
+                # ,loss_function = weighted_gaussian_loss
+                # , scheduler=scheduler
+                # , early_stop_loss = EarlyStopping(patience=5)
+                )
+    tm1.train_model(train_loader=train_loader, epochs=100)
 
-    # loss_truth = torch.nn.functional.gaussian_nll_loss(mu, y, std**2)
-    loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
-    # return loss_truth
-    # --------------------------------------------------
-    pseudo_X = gen_pseudo_data(x)
-    pseudo_mu, pseudo_std = model(pseudo_X)
-    y_pseudo_true = torch.ones_like(pseudo_std) * torch.quantile(pseudo_std, 0.75).detach().item()
-    loss_pseudo = (pseudo_std - y_pseudo_true) **2      # MSE Loss
-    max_loss_pseudo = loss_pseudo.detach().max()
-    if max_loss_pseudo == 0:
-        loss_pseudo = torch.mean(loss_pseudo)  
-        p=1
-    else:
-        loss_pseudo = torch.mean( loss_pseudo/max_loss_pseudo * torch.abs(loss_truth.detach().mean()) )
-        p=0.9
-    # --------------------------------------------------
-    loss = p * loss_truth + (1-p)* loss_pseudo
-
-    return loss
-
-
-tm1 = TorchModeling(model, device=device)
-tm1.compile(optimizer=optimizer
-            ,loss_function = loss_function
-            # ,loss_function = weighted_gaussian_loss
-            # , scheduler=scheduler
-            # , early_stop_loss = EarlyStopping(patience=5)
-            )
-tm1.train_model(train_loader=train_loader, epochs=1000)
-
-visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
-##################################################################
+    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
+    ##################################################################
 
 
 
