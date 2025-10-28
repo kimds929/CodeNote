@@ -128,11 +128,15 @@ plt.plot(x_lin, f.true_f(x_lin), color='orange', label='true')
 plt.legend()
 plt.show()
 
+###################################################################################################
+
+X_test = X_train[torch.randperm(len(X_train))[:100],:]
+y_test = f(X_test)
 
 ###################################################################################################
 train_dataset = TensorDataset(X_train, y_train)
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-
+###################################################################################################
 
 
 
@@ -144,10 +148,6 @@ train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
 
 ###################################################################################################
-
-
-
-
 class MeanRegressor(nn.Module):
     def __init__(self, input_dim, hidden_dim=32, n_ensemble=5):
         super().__init__()
@@ -194,8 +194,8 @@ tm0.train_model(train_loader=train_loader, epochs=300)
 # visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
 
 
-X_test = X_train[torch.randperm(len(X_train))[:100],:]
-y_test = f(X_test)
+# X_test = X_train[torch.randperm(len(X_train))[:100],:]
+# y_test = f(X_test)
 
 X_linspace = torch.linspace(-6, 6, steps=100, device=device).unsqueeze(1)
 with torch.no_grad():
