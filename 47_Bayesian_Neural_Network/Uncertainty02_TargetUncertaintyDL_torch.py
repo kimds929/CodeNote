@@ -34,6 +34,7 @@ except:
 
 #########################################################################################
 device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+print(f"torch_device : {device}")
 torch.cuda.device_count()
 # torch.autograd.set_detect_anomaly(False)
 
@@ -99,7 +100,7 @@ class UnknownFuncion():
 
 
 # f = UnknownFuncion()
-f = UnknownFuncion(n_polynorm=2, theta_scale=100, error_scale=0.1)
+f = UnknownFuncion(n_polynorm=2, error_scale=0.1)
 # f = UnknownFuncion(n_polynorm=3)
 # f = UnknownFuncion(n_polynorm=4)
 # f = UnknownFuncion(n_polynorm=5)
@@ -134,8 +135,153 @@ train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
 
 
+
+
+
+
+
+
+
+
 ###################################################################################################
-def visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, steps=100, f=None, return_plot=True):
+
+
+
+
+class MeanRegressor(nn.Module):
+    def __init__(self, input_dim, hidden_dim=32, n_ensemble=5):
+        super().__init__()
+
+        self.block = nn.Sequential(
+            # EmbeddingBlock(input_dim, flatten=True),
+            # nn.ReLU(),
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim*2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim*2, 1),
+        )
+
+        # # 모든 Linear 레이어 weight를 uniform 초기화
+        # for block in self.ensemble_blocks:
+        #     for layer in block:
+        #         if isinstance(layer, nn.Linear):
+        #             torch.nn.init.uniform_(layer.weight, a=-0.1, b=0.1)  # 범위 [-0.1, 0.1]
+        #             torch.nn.init.zeros_(layer.bias)  # bias는 0으로 초기화
+
+    def forward(self, x):
+        return self.block(x)
+
+model = MeanRegressor(input_dim=1)
+sum(p.numel() for p in model.parameters() if p.requires_grad)
+# model(torch.rand(10,1).to(device))
+
+
+def mse_loss(model, batch, optimizer=None):
+    batch_X, batch_y = batch
+    pred = model(batch_X)
+    return nn.functional.mse_loss(pred, batch_y)
+
+tm0 = TorchModeling(model, device=device)
+tm0.compile(optimizer= optim.Adam(model.parameters(), lr=1e-3)
+            ,loss_function = mse_loss
+            # ,loss_function = weighted_gaussian_loss
+            # , scheduler=scheduler
+            , early_stop_loss = EarlyStopping(patience=100)
+            )
+tm0.train_model(train_loader=train_loader, epochs=300)
+
+# visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
+
+
+X_test = X_train[torch.randperm(len(X_train))[:100],:]
+y_test = f(X_test)
+
+X_linspace = torch.linspace(-6, 6, steps=100, device=device).unsqueeze(1)
+with torch.no_grad():
+    # 모델 추론
+    mu_pred = model(X_test.to(device))
+    test_mse = nn.functional.mse_loss(mu_pred, y_test.to(device))
+    test_rmse = torch.sqrt(test_mse)
+    
+    mu_pred_lin = model(X_linspace.to(device))
+print(test_rmse)
+
+lower_cpu = (mu_pred_lin - 2*test_rmse).numpy().ravel()
+upper_cpu = (mu_pred_lin + 2*test_rmse).numpy().ravel()
+
+plt.figure(figsize=(10, 6))
+plt.scatter(X_train, y_train, color='steelblue')
+plt.plot(X_linspace, mu_pred_lin)
+plt.plot(X_linspace, f.true_f(X_linspace))
+plt.fill_between(X_linspace.numpy().ravel(), lower_cpu, upper_cpu, alpha=0.2)
+plt.ylim(-2.5, 4.5)
+# plt.xticks([])
+# plt.yticks([])
+plt.show()
+
+
+
+
+###################################################################################################
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.metrics import mean_squared_error
+
+# RandomForest
+RF = RandomForestRegressor()
+RF.fit(X_train.numpy(), y_train.numpy().ravel())
+
+rf_pred = RF.predict(X_test)
+rf_pred_lin = RF.predict(X_linspace)
+rf_test_rmse = np.sqrt(mean_squared_error(y_test.ravel(), rf_pred))
+print(f"RMSE_RF : {rf_test_rmse:.3f}")
+
+lower_cpu = (rf_pred_lin - 2*rf_test_rmse).ravel()
+upper_cpu = (rf_pred_lin + 2*rf_test_rmse).ravel()
+
+plt.figure(figsize=(10, 6))
+plt.scatter(X_train, y_train, color='steelblue')
+plt.plot(X_linspace, rf_pred_lin)
+plt.plot(X_linspace, f.true_f(X_linspace))
+plt.fill_between(X_linspace.numpy().ravel(), lower_cpu, upper_cpu, alpha=0.2)
+plt.ylim(-2.5, 4.5)
+# plt.xticks([])
+# plt.yticks([])
+plt.show()
+
+
+# GradientBoosting
+GB = GradientBoostingRegressor()
+GB.fit(X_train.numpy(), y_train.numpy().ravel())
+
+gb_pred = GB.predict(X_test)
+gb_pred_lin = GB.predict(X_linspace)
+gb_test_rmse = np.sqrt(mean_squared_error(y_test.ravel(), gb_pred))
+print(f"RMSE_GB : {gb_test_rmse:.3f}")
+
+
+lower_cpu = (gb_pred_lin - 2*gb_test_rmse).ravel()
+upper_cpu = (gb_pred_lin + 2*gb_test_rmse).ravel()
+
+plt.figure(figsize=(10, 6))
+plt.scatter(X_train, y_train, color='steelblue')
+plt.plot(X_linspace, gb_pred_lin)
+plt.plot(X_linspace, f.true_f(X_linspace))
+plt.fill_between(X_linspace.numpy().ravel(), lower_cpu, upper_cpu, alpha=0.2)
+plt.ylim(-2.5, 4.5)
+# plt.xticks([])
+# plt.yticks([])
+plt.show()
+
+
+
+
+
+
+
+
+###################################################################################################
+def visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, steps=100, f=None, sigma=2, return_plot=True):
     model.eval()
 
     # 모델 파라미터에서 device/dtype 추론
@@ -165,15 +311,15 @@ def visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, steps=100, f=No
     X_test_cpu = X_test.squeeze(1).detach().cpu()
     mu_cpu = mu_pred.detach().cpu()
     sig_cpu = sigma_pred.detach().cpu()
-    lower_cpu = (mu_cpu - 2 * sig_cpu)
-    upper_cpu = (mu_cpu + 2 * sig_cpu)
+    lower_cpu = (mu_cpu - sigma * sig_cpu)
+    upper_cpu = (mu_cpu + sigma * sig_cpu)
 
     fig = plt.figure(figsize=(10, 6))
-    plt.plot(X_train_cpu.numpy(), y_train_cpu.numpy(), 'o', label="Training Data")
-    plt.plot(X_test_cpu.numpy(), mu_cpu.numpy(), label="Mean Prediction")
+    plt.plot(X_train_cpu.numpy(), y_train_cpu.numpy(), 'o', label="Training Data", color='steelblue')
+    plt.plot(X_test_cpu.numpy(), mu_cpu.numpy(), label="Mean Prediction", color='steelblue')
 
     if true_y is not None:
-        plt.plot(X_test_cpu.numpy(), true_y.detach().cpu().numpy(), label='true')
+        plt.plot(X_test_cpu.numpy(), true_y.detach().cpu().numpy(), label='true', color='orange')
 
     plt.fill_between(
         X_test_cpu.numpy(),
@@ -182,7 +328,7 @@ def visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, steps=100, f=No
         alpha=0.2,
         label="Uncertainty (±2 std)"
     )
-    plt.legend()
+    plt.legend(loc='upper right')
 
     if return_plot is True:
         plt.close()
@@ -387,8 +533,8 @@ if succeed:
         pseudo_X = pseudo_data.gen_pseudo_data(x)
         pseudo_mu, pseudo_std = model(pseudo_X)
         
-        gamma_ = 0.1     # observe uncertainty coefficient
-        lambda_ = 0.1   # unobserve uncertainty coefficient
+        gamma_ = 0.05     # observe uncertainty coefficient
+        lambda_ = 0.05   # unobserve uncertainty coefficient
         p = 0.9
         std_target = gamma_* y.std() 
         pseudo_std_target = lambda_*( y.std() + torch.abs(pseudo_X - x.mean())* pseudo_data.window_alpha )
@@ -408,7 +554,14 @@ if succeed:
                 )
     tm1.train_model(train_loader=train_loader, epochs=100)
 
-    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
+    with torch.no_grad():
+        # 모델 추론
+        mu_pred, mu_std = model(X_test.to(device))
+        test_mse = nn.functional.mse_loss(mu_pred, y_test.to(device))
+        test_rmse = torch.sqrt(test_mse)
+    print(test_rmse)
+    
+    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, f=f)
     ##################################################################
 
 
@@ -472,7 +625,7 @@ if succeed:
                 )
     tm1.train_model(train_loader=train_loader, epochs=100)
 
-    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
+    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, sigma=2, f=f)
     ##################################################################
 
 
@@ -930,6 +1083,5 @@ if fail:
 
     visualize_validate(model, X_train, y_train, xmin=-6, xmax=6)
     ##################################################################
-
 
 
