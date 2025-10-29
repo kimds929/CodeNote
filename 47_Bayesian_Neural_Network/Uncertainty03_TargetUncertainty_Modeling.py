@@ -1,6 +1,12 @@
 import os
 import sys
-sys.path.append('/home/pd299370/DataScience/DS_Library')
+if 'pd' not in os.getcwd():
+    base_path = 'D:'
+else:
+    base_path = os.getcwd()
+folder_path =f"{base_path}/DataScience"
+sys.path.append(f"{folder_path}/00_DataAnalysis_Basic")
+sys.path.append(f"{folder_path}/DS_Library")
 sys.path.append(r'D:\DataScience\00_DataAnalysis_Basic')
 
 import torch
@@ -10,6 +16,7 @@ import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from copy import deepcopy
@@ -17,7 +24,7 @@ import missingno as msno
 from DS_Basic_Module import DF_Summary, ScalerEncoder
 
 try:
-    from DS_Torch import TorchDataLoader, TorchModeling, AutoML, early
+    from DS_Torch import TorchDataLoader, TorchModeling, AutoML
     from DS_DeepLearning import EarlyStopping
 except:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
@@ -34,7 +41,7 @@ except:
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_DeepLearning.py", verify=False)
         exec(response.text)
 
-db_path = r'D:\DataScience\DataBase'
+db_path = f'{folder_path}/DataBase'
 
 # df00 = pd.read_csv(f"{db_path}/Data_Tabular/datasets_Titanic_original.csv", encoding='utf-8-sig')
 df00 = pd.read_csv(f"{db_path}/Data_Tabular/datasets_Boston_house.csv", encoding='utf-8-sig')
@@ -100,6 +107,134 @@ tests_loader = DataLoader(tests_dataset, batch_size=64, shuffle=True)
 ####################################################################################################
 ####################################################################################################
 
+
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from xgboost import XGBRegressor
+from sklearn.metrics import mean_squared_error
+
+train_X_concat =np.concatenate([train_X_num_norm, train_X_cat], axis= -1)
+valid_X_concat =np.concatenate([valid_X_num_norm, valid_X_cat], axis= -1)
+tests_X_concat =np.concatenate([tests_X_num_norm, tests_X_cat], axis= -1)
+
+
+# ---------------------------------------------------------------------------
+oh = OneHotEncoder(sparse_output=True)
+train_X_cat_oh = oh.fit_transform(train_X_cat).toarray()
+valid_X_cat_oh = oh.transform(valid_X_cat).toarray()
+tests_X_cat_oh = oh.transform(tests_X_cat).toarray()
+
+train_X_concat = np.concatenate([train_X_num_norm, train_X_cat_oh], axis= -1)
+valid_X_concat = np.concatenate([valid_X_num_norm, valid_X_cat_oh], axis= -1)
+tests_X_concat = np.concatenate([tests_X_num_norm, tests_X_cat_oh], axis= -1)
+# ---------------------------------------------------------------------------
+
+# RandomForest
+RF = RandomForestRegressor()
+RF.fit(train_X_concat, train_y_norm)
+
+RF_pred = RF.predict(train_X_concat)
+np.sqrt(mean_squared_error(train_y_norm, RF_pred))
+
+
+RF_pred_tests = RF.predict(tests_X_concat)
+RF_rmse_tests = np.sqrt(mean_squared_error(tests_y_norm, RF_pred_tests))
+print(f"RF_rmse_tests : {RF_rmse_tests:.3f}")
+
+# ---------------------------------------------------------------------------
+
+# GradientBoosting
+GB = GradientBoostingRegressor()
+GB.fit(train_X_concat, train_y_norm)
+
+GB_pred = GB.predict(train_X_concat)
+np.sqrt(mean_squared_error(train_y_norm, GB_pred))
+
+
+GB_pred_tests = GB.predict(tests_X_concat)
+GB_rmse_tests = np.sqrt(mean_squared_error(tests_y_norm, GB_pred_tests))
+print(f"GB_rmse_tests : {GB_rmse_tests:.3f}")
+# ---------------------------------------------------------------------------
+
+# GradientBoosting
+XGB = XGBRegressor()
+XGB.fit(train_X_concat, train_y_norm)
+
+XGB_pred = XGB.predict(train_X_concat)
+np.sqrt(mean_squared_error(train_y_norm, XGB_pred))
+
+
+XGB_pred_tests = XGB.predict(tests_X_concat)
+XGB_rmse_tests = np.sqrt(mean_squared_error(tests_y_norm, XGB_pred_tests))
+print(f"XGB_rmse_tests : {XGB_rmse_tests:.3f}")
+# ---------------------------------------------------------------------------
+
+from bayes_opt import BayesianOptimization
+class MinimizeFunction():
+    def __init__(self, train_X, train_y, valid_X, valid_y):
+        self.train_X = train_X
+        self.train_y = train_y
+        self.valid_X = valid_X
+        self.valid_y = valid_y
+    
+    def minimize(self, max_depth, learning_rate, subsample, colsample_bytree, n_estimators):
+        model = XGBRegressor(
+            max_depth=int(max_depth),
+            learning_rate=learning_rate,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            n_estimators=int(n_estimators),
+            enable_categorical=True,
+            tree_method='hist',
+        )
+        model.fit(self.train_X, self.train_y)
+        preds = model.predict(self.valid_X)
+        rmse = np.sqrt(mean_squared_error(self.valid_y, preds))
+        return -rmse  # BayesianOptimization은 최대화를 하므로 음수로 반환
+    
+    def __call__(self, max_depth, learning_rate, subsample, colsample_bytree, n_estimators):
+        return self.minimize(max_depth, learning_rate, subsample, colsample_bytree, n_estimators)
+
+min_f = MinimizeFunction(train_X_concat, train_y_norm, valid_X_concat, valid_y_norm)
+
+# 파라미터 범위 설정
+pbounds = {
+    'max_depth': (3, 10),
+    'learning_rate': (0.01, 0.3),
+    'subsample': (0.5, 1.0),
+    'colsample_bytree': (0.5, 1.0),
+    'n_estimators': (50, 300)
+}
+
+# Bayesian Optimization 실행
+optimizer = BayesianOptimization(
+    f=min_f,
+    pbounds=pbounds
+)
+
+optimizer.maximize(init_points=5, n_iter=20)
+best_params = optimizer.max['params']
+best_params['max_depth'] = int(best_params['max_depth'])
+best_params['n_estimators'] = int(best_params['n_estimators'])
+
+XGB_best = XGBRegressor(**best_params)
+XGB_best.fit(train_X_concat, train_y_norm)
+XGB_best_pred = XGB_best.predict(train_X_concat)
+np.sqrt(mean_squared_error(train_y_norm, XGB_best_pred))
+
+XGB_best_pred_tests = XGB_best.predict(tests_X_concat)
+XGB_best_rmse_tests = np.sqrt(mean_squared_error(tests_y_norm, XGB_best_pred_tests))
+print(f"XGB_best_rmse_tests : {XGB_best_rmse_tests:.3f}")
+
+
+
+
+
+
+
+
+
+####################################################################################################
 # --------------------------------------------------------------------------------------
 
 class PseudoData():
@@ -251,7 +386,7 @@ class PseudoData():
 
 # --------------------------------------------------------------------------------------
 # device
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 print(f"torch device : {device}")
 
 # --------------------------------------------------------------------------------------
@@ -335,9 +470,9 @@ class EnsembleNN(nn.Module):
 # batch[0].shape
 # batch[1].shape
 
-model = EnsembleNN(num_input_dim=11, cat_input_dim=2, hidden_dim=32, 
+model = EnsembleNN(num_input_dim=11, cat_input_dim=2, hidden_dim=128, 
                    num_embeddings=100, n_cat_embed=2, n_ensemble=5).to(device)
-# sum(p.numel() for p in model.parameters() if p.requires_grad)
+print(f"n_params : {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 # model(torch.rand(10,11), torch.randint(0,2, size=(10,2)) )
 
 def loss_function(model, batch, optimizer=None):
@@ -377,9 +512,9 @@ tm1.compile(optimizer=optim.Adam(model.parameters(), lr=1e-3)
             ,loss_function = loss_function
             # ,loss_function = weighted_gaussian_loss
             # , scheduler=scheduler
-            , early_stop_loss = EarlyStopping(patience=100)
+            , early_stop_loss = EarlyStopping(min_iter=200, patience=100)
             )
-tm1.early_stop_loss.reset_patience_scores()
+# tm1.early_stop_loss.reset_patience_scores(patience=100)
 tm1.train_model(train_loader=train_loader, valid_loader=valid_loader, epochs=500)
 
 # tm1.early_stop_loss.plot
@@ -506,60 +641,423 @@ def partial_dependence_uncertainty_plot(model, index, train_X_num, train_X_cat, 
         plt.show()
 
 # visualize
-partial_dependence_uncertainty_plot(model, 11, train_X_num_norm, train_X_cat, train_y_norm, 
+partial_dependence_uncertainty_plot(model, 0, train_X_num_norm, train_X_cat, train_y_norm, 
                                 sigma=2, scaler_X=ss_X, scaler_y=ss_y)
 
 
 
 
 
-################################################################################
-
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.metrics import mean_squared_error
-
-train_X_concat =np.concat([train_X_num_norm, train_X_cat], axis= -1)
-tests_X_concat =np.concat([tests_X_num_norm, tests_X_cat], axis= -1)
-
-# ---------------------------------------------------------------------------
-oh = OneHotEncoder(sparse_output=True)
-train_X_cat_oh = oh.fit_transform(train_X_cat).toarray()
-tests_X_cat_oh = oh.fit_transform(tests_X_cat).toarray()
-
-train_X_concat = np.concat([train_X_num_norm, train_X_cat_oh], axis= -1)
-tests_X_concat = np.concat([tests_X_num_norm, tests_X_cat_oh], axis= -1)
-# ---------------------------------------------------------------------------
-
-# RandomForest
-RF = RandomForestRegressor()
-RF.fit(train_X_concat, train_y_norm)
-
-RF_pred = RF.predict(train_X_concat)
-np.sqrt(mean_squared_error(train_y_norm, RF_pred))
-
-
-RF_pred_tests = RF.predict(tests_X_concat)
-RF_rmse_tests = np.sqrt(mean_squared_error(tests_y_norm, RF_pred_tests))
-print(f"RF_rmse_tests : {RF_rmse_tests:.3f}")
-
-# ---------------------------------------------------------------------------
-
-# GradientBoosting
-GB = GradientBoostingRegressor()
-GB.fit(train_X_concat, train_y_norm)
-
-GB_pred = GB.predict(train_X_concat)
-np.sqrt(mean_squared_error(train_y_norm, GB_pred))
-
-
-GB_pred_tests = GB.predict(tests_X_concat)
-GB_rmse_tests = np.sqrt(mean_squared_error(tests_y_norm, GB_pred_tests))
-print(f"GB_rmse_tests : {GB_rmse_tests:.3f}")
-# ---------------------------------------------------------------------------
 
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+########################################################################################
+class ContinuousEmbeddingLayer(nn.Module):
+    def __init__(self, feature_dim, embed_dim, bias=True, sine=False, independent=False, expand=True):
+        super().__init__()
+        self.bias = bias
+        self.sine = sine
+        self.independent = independent
+        self.expand = expand
+        self.embed_dim = embed_dim
+
+        if independent is False:
+            self.weight = nn.Parameter(torch.randn(feature_dim, embed_dim))  # (feature_dim, embed_dim, 1)
+            nn.init.kaiming_normal_(self.weight, mode='fan_in', nonlinearity='linear')
+
+        if (independent is True) or (bias is True):
+            self.weight_bias = nn.Parameter(torch.randn(feature_dim, embed_dim))       # (feature_dim, embed_dim)
+            nn.init.uniform_(self.weight_bias, -1, 1)
+
+    def forward(self, x):
+        *x_shape, f_dim = x.shape   # (batch_dim, feature_dim)
+        x_unsqueezed = x.unsqueeze(-1)
+        if self.independent:
+            x_embed = self.weight_bias     # (feature_dim, embed_dim)
+            if self.expand:
+                x_embed = x_embed.expand(*x_shape, f_dim, self.embed_dim)
+        else:
+            x_embed = self.weight * x_unsqueezed
+            if self.bias:
+                x_embed += self.weight_bias
+        
+        if self.sine:
+            x_embed = torch.sin(x_embed) 
+
+        return x_embed
+
+# el = EmbeddingLayer(2, embed_dim=2)
+# el(torch.rand(5,2))
+
+# ----------------------------------------------------------------------------------------
+
+class ContinuousEmbeddingBlock(nn.Module):
+    def __init__(self, input_dim, flatten=False):
+        super().__init__()
+        self.flatten = flatten
+
+        self.ind_embedding = ContinuousEmbeddingLayer(input_dim, 1, independent=True)
+        self.sin_embedding = ContinuousEmbeddingLayer(input_dim, 1, sine=True)
+
+    def forward(self, x):
+        x_shape = x.shape
+        x_embed = x.unsqueeze(-1)
+        ind_x = self.ind_embedding(x)
+        sin_x = self.sin_embedding(x)
+        embed_output = torch.cat([x_embed, ind_x, sin_x], axis=-1)
+        if self.flatten:
+            embed_output = embed_output.view(x_shape[0],-1)
+        return embed_output
+
+# eb = EmbeddingBlock(input_dim=2, flatten=False)
+# eb(torch.rand(5,2)).shape
+
+
+
+
+
+# ----------------------------------------------------------------------------------------
+# Embedding단위에서 independent하게 fc layer를 통과
+class EmbeddingLinear(nn.Module):
+    def __init__(self, feature_dim, in_embedding, out_embedding, bias:bool=True):
+        super().__init__()
+        self.feature_dim = feature_dim
+        self.in_embedding = in_embedding
+        self.out_embedding = out_embedding
+    
+        self.weight = nn.Parameter(torch.empty(feature_dim, in_embedding, out_embedding))
+        nn.init.kaiming_uniform_(self.weight, a=torch.sqrt(torch.tensor(5.0)).item())
+        
+        if bias:
+            self.bias = nn.Parameter(torch.empty(feature_dim, out_embedding))
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / torch.sqrt(torch.tensor(float(fan_in))).item() if fan_in > 0 else 0
+            nn.init.uniform_(self.bias, -bound, bound)
+        else:
+            self.register_parameter('bias', None)
+    
+    def forward(self, x):
+        embed_out = torch.einsum('bfe,fek->bfk', x, self.weight)
+        if self.bias is not None:
+            embed_out += self.bias
+        return embed_out
+
+    def __repr__(self):
+        return f"EmbeddingLayer(feature_dim={self.feature_dim}, in_embedding={self.in_embedding}, out_embedding={self.out_embedding})"
+# el = EmbeddingLinear(5,3,6)
+# el(torch.rand(10,5,3)).shape
+
+# ----------------------------------------------------------------------------------------
+
+class LearnablePositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=4096):
+        super().__init__()
+        self.pos_embedding = nn.Embedding(max_len, d_model)
+
+    def forward(self, x):
+        batch_size, seq_len, _ = x.size()
+        positions = torch.arange(seq_len, device=x.device).unsqueeze(0).expand(batch_size, seq_len)
+        pos_enc = self.pos_embedding(positions)
+        return x + pos_enc
+
+# ----------------------------------------------------------------------------------------
+
+class PreLN_TransformerEncoderLayer(nn.Module):
+    def __init__(self, d_model, nhead, dim_feedforward, dropout=0.1, batch_first=True):
+        super().__init__()
+        
+        self.layer_norm1 = nn.LayerNorm(d_model)    # layer_norm1
+        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first)
+        self.dropout1 = nn.Dropout(dropout)
+        
+        self.ff_layer = nn.Sequential(
+            nn.LayerNorm(d_model),      # layer_norm2
+            nn.Linear(d_model, dim_feedforward),     # FF_linear1
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim_feedforward, d_model),     # FF_linear2
+            
+        )
+        self.dropout2 = nn.Dropout(dropout)
+
+    def forward(self, src, src_mask=None, is_causal=False, src_key_padding_mask=None):
+        # Pre-LN before MHA
+        src_norm = self.layer_norm1(src)
+        attn_output, _ = self.self_attn(src_norm, src_norm, src_norm,
+                                        attn_mask=src_mask,
+                                        key_padding_mask=src_key_padding_mask,
+                                        is_causal=is_causal)    # is_causal : 미래정보차단여부 (src_mask를 안넣어도 자동으로 차단해줌)
+        src = src + self.dropout1(attn_output)
+
+        # Pre-LN before FFN
+        src = src + self.ff_layer(src)
+        return src
+
+
+# ----------------------------------------------------------------------------------------
+# * ScaledDotProductAttention : B,T,E 가 있을 때, T중에 어떤 T에 집중할 지를 알려줌
+class ScaledDotProductAttention(torch.nn.Module):
+    def __init__(self, scaled=1, dropout=0):
+        super().__init__()
+        self.scaled = scaled
+        self.dropout_layer = torch.nn.Dropout(dropout)
+
+    def forward(self, x, mask=None, epsilon=1e-10):
+        query, key, value = x
+
+        self.energy = torch.matmul(query, key.transpose(-1,-2)) / self.scaled    # (B, ..., S, S) ← (B, ..., S, W), (B, ..., W, S)
+        # * summation of muliply between embedding vectors : Query에 해당하는 각 Length(단어) embedding이 어떤 key의 Length(단어) embedding과 연관(내적)되는지?
+
+        if mask is not None:
+            # masking 영역(==0)에 대해 -epsilon 으로 채우기 (softmax → 0)
+            self.energy = self.energy.masked_fill(mask==0, -epsilon)
+
+        self.attention_score = torch.softmax(self.energy, dim=-1)
+
+        self.weighted = torch.matmul(self.dropout_layer(self.attention_score), value)    # (B, ..., S, W) ← (B, ..., S, S), (B, ..., S, W)
+        # * summation of muliply between softmax_score and embeding of value
+
+        return self.weighted, self.attention_score
+
+class AttentionPoolingLayer(nn.Module):
+    def __init__(self, d_model, learnable_threshold=False, eps=1e-8):
+        super().__init__()
+        self.learnable_threshold = learnable_threshold
+        self.eps = eps
+        
+        self.query = nn.Parameter(torch.randn(d_model)/d_model)  # 학습 가능한 Query (d_model, )
+        
+        if self.learnable_threshold:
+            self.threshold = nn.Parameter(torch.randn(1)/d_model)
+
+    def forward(self, x, mask=None):  # x: (B, T, d_model)
+        # Attention score 계산
+        attn_scores = torch.matmul(x, self.query)  # (B, T)
+        
+        # Attention Mask
+        if mask is not None:
+            attn_scores = attn_scores.masked_fill(mask == 0, float('-inf'))
+        attn_weights = torch.softmax(attn_scores, dim=1)  # (B, T)
+        
+        # Learnable Threshold : sparcity
+        if self.learnable_threshold:
+            tau = torch.sigmoid(self.threshold)
+            attn_weights = torch.clamp_min(attn_weights - tau, 0.0)
+            denom = attn_weights.sum(dim=1, keepdim=True) + self.eps
+            attn_weights = attn_weights / denom
+        
+        # 가중합
+        pooled = torch.sum(x * attn_weights.unsqueeze(-1), dim=-2)  # (B, d_model)
+        return pooled, attn_weights
+# ----------------------------------------------------------------------------------------
+
+# sda = ScaledDotProductAttention()
+# a = (torch.rand(5,3,2), torch.rand(5,3,2), torch.rand(5,3,2))
+# a1, a2 = sda(a)
+# a1.shape
+# a2.shape
+# el = EmbeddingLayer(1, embed_dim=2)
+# el(torch.rand(5,1))
+####################################################################################################
+
+class EnsembleNN02(nn.Module):
+    def __init__(self, num_input_dim, cat_input_dim, embed_dim=2, num_embeddings=10,
+                 d_model=32, nhead=4, dim_ff=64, num_layers=1, n_ensemble=5):
+        super().__init__()
+
+        # Embedding
+        self.num_embedding_layer = ContinuousEmbeddingLayer(num_input_dim, embed_dim)
+        self.cat_embedding_layer = CategoricalEmbeddingLayer(cat_input_dim, num_embeddings=num_embeddings, embedding_dim=embed_dim)
+        
+        # PositionalEncoding
+        # self.pe_num = LearnablePositionalEncoding(embed_dim)
+        # self.pe_cat = LearnablePositionalEncoding(embed_dim)
+        
+        # Embedding FC
+        self.num_embedding_fc = nn.Sequential(
+            EmbeddingLinear(num_input_dim, embed_dim, d_model),
+            nn.ReLU()
+        )
+        self.cat_embedding_fc = nn.Sequential(
+            EmbeddingLinear(cat_input_dim, embed_dim, d_model),
+            nn.ReLU()
+            
+        )
+        
+        
+        # self.embedding_fc_layer = nn.Sequential(
+        #     nn.Linear(embed_dim, d_model),
+        #     nn.ReLU(),
+        # )
+        
+        # self.encoder_layer = PreLN_TransformerEncoderLayer(d_model=d_model, nhead=nhead, 
+        #                                                    dim_feedforward=dim_ff, batch_first=True)
+        # self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+        
+        # # (information pooling)
+        # # self.attn_pool_layer = AttentionPoolingLayer(num_input_dim+cat_input_dim)
+        # # self.attn_pool_layer = AttentionPoolingLayer(d_model)
+        
+        # self.ensemble_blocks = nn.ModuleList()
+        # for _ in range(n_ensemble):
+        #     block = nn.Sequential(
+        #         nn.Linear((num_input_dim+cat_input_dim)*d_model, d_model*2),
+        #         nn.ReLU(),
+        #         nn.Linear(d_model*2, d_model*2),
+        #         nn.ReLU(),
+        #         nn.Linear(d_model*2, 1)
+        #     )
+        #     self.ensemble_blocks.append(block)
+
+        # # 모든 Linear 레이어 weight를 uniform 초기화
+        # for block in self.ensemble_blocks:
+        #     for layer in block:
+        #         if isinstance(layer, nn.Linear):
+        #             torch.nn.init.uniform_(layer.weight, a=-0.1, b=0.1)  # 범위 [-0.1, 0.1]
+        #             torch.nn.init.zeros_(layer.bias)  # bias는 0으로 초기화
+
+    def forward(self, x_num, x_cat):
+            # x_num : (B, F_n),  X_cat : (B, F_c)
+            x_batch = x_num.shape[0]
+            
+            # Embedding
+            num_x_embed = self.num_embedding_layer(x_num)   # (B, F_n, emb_dim)
+            cat_x_embed = self.cat_embedding_layer(x_cat)   # (B, F_c, emb_dim)
+            
+            # # PositionalEncoding
+            # num_x_embed_pe = self.pe_num(num_x_embed)     # (B, F_n, emb_dim)
+            # cat_x_embed_pe = self.pe_num(cat_x_embed)     # (B, F_c, emb_dim)
+            
+            # Embedding_FC
+            num_x_embed_fc = self.num_embedding_fc(num_x_embed)   # (B, F_n, d_model)
+            cat_x_embed_fc = self.cat_embedding_fc(cat_x_embed)   # (B, F_c, d_model)
+            
+            # concat
+            x_embed = torch.cat([num_x_embed_fc, cat_x_embed_fc], dim=-2)   # (B, F, d_model)  # F = F_n + F_c
+            return x_embed
+            
+            # # latent fc expansion
+            # x_latent = self.embedding_fc_layer(x_embed)
+            
+            # # transformer encoder
+            # x_enc_out = self.encoder(x_latent)
+            
+            # # attention pooling
+            # # x_pool_out, att_weight = self.attn_pool_layer(x_enc_out.transpose(-2,-1))
+            # # x_pool_out, att_weight = self.attn_pool_layer(x_enc_out)
+            
+            # # flatten 
+            # x_flatten = x_enc_out.view(x_batch, -1)
+            
+            # # shared
+            # outputs = []
+            # for block in self.ensemble_blocks:
+            #     outputs.append(block(x_flatten))
+
+            # outputs_cat = torch.cat(outputs, dim=-1)  # (batch, n_ensemble)
+
+            # # mu, std
+            # mu = outputs_cat.mean(dim=-1, keepdims=True)
+            # std = outputs_cat.std(dim=-1, keepdims=True)
+
+            return mu, std
+
+
+
+model = EnsembleNN02(11, 2, d_model=64, num_embeddings=100, embed_dim=2, n_ensemble=5).to(device)
+print(f"n_params : {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+model(torch.rand(10,11).to(device), torch.randint(0,2, size=(10,2)).to(device) )
+
+
+# model(torch.rand(10,11), torch.randint(0,2, size=(10,2)) )
+
+def loss_function(model, batch, optimizer=None):
+    # --------------------------------------------------
+    X_num, X_cat, y = batch
+    mu, std = model(X_num, X_cat)
+    
+    mse_loss = lambda pred,y : ((pred - y)**2).mean()
+
+    loss_truth = mse_loss(mu, y)
+    # loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
+    # --------------------------------------------------
+    pseudo_num_X, pseudo_cat_X = pseudo_data(X_num, X_cat)
+    
+    pseudo_mu, pseudo_std = model(pseudo_num_X, pseudo_cat_X)
+    
+    gamma_ = 0.1     # observe uncertainty coefficient
+    lambda_ = 0.3   # unobserve uncertainty coefficient
+    p = 0.95
+    
+    X_true = torch.cat([X_num, X_cat], dim=-1)
+    X_true_mean = X_true.mean(dim=torch.arange(X_true.ndim)[:-1].tolist(), keepdims=True)
+    X_pseudo = torch.cat([pseudo_num_X, pseudo_cat_X], dim=-1)
+    std_target = gamma_* y.std() 
+    
+    pseudo_std_target = lambda_*( y.std() + torch.abs((X_pseudo - X_true_mean).mean())* pseudo_data.window_alpha )
+    loss_pseudo = p* mse_loss(std, std_target)+ (1-p)*mse_loss(pseudo_std, pseudo_std_target)
+    # --------------------------------------------------
+    loss = p * loss_truth + (1-p)* loss_pseudo
+
+    return loss
+
+pseudo_data = PseudoData( max_categories=torch.LongTensor(train_X_cat) )
+
+tm1 = TorchModeling(model, device=device)
+tm1.compile(optimizer=optim.Adam(model.parameters(), lr=1e-3) 
+            ,loss_function = loss_function
+            # ,loss_function = weighted_gaussian_loss
+            # , scheduler=scheduler
+            , early_stop_loss = EarlyStopping(min_iter=200, patience=100)
+            )
+# tm1.early_stop_loss.reset_patience_scores(patience=100)
+tm1.train_model(train_loader=train_loader, valid_loader=valid_loader, epochs=500)
+
+# tm1.early_stop_loss.plot
+# tm1.early_stop_loss.metrics_frame
+# tm1.set_best_model()
+# test_loss = np.sqrt(tm1.test_model(tests_loader)['test_loss']).item()      # test evaluate
+# print(f"Test Loss : {test_loss:.3f}")
+
+test_mse_losses = []
+with torch.no_grad():
+    model.eval()
+    for batch in tests_loader:
+        X_num, X_cat, y = batch
+        X_num, X_cat, y = X_num.to(device), X_cat.to(device), y.to(device)
+        mu, std = model(X_num, X_cat)
+        mse_loss = lambda pred, y : ((pred - y)**2).mean()
+        loss = mse_loss(mu, y)
+        test_mse_losses.append( loss.detach().to('cpu').numpy() )
+test_rmse = np.mean([np.sqrt(loss) for loss in test_mse_losses]).item()
+print(f"Test RMSE : {test_rmse:.3f}")
+
+
+
+####################################################################################################
+# visualize
+partial_dependence_uncertainty_plot(model, 2, train_X_num_norm, train_X_cat, train_y_norm, 
+                                sigma=2, scaler_X=ss_X, scaler_y=ss_y)
