@@ -207,18 +207,21 @@ with torch.no_grad():
     mu_pred_lin = model(X_linspace.to(device))
 print(test_rmse)
 
-lower_cpu = (mu_pred_lin - 2*test_rmse).numpy().ravel()
-upper_cpu = (mu_pred_lin + 2*test_rmse).numpy().ravel()
+lower_cpu = (mu_pred_lin - 2*test_rmse).to('cpu').numpy().ravel()
+upper_cpu = (mu_pred_lin + 2*test_rmse).to('cpu').numpy().ravel()
+
+X_linspace = X_linspace.to('cpu')
 
 plt.figure(figsize=(10, 6))
 plt.scatter(X_train, y_train, color='steelblue')
-plt.plot(X_linspace, mu_pred_lin)
+plt.plot(X_linspace, mu_pred_lin.to('cpu'))
 plt.plot(X_linspace, f.true_f(X_linspace))
 plt.fill_between(X_linspace.numpy().ravel(), lower_cpu, upper_cpu, alpha=0.2)
 plt.ylim(-2.5, 4.5)
 # plt.xticks([])
 # plt.yticks([])
 plt.show()
+
 
 
 
@@ -443,36 +446,6 @@ class PseudoData():
         return x_gen
 
 
-# def loss_function(model, batch, optimizer=None):
-#     # --------------------------------------------------
-#     x, y = batch
-#     mu, std = model(x)
-#     # loss_truth = nn.functional.mse_loss(mu, y)
-#     # loss_truth = 1/2 * (mu - y)**2
-
-#     # loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
-#     loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
-#     # return loss_truth
-    
-#     # --------------------------------------------------
-#     pseudo_X = pseudo_data.gen_pseudo_data(x)
-#     pseudo_mu, pseudo_std = model(pseudo_X)
-    
-#     y_pseudo_true = torch.ones_like(pseudo_std) *std.mean().detach() * pseudo_data.window_alpha
-#     loss_pseudo = (pseudo_std - y_pseudo_true) **2      # MSE Loss
-#     max_loss_pseudo = loss_pseudo.detach().max()
-#     if max_loss_pseudo == 0:
-#         loss_pseudo = torch.mean(loss_pseudo)  
-#         p=1
-#     else:
-#         loss_pseudo = torch.mean( loss_pseudo/max_loss_pseudo * torch.abs(loss_truth.detach().mean()) )
-#         p=0.7
-#     # --------------------------------------------------
-#     loss = p * loss_truth + (1-p)* loss_pseudo
-
-#     return loss
-
-
 #############################################################################
 # 1D Ensemble Model
 if succeed:
@@ -519,7 +492,7 @@ if succeed:
     optimizer = optim.Adam(model.parameters(), lr=1e-3) 
     pseudo_data = PseudoData(window_alpha=4)
     
-
+    
     def loss_function(model, batch, optimizer=None):
         # --------------------------------------------------
         x, y = batch
@@ -529,16 +502,23 @@ if succeed:
 
         loss_truth = mse_loss(mu, y)
         # loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
+        # loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
         # --------------------------------------------------
         pseudo_X = pseudo_data.gen_pseudo_data(x)
         pseudo_mu, pseudo_std = model(pseudo_X)
         
-        gamma_ = 0.05     # observe uncertainty coefficient
-        lambda_ = 0.05   # unobserve uncertainty coefficient
+        gamma_ = 1     # observe uncertainty coefficient
+        lambda_ = 1  # unobserve uncertainty coefficient
         p = 0.9
-        std_target = gamma_* y.std() 
-        pseudo_std_target = lambda_*( y.std() + torch.abs(pseudo_X - x.mean())* pseudo_data.window_alpha )
-        loss_pseudo = p* mse_loss(std, std_target)+ (1-p)*mse_loss(pseudo_std, pseudo_std_target)
+        std_target = gamma_* torch.sqrt(loss_truth.detach())      # gamma_ ≒ 1
+        pseudo_std_target = lambda_*y.std()* torch.sqrt(torch.tensor(pseudo_data.window_alpha)) # lambda_ ≒ 1
+        # std_target = gamma_*y.std()     # gamma_ ≒ 0.1
+        # pseudo_std_target = lambda_*( y.std() + torch.abs(pseudo_X - x.mean())* pseudo_data.window_alpha )  # lambda_ ≒ 0.1
+        loss_pseudo =  p*torch.sqrt(mse_loss(std, std_target))+ (1-p)*torch.sqrt(mse_loss(pseudo_std, pseudo_std_target))
+        
+        # pseudo_std =  pseudo_std.clamp(min=0, max=lambda_*y.std())
+        # penalty = torch.relu(pseudo_std - lambda_*y.std()).pow(2).mean()
+        # loss_pseudo = torch.log(std).mean() - torch.log( pseudo_std ).mean() + penalty
         # --------------------------------------------------
         loss = p * loss_truth + (1-p)* loss_pseudo
 
