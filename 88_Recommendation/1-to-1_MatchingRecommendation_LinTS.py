@@ -386,6 +386,8 @@ def step_update(users, sample_matching, revealed_rewards):
         # # Agent Update
         user_i.update(interest_j, reward, Sigma_j)
         user_j.update(interest_i, reward, Sigma_i)
+        # user_i.update(interest_j, reward, Sigma_j)
+        # user_j.update(interest_i, reward, Sigma_i)
         # ------------------------------------------------------------
     return users
 

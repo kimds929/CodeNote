@@ -782,6 +782,7 @@ for _ in tqdm(range(300)):
     
     # obseve rewards
     rewards_obs = revealed_reward(SM_true, sample_matching, noise_std=0.2)
+    rewards_obs
     rewards_obs_list.append(np.sum(rewards_obs))
     
     # Users parameter Update
@@ -817,12 +818,12 @@ print(sample_matching_values)
 TS_model = ThompsonSamplingFeatureMap(COMPATIBILITY_DIM, USER_DIM, USER_EMBEDDING_DIM, PREFERENCE_EMBEDDING_DIM)
 
 optimizer = optim.Adam(TS_model.parameters(), lr=1e-5)
-users_vec = torch.LongTensor( np.stack([user.user_vec for user in users]) )
-users_id = torch.LongTensor( np.stack([[user.id] for user in users]) )
+# users_vec = torch.LongTensor( np.stack([user.user_vec for user in users]) )
+# users_id = torch.LongTensor( np.stack([[user.id] for user in users]) )
 
-mu_Hat, U_Hat, Lambda_Hat = TS_model(users_vec,users_id)
-mu_Hat
-U_Hat
+# mu_Hat, U_Hat, Lambda_Hat = TS_model(users_vec,users_id)
+# mu_Hat
+# U_Hat
 
 
 
@@ -833,7 +834,7 @@ rewards_obs_list = []
 # matching
 # matching_function = KNN_GreedyMatching(k=int(np.sqrt(SM_true.shape[0]))).knn_greedy_matching   # hungarian, blossom_max_weight_matching, greedy_matching, KNN_GreedyMatching(k=10).knn_greedy_matching
 
-N_UPDATES = 50
+N_UPDATES = 100
 matching_function = greedy_matching
 for i in range(50):
     # user vector / id
