@@ -53,8 +53,8 @@ class AgentTS:
 
         #
         E_xx = np.outer(x_interest, x_interest)
-        if Sigma_other is not None:
-            E_xx += Sigma_other
+        # if Sigma_other is not None:
+        #     E_xx += Sigma_other
 
         self.A += (1/ self.sigma2) * E_xx    # += 1/(σ^2) * (X_I^T X_I)
         self.b += (1/ self.sigma2) * x_interest * r        # +=  1/(σ^2) * (X_I r)
@@ -396,7 +396,7 @@ def step_update(users, sample_matching, revealed_rewards):
 
 
 INTEREST_DIM = 16
-users = [AgentTS(user_dim=4, interest_dim=INTEREST_DIM) for _ in range(50)]
+users = [AgentTS(user_dim=4, interest_dim=INTEREST_DIM, forgetting_decay=0.5) for _ in range(32)]
 # np.linalg.det(users[0].A)
 
 # true matching
@@ -448,8 +448,3 @@ print(sample_matching_values)
 
 
 
-# 이 코드가 유저의 sampling된 interest context를 기반으로 update되면 아직 잘 추정되지 않은 상대방의 interest context로 내 interest를 update하는거기 때문에 매우 불안정할 것 같거든? 맞아?
-# 이걸 해결할 수 있는 방법이 있나?
-
-# 그리고 optimum matching을 찾아가지 못하고 중간에 수렴될 위험이 있어?
-# 그렇다면 그런 문제들은 어떻게 해결할 수 있을까?

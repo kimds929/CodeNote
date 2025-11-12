@@ -1,6 +1,11 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+from tqdm.auto import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm.auto import tqdm
+
 
 # rng = np.random.default_rng(0)
 rng = np.random.RandomState()
@@ -9,78 +14,299 @@ def normalize(v, eps=1e-9):
     n = np.linalg.norm(v) + eps
     return v / n
 
-def cosine_sim(a, b):
-    return float(np.dot(normalize(a), normalize(b)))
+bianry_to_decimal = lambda binary_list: int(''.join(map(str, binary_list)), 2)
 
-#######################################################################################################################
+user_dim = 5
+user_vec = (rng.rand(user_dim) > 0.5).astype(np.int64)
+
+
+
 
 class AgentTS:
-    user_no = 0
-    def __init__(self, user_dim, interest_dim, lambda0=1, sigma=1, forgetting_decay=1):
+    id = -1
+    true_compatibility_dim = rng.randint(20,50)
+    
+    def __init__(self, user_dim=4, compatibility_dim=16, lambda0=1, noise_sigma=0.1, forgetting_decay=1):
+        # uhknown true compatibility vector
         self.user_dim = user_dim
-        self.interest_dim = interest_dim
-        self.u = normalize(rng.normal(size=user_dim))
-        self.theta_true = normalize(rng.uniform(size=interest_dim))
-
+        
+        self.true_compatibility = normalize(rng.uniform(size=AgentTS.true_compatibility_dim))
+        
+        self.user_vec = (rng.rand(user_dim) > 0.5).astype(np.int64)
+        self.user_vec_group = int(''.join(map(str, self.user_vec)), 2)
+        
+        AgentTS.id += 1
+        self.id = AgentTS.id
+        
+        # info
+        self.compatibility_dim = compatibility_dim
+        self.noise_sigma = noise_sigma
         self.lambda0 = lambda0      # λ_0·I : Ridge Reguarization parameters (얼마나 prior를 신뢰할지?)
-        self.sigma2 = sigma**2      # sigma σ : observation noise std (얼마나 관측 reward가 noise한지?)
-        self.forgetting_decay = forgetting_decay    # Non-stationary reward 가정시 기존 matrix를 얼마나 decay할 것인지?
-
-        self.A = lambda0 * np.eye(interest_dim)
-        self.b = np.zeros(interest_dim)
-
-        self.mu = rng.uniform(size=interest_dim)*0.1      # 현재 추정된 interest Mean
-        self.Sigma = np.linalg.inv(self.A)      # 현재 추정된 interest Covariance
-        AgentTS.user_no += 1
-        self.user_no = AgentTS.user_no
-
-        self.sampled_interest_vec = None
-
-    def rep_context(self):
-        return normalize(np.concatenate([self.u, self.mu]))
-
-    def sample_interest(self):
-        self.sampled_interest_vec = rng.multivariate_normal(self.mu, self.Sigma)
-        return self.sampled_interest_vec
-
-    def update(self, interest_other, r, Sigma_other=None):
-        # x_interest = z_other[-self.interest_dim:]
-        x_interest = interest_other.copy()
-
-        # Non-stationary reward : forgetting mechanism
-        self.A = self.forgetting_decay * self.A
-        self.b = self.forgetting_decay * self.b
-
-        #
-        E_xx = np.outer(x_interest, x_interest)
+        self.forgetting_decay = forgetting_decay
+        
+        self.A = lambda0 * np.eye(compatibility_dim)
+        self.b = np.zeros(compatibility_dim)
+        
+        self.Sigma = np.linalg.inv(self.A)      # 현재 추정된 compatibility Covariance
+        self.mu = rng.uniform(size=compatibility_dim)*0.1
+    
+    def update(self, compatibility_other, r, Sigma_other=None, inplace=True):
+        x_compatibility = compatibility_other.copy()
+        A = self.forgetting_decay * self.A
+        b = self.forgetting_decay * self.b
+        
+        E_xx = np.outer(x_compatibility, x_compatibility)
         if Sigma_other is not None:
             E_xx += Sigma_other
-
-        self.A += (1/ self.sigma2) * E_xx    # += 1/(σ^2) * (X_I^T X_I)
-        self.b += (1/ self.sigma2) * x_interest * r        # +=  1/(σ^2) * (X_I r)
-
-        # (통상버전 : O(n^3)) -----------------------------------------
-        # self.Sigma = np.linalg.inv(self.A)
-        # -----------------------------------------------------------
-
-        # (Sherman–Morrison : O(n^2)) -------------------------------
-        v = (1.0/np.sqrt(self.sigma2)) * interest_other
-        Ainv_v = self.Sigma @ v
-        denom = 1.0 + v.T @ Ainv_v
-        self.Sigma -= np.outer(Ainv_v, Ainv_v) / denom
-        # -----------------------------------------------------------
-
-        self.mu = self.Sigma @ self.b
-
-    def full_context_true(self):
-        return normalize(np.concatenate([self.u, self.theta_true]))
-
+        A += (1/ self.noise_sigma) * E_xx    # += 1/(σ^2) * (X_I^T X_I)
+        b += (1/ self.noise_sigma) * x_compatibility * r        # +=  1/(σ^2) * (X_I r)
+        
+        Sigma = np.linalg.inv(A)
+        mu = Sigma @ b
+        
+        if inplace is True:
+            self.A = A
+            self.b = b
+            self.Sigma = Sigma
+            self.mu = mu
+        
+        return mu, Sigma
+    
+    def sampling(self):
+        return rng.multivariate_normal(self.mu, self.Sigma)
+    
     def __repr__(self):
-        return f"UserAgent_{self.user_no}"
+        return f"UserAgent_{self.id}"
+
+# COMPATIBILITY_DIM = 16
+# users = [AgentTS(user_dim=4, compatibility_dim=COMPATIBILITY_DIM) for _ in range(5)]
 
 
-#######################################################################################################################
+####################################################################################################
+class TrueCompatibilityNet(nn.Module):
+    def __init__(self, compatibility_dim):
+        super().__init__()
+        self.compatibility_dim = compatibility_dim
+        self.block = nn.Sequential(
+            nn.Linear(compatibility_dim, compatibility_dim*2)
+            ,nn.ReLU()
+            ,nn.Linear(compatibility_dim*2, compatibility_dim*4)
+            ,nn.ReLU()
+            ,nn.Linear(compatibility_dim*4, compatibility_dim*2)
+            ,nn.ReLU()
+            ,nn.Linear(compatibility_dim*2, compatibility_dim)
+        )
+        
+    def forward(self, x):
+        return self.block(torch.FloatTensor(x)).detach().to('cpu').numpy()
 
+# true_net = TrueCompatibilityNet(AgentTS.true_compatibility_dim)
+# true_net(users[0].true_compatibility)
+# true_net( np.stack([user.true_compatibility for user in users]) ).shape
+
+
+
+####################################################################################################
+# ---------- Helpers: upper-tri vectorization ----------
+def triu_indices(k, device=None, dtype=torch.long):
+    return torch.triu_indices(k, k, offset=0, device=device, dtype=dtype)
+
+def vec_to_triu(vec, k, device=None):
+    """
+    vec: (..., k*(k+1)//2)
+    return: (..., k, k) upper-triangular matrix with zeros elsewhere
+    """
+    idx = triu_indices(k, device=vec.device)
+    out = vec.new_zeros(*vec.shape[:-1], k, k)
+    out[..., idx[0], idx[1]] = vec
+    return out
+
+def triu_to_vec(U):
+    """
+    U: (..., k, k) upper-triangular
+    return: (..., k*(k+1)//2)
+    """
+    k = U.shape[-1]
+    idx = triu_indices(k, device=U.device)
+    return U[..., idx[0], idx[1]]
+
+####################################################################################################
+
+class CategorialEmbedding(nn.Module):
+    def __init__(self, n_features, num_embeddings, embedding_dim):
+        super().__init__()
+        self.nf, self.ne, self.ed = n_features, num_embeddings, embedding_dim
+        self.embedding = nn.Embedding(n_features * num_embeddings, embedding_dim)
+
+    def forward(self, x):
+        # x: (..., n_features), long
+        *batch, F = x.shape
+        device = x.device
+        feature_idx = torch.arange(F, device=device).view(*([1]*len(batch)), F).expand(*x.shape)
+        flat_idx = feature_idx * self.ne + x                        # (..., F)
+        out = self.embedding(flat_idx)                                      # (..., F, ed)
+        return out
+
+class ResidualConnection(nn.Module):
+    def __init__(self, block, shortcut=None):
+        super().__init__()
+        self.block = block
+        self.shortcut = shortcut or (lambda x: x)
+    
+    def forward(self, x):
+        return self.block(x) + self.shortcut(x)
+
+
+######################################################################################################
+class ThompsonSamplingFeatureMap(nn.Module):
+    def __init__(self, output_dim, user_dim, user_embed_dim, preference_embed_dim, 
+                hidden_dim=64, max_users=1000, dropout=0.1, lambda0=1e-5):
+        super().__init__()
+        self.user_info_embedding = CategorialEmbedding(user_dim, max_users, embedding_dim=user_embed_dim)
+        self.preference_embedding = nn.Embedding(max_users, embedding_dim=preference_embed_dim)
+        
+        concat_dim = (user_dim*user_embed_dim) + preference_embed_dim
+        self.backbone = nn.Sequential(
+            nn.Linear(concat_dim, hidden_dim)
+            ,nn.ReLU()
+            ,ResidualConnection(nn.Sequential(
+                nn.BatchNorm1d(hidden_dim),
+                nn.Linear(hidden_dim, hidden_dim)
+                ,nn.ReLU()
+                ,nn.Dropout(dropout)
+                )
+            )
+            ,ResidualConnection(nn.Sequential(
+                nn.BatchNorm1d(hidden_dim),
+                nn.Linear(hidden_dim, hidden_dim)
+                ,nn.ReLU()
+                ,nn.Dropout(dropout)
+                )
+            )
+        )
+        
+        # head
+        self.output_dim = output_dim
+        self.tdim = output_dim * (output_dim+1)//2
+        
+        self.softplus = nn.Softplus(beta=1.0)
+        self.mu_head = nn.Linear(hidden_dim, output_dim)
+        self.triu_head = nn.Linear(hidden_dim, self.tdim)
+        
+        # cache diagonal indices in the triu-vector
+        self.lambda0 = lambda0
+        di_rows, di_cols = torch.triu_indices(output_dim, output_dim, offset=0)
+        diag_mask = (di_rows == di_cols)
+        self.register_buffer("diag_mask", diag_mask)  # shape [tdim] : (register_buffer : 역전파로 업데이트되지 않지만 모델과 함께 저장/로드(move to cuda 등)되는 값)
+
+    def vec_to_triu(self, vec, k):
+        """
+        vec: (..., k*(k+1)//2)
+        return: (..., k, k) upper-triangular matrix (zeros elsewhere)
+        """
+        idx = torch.triu_indices(k, k, device=vec.device)
+        out = vec.new_zeros(*vec.shape[:-1], k, k)
+        out[..., idx[0], idx[1]] = vec
+        return out
+
+    def forward(self, user_vec:torch.LongTensor, user_id:torch.LongTensor):
+        batch_size = user_vec.shape[:-1]
+        
+        user_emb = self.user_info_embedding(user_vec).view(*batch_size, -1)
+        pref_emb = self.preference_embedding(user_id).view(*batch_size, -1)
+        x_concat = torch.cat([user_emb, pref_emb], dim=-1)
+        
+        # backbone
+        x_latent = self.backbone(x_concat)
+        
+        # mu
+        mu = self.mu_head(x_latent)
+        
+        # U
+        raw_triu = self.triu_head(x_latent)  # unconstrained
+        diag_part = raw_triu[..., self.diag_mask]
+        off_part  = raw_triu[..., ~self.diag_mask]
+        
+        # constrain diagonal: positive with softplus + epsilon
+        diag_part = self.softplus(diag_part) + self.lambda0
+        
+        U_triu = raw_triu.clone()       # .clone()도 gradient 전파 가능 # 파이토치에서 inplace 연산은 그래프 추적 중에 이전 연산에 영향을 줄 수 있기 때문에 종종 에러를 발생시킨다.
+        U_triu[..., self.diag_mask] = diag_part
+        U_triu[..., ~self.diag_mask] = off_part
+        
+        U = self.vec_to_triu(U_triu, self.output_dim)   # (..., k, k)
+        Lambda = U.transpose(-2, -1) @ U 
+        
+        return mu, U, Lambda
+
+    # @torch.no_grad()
+    def U_to_L(self, U:torch.Tensor):
+        """
+        Given U (upper of precision), compute Sigma = (U^T U)^{-1} without explicit inverse.
+        Solve (U^T) Y = I  ->  L = U^{-T}
+        """
+        k = U.shape[-1]
+        I = torch.eye(k, device=U.device, dtype=U.dtype).expand(U.shape[:-2] + (k, k))
+        # U^T is lower-triangular
+        L = torch.linalg.solve_triangular(U.transpose(-2, -1), I, upper=False, left=True)
+        return L
+    
+    def gaussian(self, mu, U, requires_grad=False):
+        ctx = torch.enable_grad() if requires_grad else torch.no_grad()
+        with ctx:
+            L = self.U_to_L(U)
+            Sigma = L @ L.transpose(-2,-1)
+        return mu, Sigma
+    
+    def forward_gaussian(self, user_vec:torch.LongTensor, user_id:torch.LongTensor):
+        mu, U, Lambda = self.forward(user_vec, user_id)
+        return self.gaussian(mu, U)
+    
+    def sampling(self, mu, U, n_samples=1, requires_grad=False):
+        ctx = torch.enable_grad() if requires_grad else torch.no_grad()
+        
+        with ctx:
+            L = self.U_to_L(U)
+            multivariate_gaussian_dist = torch.distributions.MultivariateNormal(loc=mu, scale_tril=L)
+            # multivariate_gaussian_dist = torch.distributions.MultivariateNormal(loc=mu, precision_matrix=Lambda)
+            samples = multivariate_gaussian_dist.rsample((n_samples,))  # (n_sample, batch , dim) rsample: 미분가능, sample: 미분불가
+            samples = torch.movedim(samples, 0, -2) # (batch, n_sample, dim)
+        return samples
+    
+    # @torch.no_grad()
+    def forward_sampling(self, user_vec:torch.LongTensor, user_id:torch.LongTensor, n_samples=1):
+        """
+        Thompson-style sampling: c = mu + U^{-T} z,  z ~ N(0,I)
+        returns (..., n_samples, k)
+        """
+        mu, U, Lambda = self.forward(user_vec, user_id)
+        return self.sampling(mu, U)
+        
+    
+
+####################################################################################################
+# users[0].id
+# users[0].user_vec
+# users[0].user_vec_group
+# model = ThompsonSamplingFeatureMap(COMPATIBILITY_DIM, users[0].user_dim,
+#                                    user_embed_dim=3, preference_embed_dim=8)
+# a = torch.LongTensor([users[0].user_vec]).repeat(5,1)
+# b = torch.LongTensor([[users[0].id]]).repeat(5,1)
+# a = torch.LongTensor([users[0].user_vec])
+# b = torch.LongTensor([[users[0].id]])
+
+# model(a,b)[0].shape
+# model(a,b)[1].shape
+# model(a,b)[2].shape
+# model.forward_gaussian(a,b)
+# model.forward_sample(a,b, n_samples=1).shape
+
+
+
+
+
+
+# -----------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------------------
 # Global Optima Matching
 # 1) hungarian matching
@@ -295,39 +521,50 @@ class KNN_GreedyMatching():
 
         return matching_result, optimal_matching_values
 
-# -----------------------------------------------------------------------------------------------
-
-#######################################################################################################################
-
-
-########################################################################################
-INTEREST_DIM = 8
-users = [AgentTS(user_dim=4, interest_dim=INTEREST_DIM) for _ in range(5)]
-
-# True matching
-users_true_vec = np.array([np.concatenate([user.u, user.theta_true], axis=-1) for user in users])
-SM_true = users_true_vec @ users_true_vec.T
-
-# true_matching, true_matching_values = hungarian(SM_true)  # True matching
-true_matching, true_matching_values = blossom_max_weight_matching(SM_true)  # True matching
-print('< true_matching >')
-print(true_matching)
-print(true_matching_values)
-
-
-# sample matching
-users_samples_vec = np.array([np.concatenate([user.u, user.sample_interest()], axis=-1) for user in users])
-SM_samples = users_samples_vec @ users_samples_vec.T
-
-# sample_matching, sample_matching_values = hungarian(SM_samples)
-sample_matching, sample_matching_values = blossom_max_weight_matching(SM_samples)
-print('< sampling_matching >')
-print(sample_matching)
-print(sample_matching_values)
+# ----------------------------------------------------------------------------------------------
 
 
 
 
+# ########################################################################################
+# USER_DIM = 4
+# COMPATIBILITY_DIM = 16
+# USER_EMBEDDING_DIM = 3
+# PREFERENCE_EMBEDDING_DIM = 8
+# users = [AgentTS(user_dim=USER_DIM, compatibility_dim=COMPATIBILITY_DIM) for _ in range(6)]
+
+# # (True matching) -------------------------------------------------------------------
+# users_true_vec = np.array([user.true_compatibility for user in users])
+# users_true_vec
+
+# # # true net
+# # true_net = TrueCompatibilityNet(AgentTS.true_compatibility_dim)
+# # users_true_vec = true_net(users_true_vec)
+# SM_true = users_true_vec @ users_true_vec.T
+
+# # true_matching, true_matching_values = hungarian(SM_true)  # True matching
+# true_matching, true_matching_values = blossom_max_weight_matching(SM_true)  # True matching
+# print('< true_matching >')
+# print(true_matching)
+# print(true_matching_values)
+# # ------------------------------------------------------------------------------------
+
+# # sample matching
+# TS_model = ThompsonSamplingFeatureMap(COMPATIBILITY_DIM, USER_DIM, USER_EMBEDDING_DIM, PREFERENCE_EMBEDDING_DIM)
+
+# users_vec = torch.LongTensor( np.stack([user.user_vec for user in users]) )
+# users_id = torch.LongTensor( np.stack([[user.id] for user in users]) )
+
+# compatibility_samples = TS_model.forward_sample(users_vec, users_id).squeeze(-2)
+# compatibility_samples_np = compatibility_samples.detach().to('cpu').numpy()
+
+# SM_samples = compatibility_samples_np @ compatibility_samples_np.T
+
+# # sample_matching, sample_matching_values = hungarian(SM_samples)
+# sample_matching, sample_matching_values = blossom_max_weight_matching(SM_samples)
+# print('< sampling_matching >')
+# print(sample_matching)
+# print(sample_matching_values)
 
 ########################################################################################
 # After Maching, Revealed Rewards
@@ -346,89 +583,306 @@ def revealed_reward(true_similarity_matrix, sample_matching, noise_std=0.1):
     # revealed_rewards = np.clip(mu_rewards+reward_noise_gen, a_min=0, a_max=1)
     return revealed_rewards[sample_matching[0], sample_matching[1]]
 
-rewards_obs = revealed_reward(SM_true, sample_matching)
-print(f"revealed rewards : {rewards_obs}")
+# rewards_obs = revealed_reward(SM_true, sample_matching)
+# print(f"revealed rewards : {rewards_obs}")
 ########################################################################################
 
 
 
-def step_update(users, sample_matching, revealed_rewards):
-    """
-    매칭 결과와 관측된 보상을 바탕으로 각 사용자의 취향 파라미터(mu, Sigma)를 업데이트합니다.
-    (선형 가우시안 베이즈 회귀)
+# rewards = revealed_reward(SM_true, sample_matching)
+# mu_target, Sigma_target = users[0].update(compatibility_samples_np[3], rewards[0], users[3].Sigma, inplace=True)
 
-    users: AgentTS 객체 리스트
-    sample_matching: (2, N) 형태의 매칭 결과 배열. [0]은 행 인덱스, [1]은 열 인덱스.
-    revealed_rewards: 매칭된 쌍에 대해 관측된 보상 배열.
-    """
 
-    # 1. 매칭 결과에서 쌍(i, j)을 추출합니다.
-    # sample_matching[0]은 행 인덱스 (사용자 i), sample_matching[1]은 열 인덱스 (사용자 j)
-    matched_pairs = list(zip(sample_matching[0], sample_matching[1]))
 
-    # 2. 매칭된 각 쌍에 대해 대칭적으로 업데이트를 수행합니다.
-    for k, (i_idx, j_idx) in enumerate(matched_pairs):
-        user_i = users[i_idx]
-        user_j = users[j_idx]
-        reward = revealed_rewards[k]
+def calculate_target_pair(idx_i:float, idx_j:int, 
+                    reward:float, users:AgentTS, compatibility_samples:np.array, inplace:bool=True):
+    mu_target_i, Sigma_target_i = users[idx_i].update(compatibility_samples[idx_j], reward, users[idx_j].Sigma, inplace=inplace)
+    mu_target_j, Sigma_target_j = users[idx_j].update(compatibility_samples[idx_i], reward, users[idx_i].Sigma, inplace=inplace)
+    return (mu_target_i, Sigma_target_i), (mu_target_j, Sigma_target_j)
+    
+def calculate_targets(rewards, users, compatibility_samples, sample_matching, inplace=True):
+    mu_targets = [np.array([])]*len(users)
+    Sigma_targets = [np.array([])]*len(users)
+    for reward, match in zip(rewards, sample_matching.T):
+        idx_i = match[0]
+        idx_j = match[1]
+        
+        if len(mu_targets[idx_i]) ==0 and len(mu_targets[idx_j]) ==0:
+            (mu_target_i, Sigma_target_i), (mu_target_j, Sigma_target_j) = calculate_target_pair(idx_i, idx_j, reward, users, compatibility_samples, inplace)
+            mu_targets[idx_i] = mu_target_i
+            mu_targets[idx_j] = mu_target_j
+            Sigma_targets[idx_i] = Sigma_target_i
+            Sigma_targets[idx_j] = Sigma_target_j
+    return mu_targets, Sigma_targets
 
-        # ------------------------------------------------------------
-        # 상대방 관심 vector
-        # interest_j = user_j.mu     # update할때는 mu로 (안정성을 위해)
-        # interest_i = user_i.mu     # update할때는 mu로 (안정성을 위해)
-        interest_j = user_j.sampled_interest_vec
-        interest_i = user_i.sampled_interest_vec
 
-        # 상대방 Sigma
-        Sigma_j = user_j.Sigma
-        Sigma_i = user_i.Sigma
+##########################################################################################
 
-        # # Agent Update
-        user_i.update(interest_j, reward, Sigma_j)
-        user_j.update(interest_i, reward, Sigma_i)
-        # ------------------------------------------------------------
-    return users
+def symmetrize(S): 
+    return 0.5*(S + S.transpose(-2,-1))
+
+@torch.no_grad()
+def project_to_spd(S, min_eig=1e-6, use_float64=True):
+    orig_dtype = S.dtype
+    S = symmetrize(torch.nan_to_num(S))             # 비대칭/NaN/Inf 정리
+    if use_float64 and S.dtype != torch.float64:
+        S = S.to(torch.float64)
+
+    # 1) cholesky_ex 시도 + 작은 지터
+    I = torch.eye(S.shape[-1], device=S.device, dtype=S.dtype).expand_as(S)
+    jitter_list = [0.0, 1e-10, 3e-10, 1e-9, 3e-9, 1e-8, 1e-7, 1e-6]
+    ok = None; L = None
+    for eps in jitter_list:
+        try:
+            L, info = torch.linalg.cholesky_ex(S + eps*I)
+            if torch.any(info>0):
+                continue
+            S = S + eps*I
+            ok = True
+            break
+        except RuntimeError:
+            continue
+
+    # 2) 그래도 실패하면 SVD로 SPD 재구성
+    if ok is None:
+        U, s, _ = torch.linalg.svd(S, full_matrices=False)
+        s = torch.clamp(s, min=min_eig)
+        S = (U * s.unsqueeze(-2)) @ U.transpose(-2,-1)
+        S = symmetrize(S)
+        L  = torch.linalg.cholesky(S)
+
+    if S.dtype != orig_dtype:
+        S = S.to(orig_dtype); L = L.to(orig_dtype)
+    return S, L   # SPD, lower-Chol
+
+def kl_target_to_pred_from_U(mu_tgt, Sigma_tgt, mu_hat, U_hat, reduction="mean", min_eig=1e-6):
+    assert mu_tgt.shape == mu_hat.shape
+    *_, k = mu_tgt.shape
+
+    # --- 타깃 SPD 투영 ---
+    Sigma_tgt_spd, L_tgt = project_to_spd(Sigma_tgt, min_eig=min_eig)
+    logdet_Sigma_tgt = 2.0 * torch.log(torch.diagonal(L_tgt, dim1=-2, dim2=-1)).sum(-1)
+
+    # --- 예측: 정밀도 촐레스키 ---
+    diagU = torch.diagonal(U_hat, dim1=-2, dim2=-1)
+    logdet_Sigma_hat = -2.0 * torch.log(diagU).sum(-1)
+
+    delta = (mu_hat - mu_tgt).unsqueeze(-1)   # (..., k, 1)
+    y = U_hat @ delta
+    quad = (y.transpose(-2,-1) @ y).squeeze(-1).squeeze(-1)
+
+    Lambda_hat = U_hat.transpose(-2,-1) @ U_hat
+    tr_term = torch.einsum('...ij,...ij->...', Lambda_hat, Sigma_tgt_spd)
+
+    kl = 0.5 * (quad + tr_term - logdet_Sigma_hat + logdet_Sigma_tgt - k)
+    if reduction=="mean": return kl.mean()
+    if reduction=="sum":  return kl.sum()
+    return kl
+
+# -----------------------------------------------------------------------
+
+
+
+# def kl_target_to_pred_from_U(mu_tgt: torch.Tensor,
+#                              Sigma_tgt: torch.Tensor,
+#                              mu_hat: torch.Tensor,
+#                              U_hat: torch.Tensor,
+#                              reduction: str = "mean"):
+#     """
+#     KL[ N(mu_tgt, Sigma_tgt) || N(mu_hat, Sigma_hat) ]
+#     with predicted precision via U_hat (upper-Cholesky of precision).
+#     Uses:
+#       Lambda_hat = U_hat^T U_hat
+#       logdet(Sigma_hat) = - 2 * sum(log diag(U_hat))
+#       quad = (mu_hat - mu_tgt)^T Lambda_hat (mu_hat - mu_tgt) = || U_hat (mu_hat - mu_tgt) ||^2
+#       trace = tr(Lambda_hat * Sigma_tgt) = sum_ij Lambda_ij * Sigma_tgt_ij
+#     """
+#     assert mu_tgt.shape == mu_hat.shape
+#     *batch, k = mu_tgt.shape
+
+#     # log det(Sigma_tgt) via cholesky_ex (더 안정적)
+#     L_tgt, info = torch.linalg.cholesky_ex(Sigma_tgt)  # lower
+#     if torch.any(info > 0):
+#         # 수치적으로 불안하면 약간의 jitter를 주고 재시도
+#         eps = 1e-6
+#         Sigma_tgt = Sigma_tgt + eps * torch.eye(k, device=Sigma_tgt.device, dtype=Sigma_tgt.dtype)
+#         L_tgt = torch.linalg.cholesky(Sigma_tgt)
+#     logdet_Sigma_tgt = 2.0 * torch.log(torch.diagonal(L_tgt, dim1=-2, dim2=-1)).sum(dim=-1)  # (...,)
+
+#     # 예측 쪽: 정밀도와 로그행렬식
+#     # log det(Sigma_hat) = - 2 * sum log diag(U_hat)
+#     logdet_Sigma_hat = -2.0 * torch.log(torch.diagonal(U_hat, dim1=-2, dim2=-1)).sum(dim=-1)  # (...,)
+
+#     # quad term: (mu_hat - mu_tgt)^T Lambda_hat (mu_hat - mu_tgt) = || U_hat * delta ||^2
+#     delta = (mu_hat - mu_tgt).unsqueeze(-1)                # (..., k, 1)
+#     y = U_hat @ delta                                      # (..., k, 1)
+#     quad = (y.transpose(-2, -1) @ y).squeeze(-1).squeeze(-1)  # (...,)
+
+#     # trace term: tr(Lambda_hat * Sigma_tgt)
+#     Lambda_hat = U_hat.transpose(-2, -1) @ U_hat           # (..., k, k)
+#     tr_term = torch.einsum('...ij,...ij->...', Lambda_hat, Sigma_tgt)  # (...,)
+
+#     kl = 0.5 * (quad + tr_term - logdet_Sigma_hat + logdet_Sigma_tgt - k)  # (...,)
+
+#     if reduction == "mean":
+#         return kl.mean()
+#     elif reduction == "sum":
+#         return kl.sum()
+#     return kl
 
 ##########################################################################################
 ##########################################################################################
 ##########################################################################################
 ##########################################################################################
 
+N_USERS = 8
+USER_DIM = 4
+COMPATIBILITY_DIM = 8
+USER_EMBEDDING_DIM = 3
+PREFERENCE_EMBEDDING_DIM = 8
 
-INTEREST_DIM = 16
-users = [AgentTS(user_dim=4, interest_dim=INTEREST_DIM) for _ in range(50)]
-# np.linalg.det(users[0].A)
+users = [AgentTS(user_dim=USER_DIM, compatibility_dim=COMPATIBILITY_DIM, forgetting_decay=1) for _ in range(N_USERS)]
 
-# true matching
-users_true_vec = np.array([np.concatenate([user.u, user.theta_true], axis=-1) for user in users])
+# (True matching) -------------------------------------------------------------------
+users_true_vec = np.array([user.true_compatibility for user in users])
+users_true_vec
+
+# # true net
+# true_net = TrueCompatibilityNet(AgentTS.true_compatibility_dim)
+# users_true_vec = true_net(users_true_vec)
 SM_true = users_true_vec @ users_true_vec.T
 
 # true_matching, true_matching_values = hungarian(SM_true)  # True matching
 true_matching, true_matching_values = blossom_max_weight_matching(SM_true)  # True matching
-
 print('< true_matching >')
 print(true_matching)
 print(true_matching_values)
+# ------------------------------------------------------------------------------------
+##########################################################################################
+
+# matching
+rewards_obs_list = []
+
+# matching
+matching_function = greedy_matching
+for _ in tqdm(range(300)):
+    # # user vector / id
+    # users_vec = np.stack([user.user_vec for user in users])
+    # users_id = np.stack([[user.id] for user in users])
+    
+    # sampling 
+    users_samples_vec = np.stack([user.sampling() for user in users])
+    
+    # calculate similarity matrix
+    SM_samples = users_samples_vec @ users_samples_vec.T
+    # np.round(SM_samples,2)
+       
+    # users matching
+    sample_matching, sample_matching_values = matching_function(SM_samples)
+    
+    # obseve rewards
+    rewards_obs = revealed_reward(SM_true, sample_matching, noise_std=0.2)
+    rewards_obs_list.append(np.sum(rewards_obs))
+    
+    # Users parameter Update
+    calculate_targets(rewards_obs, users, users_samples_vec, sample_matching, inplace=True)
+
+plt.plot(rewards_obs_list)
+plt.axhline(np.sum(true_matching_values), color='red')
+plt.ylim(0, None)
+plt.show()
+# [user.theta_true for user in users]
+# [user.mu for user in users]
+
+# sample matching
+users_samples_vec = np.stack([user.sampling() for user in users])
+SM_samples = users_samples_vec @ users_samples_vec.T
+
+
+# sample_matching, sample_matching_values = hungarian(SM_samples)
+sample_matching, sample_matching_values = blossom_max_weight_matching(SM_samples)
+print('< sampling_matching >')
+print(sample_matching)
+print(sample_matching_values)
+
+
+
+
+
+
+
+##########################################################################################
+##########################################################################################
+# sample matching
+TS_model = ThompsonSamplingFeatureMap(COMPATIBILITY_DIM, USER_DIM, USER_EMBEDDING_DIM, PREFERENCE_EMBEDDING_DIM)
+
+optimizer = optim.Adam(TS_model.parameters(), lr=1e-5)
+users_vec = torch.LongTensor( np.stack([user.user_vec for user in users]) )
+users_id = torch.LongTensor( np.stack([[user.id] for user in users]) )
+
+mu_Hat, U_Hat, Lambda_Hat = TS_model(users_vec,users_id)
+mu_Hat
+U_Hat
+
+
+
 
 # matching
 rewards_obs_list = []
 
 # matching
 # matching_function = KNN_GreedyMatching(k=int(np.sqrt(SM_true.shape[0]))).knn_greedy_matching   # hungarian, blossom_max_weight_matching, greedy_matching, KNN_GreedyMatching(k=10).knn_greedy_matching
+
+N_UPDATES = 50
 matching_function = greedy_matching
-for _ in tqdm(range(300)):
-    # sample matching
-    user_context = np.array([user.u for user in users])
-    user_sample_interest = np.array([user.sample_interest() for user in users])
-    users_samples_vec = np.concatenate([user_context, user_sample_interest], axis=-1)
-    SM_samples = users_samples_vec @ users_samples_vec.T
-
-    sample_matching, sample_matching_values = matching_function(SM_samples)
-    rewards_obs = revealed_reward(SM_true, sample_matching, noise_std=0.3)
-    users = step_update(users, sample_matching, rewards_obs)
-
-    rewards_obs_list.append(np.sum(rewards_obs))    # rewards
+for i in range(50):
+    # user vector / id
+    users_vec = torch.LongTensor( np.stack([user.user_vec for user in users]) )
+    users_id = torch.LongTensor( np.stack([[user.id] for user in users]) )
     
+    # forward : mu, U, Lambda
+    mu_Hat, U_Hat, Lambda_Hat = TS_model(users_vec, users_id) # Gradient
+    
+    # sampling 
+    compatibility_samples = TS_model.sampling(mu_Hat, U_Hat).squeeze(-2)
+    compatibility_samples_np = compatibility_samples.to('cpu').numpy()
+    
+    # calculate similarity matrix
+    SM_samples = compatibility_samples_np @ compatibility_samples_np.T
+
+    # users matching
+    sample_matching, sample_matching_values = matching_function(SM_samples)
+    
+    # obseve rewards
+    rewards_obs = revealed_reward(SM_true, sample_matching, noise_std=0.2)
+    rewards_obs_list.append(np.sum(rewards_obs))
+    
+    # calculate_targets    
+    mu_targets, Sigma_targets = calculate_targets(rewards_obs, users, compatibility_samples, sample_matching, inplace=True)
+    mu_targets_tensor = torch.FloatTensor(np.stack(mu_targets))
+    Sigma_targets_tensor = torch.FloatTensor(np.stack(Sigma_targets))
+    
+    # TS-Model Update (KL-divergence Loss)
+    loss_mu = ((mu_targets_tensor - mu_Hat)**2).mean()
+    # loss_Sigma = ((Sigma_targets_tensor - torch.linalg.inv(Lambda_Hat))**2).mean()
+    # loss = loss_mu + loss_Sigma
+    loss_kl = kl_target_to_pred_from_U(mu_targets_tensor, Sigma_targets_tensor,
+                            mu_Hat, U_Hat)
+    loss = loss_mu + loss_kl
+    
+    # model update
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    print(f"(ITER: {i}) loss : {loss.detach().to('cpu').numpy():.3f}")
+    
+    for j in range(N_UPDATES-1):
+        mu_Hat, U_Hat, Lambda_Hat = TS_model(users_vec, users_id) # Gradient
+        loss = kl_target_to_pred_from_U(mu_targets_tensor, Sigma_targets_tensor,
+                            mu_Hat, U_Hat)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
 plt.plot(rewards_obs_list)
 plt.axhline(np.sum(true_matching_values), color='red')
@@ -437,19 +891,17 @@ plt.show()
 # [user.mu for user in users]
 
 
+
+
 # sample matching
-users_samples_vec = np.array([np.concatenate([user.u, user.sample_interest()], axis=-1) for user in users])
+users_samples_vec = np.array([np.concatenate([user.u, user.sample_preference()], axis=-1) for user in users])
 SM_samples = users_samples_vec @ users_samples_vec.T
 
-sample_matching, sample_matching_values = matching_function(SM_samples)
+# sample_matching, sample_matching_values = hungarian(SM_samples)
+sample_matching, sample_matching_values = blossom_max_weight_matching(SM_samples)
 print('< sampling_matching >')
 print(sample_matching)
 print(sample_matching_values)
 
 
 
-# 이 코드가 유저의 sampling된 interest context를 기반으로 update되면 아직 잘 추정되지 않은 상대방의 interest context로 내 interest를 update하는거기 때문에 매우 불안정할 것 같거든? 맞아?
-# 이걸 해결할 수 있는 방법이 있나?
-
-# 그리고 optimum matching을 찾아가지 못하고 중간에 수렴될 위험이 있어?
-# 그렇다면 그런 문제들은 어떻게 해결할 수 있을까?

@@ -16,6 +16,7 @@ from IPython.core.display import display, HTML
 
 import copy
 import pyperclip
+from functools import reduce
 
 import re
 
@@ -2125,7 +2126,11 @@ class ScalerEncoder:
                     tc.remove(c)
                     Xcolumns = Xcolumns.drop(tc)
                     
-                    inversed_data = self.encoder[fc].inverse_transform(inversed_target, fitted_format=fitted_format, ndim=2, dtypes=apply_dtypes)
+                    if ('standard' in str(self.encoder[fc]).lower()) or ('onehot' in str(self.encoder[fc]).lower()):
+                        inversed_data = self.encoder[fc].inverse_transform(inversed_target, fitted_format=fitted_format, ndim=2, dtypes=apply_dtypes)
+                    else:
+                        inversed_data = self.encoder[fc].encoder.inverse_transform(inversed_target)
+                        
                     inversed_data.columns = [self.encoder[fc].name]
 
                     inversed_DataFrame = pd.concat([inversed_DataFrame, inversed_data], axis=1)

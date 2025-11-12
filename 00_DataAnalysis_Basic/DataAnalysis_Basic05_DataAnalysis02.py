@@ -1,5 +1,5 @@
 # from six.moves import cPickle
-# origin_file_path = r'D:\WorkForPython\DB\Data_Tabular'
+# origin_file_path = r'D:\DataScience\DB\Data_Tabular'
 # df =cPickle.load(open(f"{origin_file_path}/230612 19-22년 980DP 전체 생산이력.pkl", 'rb'), encoding='utf-8-sig')
 
 # df = df[df['재질시험_대표구분'].apply(lambda x: x in ['BOT대표 - POS', 'TOP대표 - POS'])]
@@ -11,8 +11,8 @@
 # df[columns].to_csv(f'{origin_file_path}/SampleData_980DP.csv', encoding='utf-8-sig', index=False)
 
 import sys
-sys.path.append(r'D:\WorkForPython\00_DataAnalysis_Basic')
-sys.path.append(r'D:\WorkForPython\DS_Library')
+sys.path.append(r'D:\DataScience\00_DataAnalysis_Basic')
+sys.path.append(r'D:\DataScience\DS_Library')
 
 import numpy as np
 import pandas as pd
@@ -21,7 +21,7 @@ from DS_Basic_Module import search, DF_Summary, Outlier, PredictDL
 import missingno as msno
 
 
-file_path = r'D:\WorkForPython\DB\Data_Education'
+file_path = r'D:\DataScience\DataBase\Data_Education'
 df00 = pd.read_csv(f"{file_path}/SampleData_980DP_Analysis.csv", encoding='utf-8-sig')
 df00.shape
 
@@ -144,8 +144,7 @@ df03 = df02.loc[df03.index]
 
 print(f"{df02.shape} → {df03.shape}")
 
-
-# df03.to_csv(f"{file_path}/SampleData_980DP_YS_Modeling.csv", index=False, encoding='utf-8-sig')
+# df03.to_csv(f"{file_path}/SampleData_980DP_YS_Modeling_mini.csv", index=False, encoding='utf-8-sig')
 # df03.to_csv(f"{file_path}/SampleData_980DP_EL_Modeling.csv", index=False, encoding='utf-8-sig')
 
 

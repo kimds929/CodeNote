@@ -4,8 +4,8 @@
 ###########################################################################################
 # 【 예측모델 preprocessing 】 ###################################################
 import sys
-sys.path.append(r'D:\WorkForPython\00_DataAnalysis_Basic')
-sys.path.append(r'D:\WorkForPython\DS_Library')
+sys.path.append(r'D:\DataScience\00_DataAnalysis_Basic')
+sys.path.append(r'D:\DataScience\DS_Library')
 
 import numpy as np
 import pandas as pd
@@ -36,7 +36,7 @@ columns_fac = ['PCM공장', '소둔공장', '열연공장', '제강공장']
 ###############################################################################################################
 # 【 YP Regression 】##########################################################################################
 # 파일 불러오기
-file_path = r'D:\WorkForPython\DB\Data_Education'
+file_path = r'D:\DataScience\DataBase\Data_Education'
 df04 = pd.read_csv(f"{file_path}/SampleData_980DP_YS_Modeling.csv", encoding='utf-8-sig')
 
 # Column 선택
