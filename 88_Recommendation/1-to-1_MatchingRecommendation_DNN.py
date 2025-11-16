@@ -760,51 +760,51 @@ print(true_matching_values)
 # ------------------------------------------------------------------------------------
 ##########################################################################################
 
-# matching
-rewards_obs_list = []
+# # matching
+# rewards_obs_list = []
 
-# matching
-matching_function = greedy_matching
-for _ in tqdm(range(300)):
-    # # user vector / id
-    # users_vec = np.stack([user.user_vec for user in users])
-    # users_id = np.stack([[user.id] for user in users])
+# # matching
+# matching_function = greedy_matching
+# for _ in tqdm(range(300)):
+#     # # user vector / id
+#     # users_vec = np.stack([user.user_vec for user in users])
+#     # users_id = np.stack([[user.id] for user in users])
     
-    # sampling 
-    users_samples_vec = np.stack([user.sampling() for user in users])
+#     # sampling 
+#     users_samples_vec = np.stack([user.sampling() for user in users])
     
-    # calculate similarity matrix
-    SM_samples = users_samples_vec @ users_samples_vec.T
-    # np.round(SM_samples,2)
+#     # calculate similarity matrix
+#     SM_samples = users_samples_vec @ users_samples_vec.T
+#     # np.round(SM_samples,2)
        
-    # users matching
-    sample_matching, sample_matching_values = matching_function(SM_samples)
+#     # users matching
+#     sample_matching, sample_matching_values = matching_function(SM_samples)
     
-    # obseve rewards
-    rewards_obs = revealed_reward(SM_true, sample_matching, noise_std=0.2)
-    rewards_obs
-    rewards_obs_list.append(np.sum(rewards_obs))
+#     # obseve rewards
+#     rewards_obs = revealed_reward(SM_true, sample_matching, noise_std=0.2)
+#     rewards_obs
+#     rewards_obs_list.append(np.sum(rewards_obs))
     
-    # Users parameter Update
-    calculate_targets(rewards_obs, users, users_samples_vec, sample_matching, inplace=True)
+#     # Users parameter Update
+#     calculate_targets(rewards_obs, users, users_samples_vec, sample_matching, inplace=True)
 
-plt.plot(rewards_obs_list)
-plt.axhline(np.sum(true_matching_values), color='red')
-plt.ylim(0, None)
-plt.show()
-# [user.theta_true for user in users]
-# [user.mu for user in users]
+# plt.plot(rewards_obs_list)
+# plt.axhline(np.sum(true_matching_values), color='red')
+# plt.ylim(0, None)
+# plt.show()
+# # [user.theta_true for user in users]
+# # [user.mu for user in users]
 
-# sample matching
-users_samples_vec = np.stack([user.sampling() for user in users])
-SM_samples = users_samples_vec @ users_samples_vec.T
+# # sample matching
+# users_samples_vec = np.stack([user.sampling() for user in users])
+# SM_samples = users_samples_vec @ users_samples_vec.T
 
 
-# sample_matching, sample_matching_values = hungarian(SM_samples)
-sample_matching, sample_matching_values = blossom_max_weight_matching(SM_samples)
-print('< sampling_matching >')
-print(sample_matching)
-print(sample_matching_values)
+# # sample_matching, sample_matching_values = hungarian(SM_samples)
+# sample_matching, sample_matching_values = blossom_max_weight_matching(SM_samples)
+# print('< sampling_matching >')
+# print(sample_matching)
+# print(sample_matching_values)
 
 
 
@@ -834,7 +834,7 @@ rewards_obs_list = []
 # matching
 # matching_function = KNN_GreedyMatching(k=int(np.sqrt(SM_true.shape[0]))).knn_greedy_matching   # hungarian, blossom_max_weight_matching, greedy_matching, KNN_GreedyMatching(k=10).knn_greedy_matching
 
-N_UPDATES = 100
+N_UPDATES = 300
 matching_function = greedy_matching
 for i in range(50):
     # user vector / id
@@ -859,17 +859,17 @@ for i in range(50):
     rewards_obs_list.append(np.sum(rewards_obs))
     
     # calculate_targets    
-    mu_targets, Sigma_targets = calculate_targets(rewards_obs, users, compatibility_samples, sample_matching, inplace=True)
+    mu_targets, Sigma_targets = calculate_targets(rewards_obs, users, compatibility_samples_np, sample_matching, inplace=True)
     mu_targets_tensor = torch.FloatTensor(np.stack(mu_targets))
     Sigma_targets_tensor = torch.FloatTensor(np.stack(Sigma_targets))
     
     # TS-Model Update (KL-divergence Loss)
     loss_mu = ((mu_targets_tensor - mu_Hat)**2).mean()
-    # loss_Sigma = ((Sigma_targets_tensor - torch.linalg.inv(Lambda_Hat))**2).mean()
-    # loss = loss_mu + loss_Sigma
-    loss_kl = kl_target_to_pred_from_U(mu_targets_tensor, Sigma_targets_tensor,
-                            mu_Hat, U_Hat)
-    loss = loss_mu + loss_kl
+    loss_Sigma = ((Sigma_targets_tensor - torch.linalg.inv(Lambda_Hat))**2).mean()
+    loss = loss_mu + loss_Sigma
+    # loss_kl = kl_target_to_pred_from_U(mu_targets_tensor, Sigma_targets_tensor,
+    #                         mu_Hat, U_Hat)
+    # loss = loss_mu + loss_kl
     
     # model update
     optimizer.zero_grad()
