@@ -686,6 +686,68 @@ def kl_gaussian_full(mu0, Sigma0, mu1, Sigma1, eps=1e-6, reduction: str = "mean"
     else:  # 'none'
         return kl
 
+
+# 
+def kl_gaussian_prec_chol(
+    mu_target: torch.Tensor,       # (B, k)
+    cov_target: torch.Tensor,      # (B, k, k)   Σ_target
+    mu_pred: torch.Tensor,         # (B, k)      μ_hat
+    prec_chol_pred: torch.Tensor,  # (B, k, k)   U_hat : Σ_hat^{-1} = U^T U
+    reduction: str = "mean"
+):
+    """
+    KL( N(mu_target, cov_target) || N(mu_pred, cov_pred) )을 계산.
+    cov_pred는 직접 입력하지 않고, prec_chol_pred (precision의 Cholesky factor)로부터 유도.
+
+    mu_target, mu_pred   : (B, k)
+    cov_target           : (B, k, k)
+    prec_chol_pred (U)   : (B, k, k),  Σ_hat^{-1} = U^T U
+    """
+    eps = 1e-6
+
+    B, k = mu_target.shape
+
+    # 1) Σ_hat^{-1} = Λ_hat = U^T U
+    precision_pred = prec_chol_pred.transpose(-1, -2) @ prec_chol_pred  # (B, k, k)
+
+    # 2) tr( Σ_hat^{-1} Σ_target )
+    #   term1 = tr( precision_pred @ cov_target )
+    #   trace(AB) = sum_ij A_ij B_ji
+    term1 = torch.einsum("bij,bji->b", precision_pred, cov_target)
+
+    # 3) (μ_hat - μ_target)^T Σ_hat^{-1} (μ_hat - μ_target)
+    diff = (mu_pred - mu_target).unsqueeze(-1)       # (B, k, 1)
+    quad = diff.transpose(-1, -2) @ (precision_pred @ diff)  # (B, 1, 1)
+    term2 = quad.squeeze(-1).squeeze(-1)             # (B,)
+
+    # 4) log det Σ_hat  (prec_chol_pred는 Σ_hat^{-1}의 Cholesky factor)
+    #    log det Σ_hat^{-1} = 2 * sum(log(diag(U)))
+    diag_U = torch.diagonal(prec_chol_pred, dim1=-2, dim2=-1)  # (B, k)
+    logdet_prec_pred = 2.0 * torch.log(diag_U + eps).sum(-1)   # (B,)
+    logdet_cov_pred = -logdet_prec_pred                         # log det Σ_hat
+
+    # 5) log det Σ_target  (표준 Cholesky 사용)
+    #    cov_target = L L^T  → log det Σ_target = 2 * sum(log(diag(L)))
+    L_target = torch.linalg.cholesky(cov_target + eps * torch.eye(k, device=cov_target.device))
+    diag_L = torch.diagonal(L_target, dim1=-2, dim2=-1)         # (B, k)
+    logdet_cov_target = 2.0 * torch.log(diag_L + eps).sum(-1)   # (B,)
+
+    # 6) 전체 KL:
+    #   KL = 1/2 [ tr(Σ_hat^{-1} Σ_target)
+    #              + (μ_hat - μ_t)^T Σ_hat^{-1} (μ_hat - μ_t)
+    #              - k
+    #              + log( det Σ_hat / det Σ_target ) ]
+    term3 = logdet_cov_pred - logdet_cov_target
+
+    kl_per_sample = 0.5 * (term1 + term2 - k + term3)  # (B,)
+
+    if reduction == "mean":
+        return kl_per_sample.mean()
+    elif reduction == "sum":
+        return kl_per_sample.sum()
+    else:  # 'none'
+        return kl_per_sample
+
 ##########################################################################################
 ##########################################################################################
 ##########################################################################################
@@ -786,6 +848,7 @@ optimizer = optim.Adam(TS_model.parameters(), lr=1e-3)
 #     Sigma_targets_tensor = torch.FloatTensor([user.Sigma for user in users])
 
 #     # TS-Model Update (KL-divergence Loss)
+#     loss = kl_gaussian_prec_chol(mu_targets_tensor, Sigma_targets_tensor, mu_Hat, U_Hat, reduction='mean')
 #     loss = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor, mu_Hat, torch.linalg.inv(Lambda_Hat), reduction='mean')
     
 #     # model update
@@ -832,8 +895,9 @@ for i in range(500):
     Sigma_targets_tensor = torch.FloatTensor(np.stack(Sigma_targets))
     
     # TS-Model Update (KL-divergence Loss)
-    loss = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor,
-                            mu_Hat, torch.linalg.inv(Lambda_Hat), reduction='mean')
+    loss = kl_gaussian_prec_chol(mu_targets_tensor, Sigma_targets_tensor, mu_Hat, U_Hat, reduction='mean')
+    # loss = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor,
+    #                         mu_Hat, torch.linalg.inv(Lambda_Hat), reduction='mean')
     
     # model update
     optimizer.zero_grad()
@@ -843,8 +907,9 @@ for i in range(500):
     
     for j in range(N_UPDATES-1):
         mu_Hat, U_Hat, Lambda_Hat = TS_model(users_vec, users_id) # Gradient
-        loss = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor,
-                            mu_Hat, torch.linalg.inv(Lambda_Hat), reduction='mean')
+        loss = kl_gaussian_prec_chol(mu_targets_tensor, Sigma_targets_tensor, mu_Hat, U_Hat, reduction='mean')
+        # loss = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor,
+        #                     mu_Hat, torch.linalg.inv(Lambda_Hat), reduction='mean')
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
