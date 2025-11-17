@@ -60,11 +60,19 @@ class AgentTS:
         self.lambda0 = lambda0      # λ_0·I : Ridge Reguarization parameters (얼마나 prior를 신뢰할지?)
         self.forgetting_decay = forgetting_decay
         
-        self.A = lambda0 * np.eye(compatibility_dim)
-        self.b = np.zeros(compatibility_dim)
+        self.reset_params()
+        # self.A = lambda0 * np.eye(compatibility_dim)
+        # self.b = np.zeros(compatibility_dim)
+        
+        # self.Sigma = np.linalg.inv(self.A)      # 현재 추정된 compatibility Covariance
+        # self.mu = rng.uniform(size=compatibility_dim)*0.1
+    
+    def reset_params(self):
+        self.A = self.lambda0 * np.eye(self.compatibility_dim)
+        self.b = np.zeros(self.compatibility_dim)
         
         self.Sigma = np.linalg.inv(self.A)      # 현재 추정된 compatibility Covariance
-        self.mu = rng.uniform(size=compatibility_dim)*0.1
+        self.mu = rng.uniform(size=self.compatibility_dim)*0.1
     
     def update(self, compatibility_other, r, Sigma_other=None, inplace=True):
         x_compatibility = compatibility_other.copy()
@@ -783,6 +791,8 @@ print(true_matching_values)
 
 ###################################################################################################
 ## (LinTS) ########################################################################################
+# reset params
+[user.reset_params() for user in users]
 
 #  matching
 rewards_obs_list = []
@@ -827,12 +837,17 @@ sample_matching, sample_matching_values = blossom_max_weight_matching(SM_samples
 print('< sampling_matching >')
 print(sample_matching)
 print(sample_matching_values)
+print(sum(sample_matching_values))
 
 
 
 
 ####################################################################################################
 # (DeepTS) #########################################################################################
+
+# reset params
+[user.reset_params() for user in users]
+
 # sample matching
 TS_model = ThompsonSamplingFeatureMap(COMPATIBILITY_DIM, USER_DIM, USER_EMBEDDING_DIM, PREFERENCE_EMBEDDING_DIM)
 optimizer = optim.Adam(TS_model.parameters(), lr=1e-3)
@@ -937,6 +952,6 @@ sample_matching, sample_matching_values = blossom_max_weight_matching(SM_samples
 print('< sampling_matching >')
 print(sample_matching)
 print(sample_matching_values)
-
+print(sum(sample_matching_values))
 
 
