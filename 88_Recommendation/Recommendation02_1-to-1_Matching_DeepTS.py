@@ -637,7 +637,7 @@ def calculate_targets(rewards, users, compatibility_samples, sample_matching, in
 # -----------------------------------------------------------------------
 
 
-def kl_gaussian_full(mu0, Sigma0, mu1, Sigma1, eps=1e-6):
+def kl_gaussian_full(mu0, Sigma0, mu1, Sigma1, eps=1e-6, reduction: str = "mean"):
     """
     Multivariate Gaussian KL(N0 || N1)
     N0 ~ N(mu0, Sigma0)
@@ -678,7 +678,13 @@ def kl_gaussian_full(mu0, Sigma0, mu1, Sigma1, eps=1e-6):
 
     # KL = 0.5 * (trace + quad - D + logdet1 - logdet0)
     kl = 0.5 * (term_trace + term_quad - D + term_logdet)
-    return kl
+    
+    if reduction == "mean":
+        return kl.mean()
+    elif reduction == "sum":
+        return kl.sum()
+    else:  # 'none'
+        return kl
 
 ##########################################################################################
 ##########################################################################################
@@ -780,10 +786,7 @@ optimizer = optim.Adam(TS_model.parameters(), lr=1e-3)
 #     Sigma_targets_tensor = torch.FloatTensor([user.Sigma for user in users])
 
 #     # TS-Model Update (KL-divergence Loss)
-#     # loss_mu = ((mu_targets_tensor - mu_Hat)**2).mean()
-#     loss_kl = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor, mu_Hat, torch.linalg.inv(Lambda_Hat))
-#     # loss = loss_mu + loss_kl.mean()
-#     loss = loss_kl.mean()
+#     loss = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor, mu_Hat, torch.linalg.inv(Lambda_Hat), reduction='mean')
     
 #     # model update
 #     optimizer.zero_grad()
@@ -829,13 +832,8 @@ for i in range(500):
     Sigma_targets_tensor = torch.FloatTensor(np.stack(Sigma_targets))
     
     # TS-Model Update (KL-divergence Loss)
-    # loss_mu = ((mu_targets_tensor - mu_Hat)**2).mean()
-    # loss_Sigma = ((Sigma_targets_tensor - torch.linalg.inv(Lambda_Hat))**2).mean()
-    # loss = loss_mu + loss_Sigma
-    loss_kl = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor,
-                            mu_Hat, torch.linalg.inv(Lambda_Hat))
-    # loss = loss_mu + loss_kl.mean()
-    loss = loss_kl.mean()
+    loss = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor,
+                            mu_Hat, torch.linalg.inv(Lambda_Hat), reduction='mean')
     
     # model update
     optimizer.zero_grad()
@@ -846,7 +844,7 @@ for i in range(500):
     for j in range(N_UPDATES-1):
         mu_Hat, U_Hat, Lambda_Hat = TS_model(users_vec, users_id) # Gradient
         loss = kl_gaussian_full(mu_targets_tensor, Sigma_targets_tensor,
-                            mu_Hat, torch.linalg.inv(Lambda_Hat)).mean()
+                            mu_Hat, torch.linalg.inv(Lambda_Hat), reduction='mean')
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
