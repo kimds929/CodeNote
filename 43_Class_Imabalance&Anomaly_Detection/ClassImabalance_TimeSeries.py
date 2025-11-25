@@ -454,7 +454,7 @@ def compute_class_weights(train_y: torch.Tensor) -> torch.Tensor:
 ########################################################################################
 
 
-class TimeSeriesModel(nn.Module):
+class TiimeSeriesTransformers(nn.Module):
     def __init__(self, d_model, nhead=2, dim_ff=128, num_layers=1, max_len=4096):
         super().__init__()
         
@@ -479,6 +479,7 @@ class TimeSeriesModel(nn.Module):
         
     def forward(self, x, mask=None):
         # x : (B, T)
+        # mask : (B, T)  # valid : True
         x_unsqueeze = x.unsqueeze(-1)   # x_unsqueeze : (B, T, 1)
         
         # (embedding)
@@ -486,11 +487,15 @@ class TimeSeriesModel(nn.Module):
         x_embed_pe = self.pe(x_embed)       # x_embed_pe : (B, T, d_model)
         
         # (encoder)
-        if mask is not None:    # True=PAD
+        if mask is not None:    # True = Valid, False = PAD
             src_key_padding_mask = ~mask
         else:
             src_key_padding_mask = ~torch.ones_like(x).to(torch.bool) 
         encoder_out = self.encoder(x_embed_pe, src_key_padding_mask=src_key_padding_mask)   # encoder_out : (B, T, d_model)
+        
+        if mask is not None:
+            mask_float = mask.unsqueeze(-1).float()  # (B, T, 1)
+            encoder_out = encoder_out * mask_float         # PAD 위치 hidden state는 0으로
         
         # (information pooling)
         # pool_out = torch.mean(encoder_out, dim=-2)    # Global Average Pooling (GAP)   # pool_out : (B, d_model)
@@ -503,33 +508,116 @@ class TimeSeriesModel(nn.Module):
 
 #--------------------------------------------------------------------------------------
 
+import inspect
+class KwargSequential(nn.Sequential):
+    def forward(self, x, **kwargs):
+        """
+        x : 메인 입력 (Conv1d feature 등)
+        kwargs : mask, time_mask, scale 등 부가 인자들
+        """
+        for module in self:
+            # module.forward의 시그니처를 보고, 받을 수 있는 인자만 필터링
+            sig = inspect.signature(module.forward)
+            param_names = list(sig.parameters.keys())[1:]  # self 제외
+
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k in param_names}
+
+            # 해당 모듈이 그 인자를 받는다면 kwargs 전달
+            if filtered_kwargs:
+                x = module(x, **filtered_kwargs)
+            else:
+                x = module(x)
+        return x
+
 
 class ResidualConnection(nn.Module):
     def __init__(self, block, shortcut=None):
         super().__init__()
         self.block = block
         self.shortcut = shortcut or (lambda x: x)
-    
-    def forward(self, x):
-        return self.block(x) + self.shortcut(x)
-    
+
+        # block.forward가 받는 argument 목록 (self 제외)
+        sig = inspect.signature(block.forward)
+        self.block_args = list(sig.parameters.keys())[1:]  # ['x', 'mask'] 등
+
+    def forward(self, x, **kwargs):
+        # block.forward가 받는 인자에만 kwargs 전달
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in self.block_args}
+
+        out = self.block(x, **filtered_kwargs)
+        sc = self.shortcut(x)
+
+        return out + sc
+
+
+class MaskedConv1d(nn.Conv1d):
+    def forward(self, x, mask=None):
+        # x: (B, C, T)
+        # mask: (B, 1, T) or (B, T) or None
+        
+        if mask is None:
+            return super().forward(x)
+
+         # 1) mask를 (B, 1, T)로 정규화
+        if mask.dim() == 2:            # (B, T)
+            mask = mask.unsqueeze(1)   # (B, 1, T)
+        elif mask.dim() == 3:
+            # (B, 1, T)라고 가정, 아니면 에러 내거나 assert
+            assert mask.size(1) == 1, "mask의 채널 차원은 1이어야 합니다."
+        else:
+            raise ValueError(f"Unexpected mask shape: {mask.shape}")
+
+        mask = mask.to(x.dtype)
+        
+        # 2) 유효한 값만 사용
+        x_masked = x * mask          # (B, C, T)
+        numerator = F.conv1d(x_masked, self.weight, bias=None, stride=self.stride, 
+                            padding=self.padding, dilation=self.dilation, groups=self.groups)
+
+        # 3) 마스크도 conv해서 실제로 몇 개가 기여했는지 계산
+        ones_kernel = torch.ones(1, 1, self.kernel_size[0], device=x.device, dtype=x.dtype)
+        
+        denom = F.conv1d(mask, ones_kernel, bias=None, stride=self.stride,
+                        padding=self.padding, dilation=self.dilation, groups=1,)
+
+        # 4) 평균
+        out = numerator / (denom + 1e-8)
+
+        # 4) bias 있으면 마지막에 더해줌
+        if self.bias is not None:
+            out = out + self.bias.view(1, -1, 1)
+
+        return out
+
+
 class TimeSeriesConv(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super().__init__()
+        
+        self.encoder = nn.ModuleDict({})
+        self.encoder['input_conv'] = nn.Conv1d(input_dim, hidden_dim, kernel_size=5, padding=2)
+        self.encoder['input_activation'] = nn.ReLU()
+        
+        self.encoder['input_conv']
+        
+        
         # (convolution encoder)
-        self.encoder = nn.Sequential(
-            nn.Conv1d(input_dim, hidden_dim, kernel_size=5, padding=2)
+        self.encoder = KwargSequential(
+            # nn.Conv1d(input_dim, hidden_dim, kernel_size=5, padding=2)
+            MaskedConv1d(input_dim, hidden_dim, kernel_size=5, padding=2)
             ,nn.ReLU()
             ,ResidualConnection(
-                nn.Sequential(
-                    nn.Conv1d(hidden_dim, hidden_dim, kernel_size=5, padding=2)
+                KwargSequential(
+                    MaskedConv1d(hidden_dim, hidden_dim, kernel_size=5, padding=2)
+                    # nn.Conv1d(hidden_dim, hidden_dim, kernel_size=5, padding=2)
                     ,nn.BatchNorm1d(hidden_dim)
                     ,nn.ReLU()
                 )
             )
             ,ResidualConnection(
-                nn.Sequential(
-                    nn.Conv1d(hidden_dim, hidden_dim, kernel_size=5, padding=2)
+                KwargSequential(
+                    MaskedConv1d(hidden_dim, hidden_dim, kernel_size=5, padding=2)
+                    # nn.Conv1d(hidden_dim, hidden_dim, kernel_size=5, padding=2)
                     ,nn.BatchNorm1d(hidden_dim)
                     ,nn.ReLU()
                 )
@@ -553,10 +641,11 @@ class TimeSeriesConv(nn.Module):
 
     def forward(self, x, mask):
         # x.shape   # (B, T)
+        # mask.shape # (B, T)   # valid: True
         unsqueeze_x = x.unsqueeze(-2)   # (B, 1, T)
         
         # (convolution encoder)
-        encoder_out = self.encoder(unsqueeze_x)     # (B, E, T)
+        encoder_out = self.encoder(unsqueeze_x, mask=mask)     # (B, E, T)
         
         # (masking)
         mask_unsqueeze = mask.unsqueeze(-2).to(encoder_out.dtype)   # (B, 1, T)
@@ -570,18 +659,10 @@ class TimeSeriesConv(nn.Module):
         out = self.classification_head(pool_out)   # out : (B, 1)
         return out
 
-
-
 ########################################################################################
 
-
-
-
-
-
-
-model = TimeSeriesModel(d_model=8, nhead=4)
-# model = TimeSeriesConv(input_dim=1, hidden_dim=64)
+# model = TiimeSeriesTransformers(d_model=8, nhead=4)
+model = TimeSeriesConv(input_dim=1, hidden_dim=64)
 f"{sum(p.numel() for p in model.parameters() if p.requires_grad):,}"
 # model( torch.rand(10,5) )
 
