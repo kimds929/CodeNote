@@ -1,3 +1,10 @@
+import os
+import sys
+sys.path.append(f"{os.getcwd()}/DataScience/00_DataAnalysis_Basic")
+sys.path.append(f"{os.getcwd()}/DataScience/DS_Library")
+sys.path.append(r'D:\DataScience\00_DataAnalysis_Basic')
+
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -12,8 +19,9 @@ import matplotlib.pyplot as plt
 
 
 
+
 try:
-    from DS_Torch import TorchDataLoader, TorchModeling, AutoML, early
+    from DS_Torch import TorchDataLoader, TorchModeling, AutoML
     from DS_DeepLearning import EarlyStopping
 except:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
@@ -66,7 +74,7 @@ def generate_series(
     t = np.linspace(0.0, 1.0, L)
     k = rng.uniform(5.0, 7.0)
     y0 = 0.0
-    target = rng.uniform(0.8, 1.2)
+    target = rng.uniform(0.9, 1.1)
     
 
     # series_type에 따라 p 선택
@@ -303,14 +311,17 @@ train_loader = DataLoader(train_dataset, batch_size=BATCH, shuffle=True)
 valid_loader = DataLoader(valid_dataset, batch_size=BATCH, shuffle=True)
 tests_loader = DataLoader(tests_dataset, batch_size=BATCH, shuffle=True)
 
-# for batch in train_loader:
-#     break
-# len(batch)        # 5 : X, mask, valid_seq_len, tail_mean, y
-# batch[0].shape
-# batch[1].shape
-# batch[2].shape
+for batch in train_loader:
+    break
+len(batch)        # 5 : X, mask, valid_seq_len, tail_mean, y
+batch[0].shape
+batch[1].shape
+batch[2].shape
 # batch[3].shape
 # batch[4].shape
+batch[0]    # time-series data (Batch, Seq)
+batch[1]    # masking data (Batch, Seq)
+batch[2]    # valid sequence length (Batch)
 
 #################################################################################################
 
@@ -389,13 +400,13 @@ class PreLN_TransformerEncoderLayer(nn.Module):
 
 
 # ----------------------------------------------------------------------------------------
-class AttentionPoolingLayer(nn.Module):
+class AttentionPooling(nn.Module):
     def __init__(self, d_model, learnable_threshold=False, eps=1e-8):
         super().__init__()
         self.learnable_threshold = learnable_threshold
         self.eps = eps
         
-        self.query = nn.Parameter(torch.randn(d_model)/d_model)  # 학습 가능한 Query (d_model, )
+        self.query = nn.Parameter(torch.randn(d_model)/d_model)  # 학습 가능한 Query (d_model, ) : 어떤 방식으로 요약할까?, 무엇이 중요한 시점인지를 학습하기 위함
         
         if self.learnable_threshold:
             self.threshold = nn.Parameter(torch.randn(1)/d_model)
@@ -413,11 +424,11 @@ class AttentionPoolingLayer(nn.Module):
         if self.learnable_threshold:
             tau = torch.sigmoid(self.threshold)
             attn_weights = torch.clamp_min(attn_weights - tau, 0.0)
-            denom = attn_weights.sum(dim=1, keepdim=True) + self.eps
+            denom = attn_weights.sum(dim=-2, keepdim=True) + self.eps
             attn_weights = attn_weights / denom
         
-        # 가중합
-        pooled = torch.sum(x * attn_weights.unsqueeze(-1), dim=-2)  # (B, d_model)
+        # Weighted Sum
+        pooled = torch.sum(x * attn_weights.unsqueeze(-1), dim=-2)  # (B,T,d_modl) * (B,T,1) = (B,T,d_modl) → sum → (B, d_model)
         return pooled, attn_weights
 # ----------------------------------------------------------------------------------------
 
@@ -440,6 +451,8 @@ def compute_class_weights(train_y: torch.Tensor) -> torch.Tensor:
 # ----------------------------------------------------------------------------------------
 
 
+########################################################################################
+
 
 class TimeSeriesModel(nn.Module):
     def __init__(self, d_model, nhead=2, dim_ff=128, num_layers=1, max_len=4096):
@@ -459,7 +472,7 @@ class TimeSeriesModel(nn.Module):
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
         
         # (information pooling)
-        self.attn_pool_layer = AttentionPoolingLayer(d_model)
+        self.attn_pool_layer = AttentionPooling(d_model)
         
         # (classification head)
         self.classification_head = nn.Linear(d_model, 1)
@@ -482,18 +495,96 @@ class TimeSeriesModel(nn.Module):
         # (information pooling)
         # pool_out = torch.mean(encoder_out, dim=-2)    # Global Average Pooling (GAP)   # pool_out : (B, d_model)
         # pool_out, _ = torch.max(encoder_out, dim=-2)    # Global Max Pooling (GMP)   # pool_out : (B, d_model)
-        pool_out, _ = self.attn_pool_layer(encoder_out)      # Attention Pooling (AP)   # pool_out : (B, d_model)
+        pool_out, _ = self.attn_pool_layer(encoder_out, mask)      # Attention Pooling (AP)   # pool_out : (B, d_model)
+        
+        # (classification head)
+        out = self.classification_head(pool_out)   # out : (B, 1)
+        return out
+
+#--------------------------------------------------------------------------------------
+
+
+class ResidualConnection(nn.Module):
+    def __init__(self, block, shortcut=None):
+        super().__init__()
+        self.block = block
+        self.shortcut = shortcut or (lambda x: x)
+    
+    def forward(self, x):
+        return self.block(x) + self.shortcut(x)
+    
+class TimeSeriesConv(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super().__init__()
+        # (convolution encoder)
+        self.encoder = nn.Sequential(
+            nn.Conv1d(input_dim, hidden_dim, kernel_size=5, padding=2)
+            ,nn.ReLU()
+            ,ResidualConnection(
+                nn.Sequential(
+                    nn.Conv1d(hidden_dim, hidden_dim, kernel_size=5, padding=2)
+                    ,nn.BatchNorm1d(hidden_dim)
+                    ,nn.ReLU()
+                )
+            )
+            ,ResidualConnection(
+                nn.Sequential(
+                    nn.Conv1d(hidden_dim, hidden_dim, kernel_size=5, padding=2)
+                    ,nn.BatchNorm1d(hidden_dim)
+                    ,nn.ReLU()
+                )
+            )
+        )
+        
+        # (information pooling)
+        self.attn_pool_layer = AttentionPooling(hidden_dim)
+        
+        # (classification head)
+        self.classification_head = nn.Linear(hidden_dim, 1)
+    
+    def masked_mean(self, x, mask, eps=1e-9):
+        """
+        x:    (B, E, T)  (float)
+        mask: (B, 1, T)  (bool)
+        """
+        sum_x = x.sum(dim=-1)                  # (B, E)
+        len_x = mask.sum(dim=-1)               # (B, 1)
+        return sum_x / (len_x + eps)           # (B, E)
+
+    def forward(self, x, mask):
+        # x.shape   # (B, T)
+        unsqueeze_x = x.unsqueeze(-2)   # (B, 1, T)
+        
+        # (convolution encoder)
+        encoder_out = self.encoder(unsqueeze_x)     # (B, E, T)
+        
+        # (masking)
+        mask_unsqueeze = mask.unsqueeze(-2).to(encoder_out.dtype)   # (B, 1, T)
+        encoder_out_mask = encoder_out * mask_unsqueeze     # (B, E, T)
+        
+        # (information pooling)
+        pool_out, _ = self.attn_pool_layer(encoder_out_mask.transpose(-2,-1), mask)    # (B, E) : Attention Pooling
+        # pool_out = self.masked_mean(encoder_out_mask, mask_unsqueeze)   # (B, E) : Mean Pooling
         
         # (classification head)
         out = self.classification_head(pool_out)   # out : (B, 1)
         return out
 
 
+
+########################################################################################
+
+
+
+
+
+
+
 model = TimeSeriesModel(d_model=8, nhead=4)
+# model = TimeSeriesConv(input_dim=1, hidden_dim=64)
 f"{sum(p.numel() for p in model.parameters() if p.requires_grad):,}"
 # model( torch.rand(10,5) )
 
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 cs_weight = compute_class_weights(train_y_tensor)
 pos_weight = cs_weight[1]/ cs_weight[0]
@@ -508,7 +599,7 @@ def cross_entropy_loss(model, batch, optimizer=None):
 
 tm = TorchModeling(model, device)
 
-tm.compile(optimizer,
+tm.compile(optim.Adam(model.parameters(), lr=1e-3),
            early_stop_loss = EarlyStopping(patience=50))
 tm.train_model(train_loader, valid_loader, epochs=300, loss_function=cross_entropy_loss)
 
@@ -559,7 +650,7 @@ last_values = test_x_np[np.arange(len(tests_X_tensor_set[0])), tests_X_tensor_se
 
 
 
-plt.figure(figsize=(6, 4))
+plt.figure(figsize=(7, 4))
 TP, FN, TN, FP = [0]*4
 for lx, ly, p, tests_x, true_y in zip(tests_X_tensor_set[2].numpy(), last_values, pred_test_y_prob.numpy().reshape(-1), test_x_np, tests_y_tensor.numpy()):
     label = None
@@ -595,7 +686,6 @@ plt.legend(loc='upper center', bbox_to_anchor=(0.5, 0), ncol=4)
 plt.xticks([])
 plt.yticks([])
 plt.show()
-
 
 
 
