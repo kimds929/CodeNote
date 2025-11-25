@@ -452,7 +452,7 @@ def compute_class_weights(train_y: torch.Tensor) -> torch.Tensor:
 
 
 ########################################################################################
-
+# (TimeSeries Transformers)
 
 class TiimeSeriesTransformers(nn.Module):
     def __init__(self, d_model, nhead=2, dim_ff=128, num_layers=1, max_len=4096):
@@ -506,7 +506,8 @@ class TiimeSeriesTransformers(nn.Module):
         out = self.classification_head(pool_out)   # out : (B, 1)
         return out
 
-#--------------------------------------------------------------------------------------
+########################################################################################
+# (1d Convolution)
 
 import inspect
 class KwargSequential(nn.Sequential):
@@ -590,7 +591,7 @@ class MaskedConv1d(nn.Conv1d):
         return out
 
 
-class TimeSeriesConv(nn.Module):
+class TimeSeriesConv1d(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super().__init__()
         
@@ -660,9 +661,176 @@ class TimeSeriesConv(nn.Module):
         return out
 
 ########################################################################################
+# (1d Convolution + Feature Pyramid Network)
 
+# ------------------------------------------------------------
+# 1) Dilated Conv Block with Mask (C3/C4/C5에 사용)
+# ------------------------------------------------------------
+class ConvBlock1D(nn.Module):
+    """
+    dilation을 바꿔가며 receptive field만 키우는 블록.
+    길이 T는 유지.
+    """
+    def __init__(self, in_ch, out_ch, dilation=1):
+        super().__init__()
+        padding = dilation  # kernel_size=3 기준: padding=dilation
+
+        self.block = KwargSequential(
+            MaskedConv1d(in_ch, out_ch, kernel_size=3, padding=padding, dilation=dilation),
+            nn.BatchNorm1d(out_ch),
+            nn.ReLU(),
+            ResidualConnection(
+                KwargSequential(
+                    MaskedConv1d(out_ch, out_ch, kernel_size=3, padding=padding, dilation=dilation),
+                    nn.BatchNorm1d(out_ch),
+                    nn.ReLU(),
+                )
+            )
+        )
+
+    def forward(self, x, mask=None):
+        # x: (B, C_in, T)
+        # mask: (B, T) or (B, 1, T)
+        return self.block(x, mask=mask)   # KwargSequential이 MaskedConv1d에만 mask 전달
+
+class ConvBackbone1D_Masked(nn.Module):
+    """
+    C3, C4, C5: 모두 같은 길이 T, 다른 dilation으로 다양한 시간 스케일을 봄
+    """
+    def __init__(self, in_channels=1, c3=64, c4=128, c5=256):
+        super().__init__()
+        self.c3_block = ConvBlock1D(in_channels, c3, dilation=1)   # short scale
+        self.c4_block = ConvBlock1D(c3, c4, dilation=2)            # mid scale
+        self.c5_block = ConvBlock1D(c4, c5, dilation=4)            # long scale
+
+    def forward(self, x, mask=None):
+        """
+        x: (B, C_in, T)
+        mask: (B, T) or (B, 1, T) or None
+        """
+        c3 = self.c3_block(x, mask=mask)       # (B, c3, T)
+        c4 = self.c4_block(c3, mask=mask)      # (B, c4, T)
+        c5 = self.c5_block(c4, mask=mask)      # (B, c5, T)
+        return c3, c4, c5   # 마스크는 길이 안 바뀌므로 그대로 사용 가능
+
+# mbm = ConvBackbone1D_Masked()
+# c3, c4, c5 = mbm(batch[0].unsqueeze(-2), batch[1])
+# c3.shape
+
+
+class FPN1D_Masked(nn.Module):
+    def __init__(self, c3=64, c4=128, c5=256, out_channels=128):
+        super().__init__()
+        # lateral 1x1 conv
+        self.lateral5 = nn.Conv1d(c5, out_channels, kernel_size=1)
+        self.lateral4 = nn.Conv1d(c4, out_channels, kernel_size=1)
+        self.lateral3 = nn.Conv1d(c3, out_channels, kernel_size=1)
+
+        # smoothing conv
+        self.smooth5 = nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=1)
+        self.smooth4 = nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=1)
+        self.smooth3 = nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=1)
+
+    def forward(self, c3, c4, c5, mask=None):
+        """
+        c3: (B, C3, T)
+        c4: (B, C4, T)
+        c5: (B, C5, T)
+        mask: (B, T) or (B, 1, T) or None
+        """
+        # top-down (길이가 같으니 upsample 불필요)
+        p5 = self.lateral5(c5)   # (B, out, T)
+        p4 = self.lateral4(c4) + p5
+        p3 = self.lateral3(c3) + p4
+
+        # smoothing
+        p5 = self.smooth5(p5)
+        p4 = self.smooth4(p4)
+        p3 = self.smooth3(p3)
+
+        # mask는 길이 T 그대로 유지
+        return p3, p4, p5, mask
+
+# fpn1d = FPN1D_Masked()
+# p3, p4, p5, mask_out  = fpn1d(c3, c4, c5, batch[1])
+
+
+class TimeSeriesConv1dFPN(nn.Module):
+    def __init__(self,
+                 in_channels=1,
+                 num_outputs=1,          # 1: 회귀/이진, K: K-class logits
+                 c3=64, c4=128, c5=256,
+                 fpn_channels=128):
+        super().__init__()
+        self.backbone = ConvBackbone1D_Masked(
+            in_channels=in_channels,
+            c3=c3, c4=c4, c5=c5
+        )
+        self.fpn = FPN1D_Masked(
+            c3=c3, c4=c4, c5=c5,
+            out_channels=fpn_channels
+        )
+        
+        self.attn_pooling_p3 = AttentionPooling(fpn_channels)
+        self.attn_pooling_p4 = AttentionPooling(fpn_channels)
+        self.attn_pooling_p5 = AttentionPooling(fpn_channels)
+
+        # 여러 스케일 feature를 concat해서 head로
+        self.head = nn.Sequential(
+            nn.Linear(fpn_channels * 3, 128),
+            nn.ReLU(),
+            nn.Linear(128, num_outputs)
+        )
+
+    def masked_mean(self, x, mask, eps=1e-9):
+        """
+        x:    (B, E, T)  (float)
+        mask: (B, 1, T)  (bool)
+        """
+        sum_x = x.sum(dim=-1)                  # (B, E)
+        len_x = mask.sum(dim=-1)               # (B, 1)
+        return sum_x / (len_x + eps)           # (B, E)
+    
+    def forward(self, x, mask=None):
+        """
+        x: (B, T) or (B, C_in, T)
+        mask: (B, T) or (B, 1, T) or None
+              1/True=유효, 0/False=PAD
+        """
+        # x shape 정규화
+        if x.dim() == 2:
+            x = x.unsqueeze(1)  # (B, 1, T)
+        mask_unsqueeze = mask.unsqueeze(-2).to(x.dtype)   # (B, 1, T)
+
+        # backbone
+        c3, c4, c5 = self.backbone(x, mask=mask)  # (B, C*, T)
+
+        # FPN
+        p3, p4, p5, mask_out = self.fpn(c3, c4, c5, mask=mask)
+
+        # masked global pooling
+        g3 = self.masked_mean(p3, mask_unsqueeze)     # (B, fpn_channels)
+        g4 = self.masked_mean(p4, mask_unsqueeze)     # (B, fpn_channels)
+        g5 = self.masked_mean(p5, mask_unsqueeze)     # (B, fpn_channels)
+        
+        # masked attention pooling
+        # g3, _ = self.attn_pooling_p3(p3.transpose(-2, -1), mask)
+        # g4, _ = self.attn_pooling_p4(p4.transpose(-2, -1), mask)
+        # g5, _ = self.attn_pooling_p5(p5.transpose(-2, -1), mask)
+        
+        feat = torch.cat([g3, g4, g5], dim=-1)  # (B, fpn_channels * 3)
+        out = self.head(feat)                   # (B, num_outputs)
+        return out
+
+
+# tsc1fpn = TimeSeriesConv1dFPN()
+# tsc1fpn(batch[0], batch[1])
+
+########################################################################################
 # model = TiimeSeriesTransformers(d_model=8, nhead=4)
-model = TimeSeriesConv(input_dim=1, hidden_dim=64)
+# model = TimeSeriesConv1d(input_dim=1, hidden_dim=64)
+model = TimeSeriesConv1dFPN(in_channels=1, num_outputs=1,
+                        c3=24, c4=32, c5=40, fpn_channels=40)
 f"{sum(p.numel() for p in model.parameters() if p.requires_grad):,}"
 # model( torch.rand(10,5) )
 
@@ -709,8 +877,6 @@ with torch.no_grad():
     print(f" - PR-AUC : {pr_auc:.3f}")
     print(f" - ROC-AUC : {roc_auc:.3f}")
     print(cls_report)
-
-
 
 
 # # visualize
