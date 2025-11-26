@@ -336,10 +336,88 @@ batch[2]    # valid sequence length (Batch)
 
 
 
+#################################################################################################
+#################################################################################################
+#################################################################################################
+
+
+def compute_class_weights(train_y: torch.Tensor) -> torch.Tensor:
+    """
+    train_y: shape (N,), LongTensor, 각 값은 클래스 인덱스
+    return: shape (num_classes,), FloatTensor
+    """
+    # 클래스 개수
+    num_classes = train_y.max().item() + 1
+    
+    # 각 클래스별 샘플 수 계산
+    class_counts = torch.bincount(train_y, minlength=num_classes).float()
+    
+    # 가중치 계산: inverse frequency
+    weights = train_y.size(0) / (num_classes * class_counts)
+    # weights = torch.nn.functional.softmax(weights, dim=-1)    # softmax : 불균형 보정 효과 약화
+    return weights
+
+
+
+# ----------------------------------------------------------------------------------------
+class AttentionPooling(nn.Module):
+    def __init__(self, d_model, learnable_threshold=False, eps=1e-8):
+        super().__init__()
+        self.learnable_threshold = learnable_threshold
+        self.eps = eps
+        
+        self.query = nn.Parameter(torch.randn(d_model)/d_model)  # 학습 가능한 Query (d_model, ) : 어떤 방식으로 요약할까?, 무엇이 중요한 시점인지를 학습하기 위함
+        
+        if self.learnable_threshold:
+            self.threshold = nn.Parameter(torch.randn(1)/d_model)
+
+    def forward(self, x, mask=None):  # x: (B, T, d_model)
+        # Attention score 계산
+        attn_scores = torch.matmul(x, self.query)  # (B, T)
+        
+        # Attention Mask
+        if mask is not None:
+            attn_scores = attn_scores.masked_fill(mask == 0, float('-inf'))
+        attn_weights = torch.softmax(attn_scores, dim=1)  # (B, T)
+        
+        # Learnable Threshold : sparcity
+        if self.learnable_threshold:
+            tau = torch.sigmoid(self.threshold)
+            attn_weights = torch.clamp_min(attn_weights - tau, 0.0)
+            denom = attn_weights.sum(dim=-2, keepdim=True) + self.eps
+            attn_weights = attn_weights / denom
+        
+        # Weighted Sum
+        pooled = torch.sum(x * attn_weights.unsqueeze(-1), dim=-2)  # (B,T,d_modl) * (B,T,1) = (B,T,d_modl) → sum → (B, d_model)
+        return pooled, attn_weights
+# ----------------------------------------------------------------------------------------
 
 #################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #################################################################################################
-#################################################################################################
+# TimeSeries Transformers
 # ----------------------------------------------------------------------------------------
 class PositionalEncodingLayer(nn.Module):
     def __init__(self, d_model, max_len=4096):
@@ -399,57 +477,6 @@ class PreLN_TransformerEncoderLayer(nn.Module):
         return src
 
 
-# ----------------------------------------------------------------------------------------
-class AttentionPooling(nn.Module):
-    def __init__(self, d_model, learnable_threshold=False, eps=1e-8):
-        super().__init__()
-        self.learnable_threshold = learnable_threshold
-        self.eps = eps
-        
-        self.query = nn.Parameter(torch.randn(d_model)/d_model)  # 학습 가능한 Query (d_model, ) : 어떤 방식으로 요약할까?, 무엇이 중요한 시점인지를 학습하기 위함
-        
-        if self.learnable_threshold:
-            self.threshold = nn.Parameter(torch.randn(1)/d_model)
-
-    def forward(self, x, mask=None):  # x: (B, T, d_model)
-        # Attention score 계산
-        attn_scores = torch.matmul(x, self.query)  # (B, T)
-        
-        # Attention Mask
-        if mask is not None:
-            attn_scores = attn_scores.masked_fill(mask == 0, float('-inf'))
-        attn_weights = torch.softmax(attn_scores, dim=1)  # (B, T)
-        
-        # Learnable Threshold : sparcity
-        if self.learnable_threshold:
-            tau = torch.sigmoid(self.threshold)
-            attn_weights = torch.clamp_min(attn_weights - tau, 0.0)
-            denom = attn_weights.sum(dim=-2, keepdim=True) + self.eps
-            attn_weights = attn_weights / denom
-        
-        # Weighted Sum
-        pooled = torch.sum(x * attn_weights.unsqueeze(-1), dim=-2)  # (B,T,d_modl) * (B,T,1) = (B,T,d_modl) → sum → (B, d_model)
-        return pooled, attn_weights
-# ----------------------------------------------------------------------------------------
-
-
-def compute_class_weights(train_y: torch.Tensor) -> torch.Tensor:
-    """
-    train_y: shape (N,), LongTensor, 각 값은 클래스 인덱스
-    return: shape (num_classes,), FloatTensor
-    """
-    # 클래스 개수
-    num_classes = train_y.max().item() + 1
-    
-    # 각 클래스별 샘플 수 계산
-    class_counts = torch.bincount(train_y, minlength=num_classes).float()
-    
-    # 가중치 계산: inverse frequency
-    weights = train_y.size(0) / (num_classes * class_counts)
-    # weights = torch.nn.functional.softmax(weights, dim=-1)    # softmax : 불균형 보정 효과 약화
-    return weights
-# ----------------------------------------------------------------------------------------
-
 
 ########################################################################################
 # (TimeSeries Transformers)
@@ -505,6 +532,154 @@ class TiimeSeriesTransformers(nn.Module):
         # (classification head)
         out = self.classification_head(pool_out)   # out : (B, 1)
         return out
+
+########################################################################################
+model = TiimeSeriesTransformers(d_model=8, nhead=4)
+f"{sum(p.numel() for p in model.parameters() if p.requires_grad):,}"
+# model( torch.rand(10,5) )
+
+
+cs_weight = compute_class_weights(train_y_tensor)
+pos_weight = cs_weight[1]/ cs_weight[0]
+
+def cross_entropy_loss(model, batch, optimizer=None):
+    batch_X, mask, valid_seq_len, tail_mean, batch_y = batch
+    pred_y = model(batch_X, mask)
+    batch_y_float = batch_y.view(-1,1).to(torch.float32)
+    # loss = nn.functional.binary_cross_entropy_with_logits(pred_y, batch_y_float)    # pos_weight : class 0 대비 class 1의 가중치
+    loss = nn.functional.binary_cross_entropy_with_logits(pred_y, batch_y_float, pos_weight)    # pos_weight : class 0 대비 class 1의 가중치
+    return loss
+
+tm = TorchModeling(model, device)
+
+tm.compile(optim.Adam(model.parameters(), lr=1e-3),
+           early_stop_loss = EarlyStopping(patience=50))
+tm.train_model(train_loader, valid_loader, epochs=300, loss_function=cross_entropy_loss)
+
+
+from sklearn.metrics import confusion_matrix, precision_recall_curve, auc, classification_report, roc_auc_score
+threshold = 0.5
+with torch.no_grad():
+    model.eval()
+    pred_test_y = model(tests_X_tensor_set[0].to(device), tests_X_tensor_set[1].to(device))
+    
+    pred_test_y_prob = torch.sigmoid(pred_test_y).to('cpu')
+    
+    pred_torch = (pred_test_y_prob > threshold).to(torch.int64)
+    true_torch = tests_y_tensor.view(-1,1).to('cpu')
+    conf = confusion_matrix(true_torch, pred_torch)
+    
+    precision, recall, _ = precision_recall_curve(true_torch, pred_torch)
+    pr_auc = auc(recall, precision)
+    roc_auc = roc_auc_score(true_torch, pred_torch)
+    
+    
+    cls_report = classification_report(true_torch, pred_torch)
+    
+    print('confusion_matrix')
+    print(conf.T)
+    print(f" - PR-AUC : {pr_auc:.3f}")
+    print(f" - ROC-AUC : {roc_auc:.3f}")
+    print(cls_report)
+
+
+# # visualize
+# def visualize_result(x, y, mask, valid_seq_len, scaler=None):
+#     x_copy = x.copy()
+#     x_copy[~mask] = np.nan
+    
+#     if scaler is not None:
+#         test_x_np = ss_X.inverse_transform(tests_x_np_norm)
+  
+
+tests_x_np_norm = tests_X_tensor_set[0].numpy().copy()
+tests_mask = tests_X_tensor_set[1]
+tests_x_np_norm[~tests_mask] = np.nan
+test_x_np = (tests_x_np_norm * X_std) + X_mean
+# test_x_np = ss_X.inverse_transform(tests_x_np_norm)
+last_values = test_x_np[np.arange(len(tests_X_tensor_set[0])), tests_X_tensor_set[2]-1]
+
+
+
+plt.figure(figsize=(7, 4))
+TP, FN, TN, FP = [0]*4
+for lx, ly, p, tests_x, true_y in zip(tests_X_tensor_set[2].numpy(), last_values, pred_test_y_prob.numpy().reshape(-1), test_x_np, tests_y_tensor.numpy()):
+    label = None
+    if true_y == 1:
+        if p < 0.5:
+            if FN == 0:
+                label='FN'
+            plt.plot(tests_x, color='red',alpha=0.5, label=label)
+            plt.scatter(lx-1, ly, s=3, color='darkred')
+            plt.text(lx-1, ly, f"{p:.2f}", color='red')
+            FN += 1
+        else:
+            if TP == 0:
+                label='TP'
+            plt.plot(tests_x, color='orange',alpha=0.5, label=label)
+            plt.scatter(lx-1, ly, s=3, color='brown')
+            plt.text(lx-1, ly, f"{p:.2f}")
+            TP += 1
+    else:
+        if p > 0.5:
+            if FP == 0:
+                label='FP'
+            plt.plot(tests_x, color='green',alpha=0.5, label=label)
+            plt.scatter(lx-1, ly, s=3, color='darkred')
+            plt.text(lx-1, ly, f"{p:.2f}")
+            FP +=1
+        else:
+            if TN == 0:
+                label='TN'
+            plt.plot(tests_x, color='steelblue',alpha=0.1, label=label)
+            TN +=1
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, 0), ncol=4)
+plt.xticks([])
+plt.yticks([])
+plt.show()
+########################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ########################################################################################
 # (1d Convolution)
@@ -659,6 +834,159 @@ class TimeSeriesConv1d(nn.Module):
         # (classification head)
         out = self.classification_head(pool_out)   # out : (B, 1)
         return out
+########################################################################################
+########################################################################################
+model = TimeSeriesConv1d(input_dim=1, hidden_dim=64)
+f"{sum(p.numel() for p in model.parameters() if p.requires_grad):,}"
+# model( torch.rand(10,5) )
+
+
+cs_weight = compute_class_weights(train_y_tensor)
+pos_weight = cs_weight[1]/ cs_weight[0]
+
+def cross_entropy_loss(model, batch, optimizer=None):
+    batch_X, mask, valid_seq_len, tail_mean, batch_y = batch
+    pred_y = model(batch_X, mask)
+    batch_y_float = batch_y.view(-1,1).to(torch.float32)
+    # loss = nn.functional.binary_cross_entropy_with_logits(pred_y, batch_y_float)    # pos_weight : class 0 대비 class 1의 가중치
+    loss = nn.functional.binary_cross_entropy_with_logits(pred_y, batch_y_float, pos_weight)    # pos_weight : class 0 대비 class 1의 가중치
+    return loss
+
+tm = TorchModeling(model, device)
+
+tm.compile(optim.Adam(model.parameters(), lr=1e-3),
+           early_stop_loss = EarlyStopping(patience=50))
+tm.train_model(train_loader, valid_loader, epochs=300, loss_function=cross_entropy_loss)
+
+
+from sklearn.metrics import confusion_matrix, precision_recall_curve, auc, classification_report, roc_auc_score
+threshold = 0.5
+with torch.no_grad():
+    model.eval()
+    pred_test_y = model(tests_X_tensor_set[0].to(device), tests_X_tensor_set[1].to(device))
+    
+    pred_test_y_prob = torch.sigmoid(pred_test_y).to('cpu')
+    
+    pred_torch = (pred_test_y_prob > threshold).to(torch.int64)
+    true_torch = tests_y_tensor.view(-1,1).to('cpu')
+    conf = confusion_matrix(true_torch, pred_torch)
+    
+    precision, recall, _ = precision_recall_curve(true_torch, pred_torch)
+    pr_auc = auc(recall, precision)
+    roc_auc = roc_auc_score(true_torch, pred_torch)
+    
+    
+    cls_report = classification_report(true_torch, pred_torch)
+    
+    print('confusion_matrix')
+    print(conf.T)
+    print(f" - PR-AUC : {pr_auc:.3f}")
+    print(f" - ROC-AUC : {roc_auc:.3f}")
+    print(cls_report)
+
+
+# # visualize
+# def visualize_result(x, y, mask, valid_seq_len, scaler=None):
+#     x_copy = x.copy()
+#     x_copy[~mask] = np.nan
+    
+#     if scaler is not None:
+#         test_x_np = ss_X.inverse_transform(tests_x_np_norm)
+  
+
+tests_x_np_norm = tests_X_tensor_set[0].numpy().copy()
+tests_mask = tests_X_tensor_set[1]
+tests_x_np_norm[~tests_mask] = np.nan
+test_x_np = (tests_x_np_norm * X_std) + X_mean
+# test_x_np = ss_X.inverse_transform(tests_x_np_norm)
+last_values = test_x_np[np.arange(len(tests_X_tensor_set[0])), tests_X_tensor_set[2]-1]
+
+
+
+plt.figure(figsize=(7, 4))
+TP, FN, TN, FP = [0]*4
+for lx, ly, p, tests_x, true_y in zip(tests_X_tensor_set[2].numpy(), last_values, pred_test_y_prob.numpy().reshape(-1), test_x_np, tests_y_tensor.numpy()):
+    label = None
+    if true_y == 1:
+        if p < 0.5:
+            if FN == 0:
+                label='FN'
+            plt.plot(tests_x, color='red',alpha=0.5, label=label)
+            plt.scatter(lx-1, ly, s=3, color='darkred')
+            plt.text(lx-1, ly, f"{p:.2f}", color='red')
+            FN += 1
+        else:
+            if TP == 0:
+                label='TP'
+            plt.plot(tests_x, color='orange',alpha=0.5, label=label)
+            plt.scatter(lx-1, ly, s=3, color='brown')
+            plt.text(lx-1, ly, f"{p:.2f}")
+            TP += 1
+    else:
+        if p > 0.5:
+            if FP == 0:
+                label='FP'
+            plt.plot(tests_x, color='green',alpha=0.5, label=label)
+            plt.scatter(lx-1, ly, s=3, color='darkred')
+            plt.text(lx-1, ly, f"{p:.2f}")
+            FP +=1
+        else:
+            if TN == 0:
+                label='TN'
+            plt.plot(tests_x, color='steelblue',alpha=0.1, label=label)
+            TN +=1
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, 0), ncol=4)
+plt.xticks([])
+plt.yticks([])
+plt.show()
+
+########################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ########################################################################################
 # (1d Convolution + Feature Pyramid Network)
@@ -827,8 +1155,6 @@ class TimeSeriesConv1dFPN(nn.Module):
 # tsc1fpn(batch[0], batch[1])
 
 ########################################################################################
-# model = TiimeSeriesTransformers(d_model=8, nhead=4)
-# model = TimeSeriesConv1d(input_dim=1, hidden_dim=64)
 model = TimeSeriesConv1dFPN(in_channels=1, num_outputs=1,
                         c3=24, c4=32, c5=40, fpn_channels=40)
 f"{sum(p.numel() for p in model.parameters() if p.requires_grad):,}"
@@ -933,7 +1259,7 @@ plt.legend(loc='upper center', bbox_to_anchor=(0.5, 0), ncol=4)
 plt.xticks([])
 plt.yticks([])
 plt.show()
-
+########################################################################################
 
 
 
