@@ -1,5 +1,7 @@
 import os
 import sys
+if 'd:' in os.getcwd().lower():
+    os.chdir("D:/DataScience/")
 sys.path.append(f"{os.getcwd()}/DataScience/00_DataAnalysis_Basic")
 sys.path.append(f"{os.getcwd()}/DataScience/DS_Library")
 sys.path.append(r'D:\DataScience\00_DataAnalysis_Basic')
@@ -441,9 +443,9 @@ class AnomalyTimeSeriesConv1d(nn.Module):
         self.cov = torch.eye(self.out_channels) * self.eps
     
     def update_params(self, n_batch, mu, cov):
-        self.mu = (self.mu * self.n + n_batch * mu) / (self.n + n_batch)
+        self.mu = (self.n * self.mu + n_batch * mu) / (self.n + n_batch)
+        self.cov = (self.n * self.cov + n_batch * cov) / (self.n + n_batch)
         self.n += n_batch
-        self.cov += cov
     
     def forward(self, x, mask):
         # x.shape   # (B, T)
@@ -463,7 +465,7 @@ class AnomalyTimeSeriesConv1d(nn.Module):
         
         # (classification head)
         latent = self.latent_head(pool_out)   # latent : (B, out_channel)
-        return latent
+        return torch.tanh(latent)*6
     
     def forward_gaussian(self, x, mask, batch_seq=-1):
         n_batch = x.size(0)
@@ -512,7 +514,7 @@ Batch_KL_Loss = Batch_KL_Divergece(train_loader)
 
 tm = TorchModeling(model, device)
 tm.compile(optim.Adam(model.parameters(), lr=3e-4),
-           early_stop_loss = EarlyStopping(min_iter=50, patience=50))
+           early_stop_loss = EarlyStopping(min_iter=100, patience=50))
 tm.train_model(train_loader, valid_loader, epochs=300, loss_function=Batch_KL_Loss.batch_kl_divergence_loss)
 
 
@@ -531,11 +533,16 @@ pred_batch = model(sample_batch.to(device), sample_mask.to(device)).detach().to(
 pred_batch_np = pred_batch.numpy()
 # model.mu
 # model.cov
-maha_dists = torch.einsum("nd,nd->n", torch.einsum("nd, de->ne", pred_batch, torch.linalg.inv(model.cov)), pred_batch).reshape(-1,1)
+maha_dists = torch.sqrt( torch.einsum("nd,nd->n", torch.einsum("nd, de->ne", pred_batch, torch.linalg.inv(model.cov)), pred_batch).reshape(-1,1) )
+
+
 
 
 # Visualize 2-dim
-plt.scatter(pred_batch_np[:, 0], pred_batch_np[:, 1], c=maha_dists.numpy().ravel(), cmap='jet', vmax=3)
+threshold = 2.5
+plt.scatter(pred_batch_np[:, 0], pred_batch_np[:, 1], c=maha_dists.numpy().ravel(), cmap='jet')
+circle = plt.Circle((0, 0), threshold, color='red', fill=False) 
+plt.gca().add_patch(circle)
 plt.colorbar()
 plt.show()
 
@@ -553,7 +560,7 @@ plt.show()
 import matplotlib.cm as cm
 
 plt.figure(figsize=(10, 6))
-norm = plt.Normalize(vmin=maha_dists.min(), vmax=2.5)
+norm = plt.Normalize(vmin=maha_dists.min(), vmax=3)
 cmap = cm.get_cmap('jet')
 for i in range(len(sample_origin_scale)):
     color_val = cmap(norm(maha_dists.ravel()[i]))
@@ -567,11 +574,11 @@ plt.show()
 
 
 # X_mean, X_std
-pred_normal_idx = torch.where(maha_dists.ravel() < 0.2)[0]
+pred_normal_idx = torch.where(maha_dists.ravel() < threshold/5)[0]
 normal_samples = sample_batch[pred_normal_idx].masked_fill(sample_mask[pred_normal_idx] == 0, float('nan'))
 normal_samples = normal_samples * X_std + X_mean
 
-pred_abnormal_idx = torch.where(maha_dists.ravel() > 3)[0]
+pred_abnormal_idx = torch.where(maha_dists.ravel() > threshold)[0]
 abnormal_samples = sample_batch[pred_abnormal_idx].masked_fill(sample_mask[pred_abnormal_idx] == 0, float('nan'))
 abnormal_samples = abnormal_samples * X_std + X_mean
 
@@ -778,9 +785,9 @@ class AnomalyTimeSeriesConv1d(nn.Module):
         self.cov = torch.eye(self.out_channels) * self.eps
     
     def update_params(self, n_batch, mu, cov):
-        self.mu = (self.mu * self.n + n_batch * mu) / (self.n + n_batch)
+        self.mu = (self.n * self.mu + n_batch * mu) / (self.n + n_batch)
+        self.cov = (self.n * self.cov + n_batch * cov) / (self.n + n_batch)
         self.n += n_batch
-        self.cov += cov
     
     def forward(self, x, mask):
         # x.shape   # (B, T)
@@ -800,8 +807,7 @@ class AnomalyTimeSeriesConv1d(nn.Module):
         
         # (classification head)
         latent = self.latent_head(pool_out)   # latent : (B, out_channel)
-        # return torch.tanh(latent)*6
-        return latent
+        return torch.tanh(latent)*6
     
     def forward_gaussian(self, x, mask, batch_seq=-1):
         n_batch = x.size(0)
@@ -873,12 +879,12 @@ pred_batch = model(sample_batch.to(device), sample_mask.to(device)).detach().to(
 pred_batch_np = pred_batch.numpy()
 # model.mu
 # model.cov
-maha_dists = torch.einsum("nd,nd->n", torch.einsum("nd, de->ne", pred_batch, torch.linalg.inv(model.cov)), pred_batch).reshape(-1,1)
+maha_dists = torch.sqrt( torch.einsum("nd,nd->n", torch.einsum("nd, de->ne", pred_batch, torch.linalg.inv(model.cov)), pred_batch).reshape(-1,1) )
 
 
 threshold = 3
 # Visualize 2-dim
-plt.scatter(pred_batch_np[:, 0], pred_batch_np[:, 1], c=maha_dists.numpy().ravel(), cmap='jet')
+plt.scatter(pred_batch_np[:, 0], pred_batch_np[:, 1], c=maha_dists.numpy().ravel(), cmap='jet', vmax=3)
 plt.xlim(-4.5, 4.5)
 plt.ylim(-4.5, 4.5)
 circle = plt.Circle((0, 0), threshold, color='red', fill=False) 
@@ -939,7 +945,7 @@ plt.show()
 
 ##############################################################################################
 from sklearn.metrics import confusion_matrix, precision_recall_curve, auc, classification_report, roc_auc_score
-# threshold = 3
+# threshold = 2.5
 with torch.no_grad():
     model.eval()
     pred_test_y = model(tests_X_tensor_set[0].to(device), tests_X_tensor_set[1].to(device)).detach().to('cpu')
@@ -980,22 +986,22 @@ for lx, ly, mh_dist, tests_x, true_y in zip(tests_X_tensor_set[2].numpy(), last_
         if mh_dist < threshold:
             if FN == 0:
                 label='FN'
-            plt.plot(tests_x, color='red',alpha=0.5, label=label)
+            plt.plot(tests_x, color='red', alpha=0.3, label=label)
             plt.scatter(lx-1, ly, s=3, color='darkred')
             plt.text(lx-1, ly, f"{mh_dist:.2f}", color='red')
             FN += 1
         else:
             if TP == 0:
                 label='TP'
-            plt.plot(tests_x, color='orange',alpha=0.5, label=label)
-            plt.scatter(lx-1, ly, s=3, color='brown')
-            plt.text(lx-1, ly, f"{mh_dist:.2f}")
+            plt.plot(tests_x, color='orange', alpha=0.3, label=label)
+            # plt.scatter(lx-1, ly, s=3, color='brown')
+            # plt.text(lx-1, ly, f"{mh_dist:.2f}")
             TP += 1
     else:
         if mh_dist > threshold:
             if FP == 0:
                 label='FP'
-            plt.plot(tests_x, color='green',alpha=0.5, label=label)
+            plt.plot(tests_x, color='purple', alpha=0.3, label=label)
             plt.scatter(lx-1, ly, s=3, color='darkred')
             plt.text(lx-1, ly, f"{mh_dist:.2f}")
             FP +=1
@@ -1003,6 +1009,8 @@ for lx, ly, mh_dist, tests_x, true_y in zip(tests_X_tensor_set[2].numpy(), last_
             if TN == 0:
                 label='TN'
             plt.plot(tests_x, color='steelblue',alpha=0.1, label=label)
+            # plt.scatter(lx-1, ly, s=3, color='brown')
+            # plt.text(lx-1, ly, f"{mh_dist:.2f}")
             TN +=1
 plt.legend(loc='upper center', bbox_to_anchor=(0.5, 0), ncol=4)
 plt.xticks([])
