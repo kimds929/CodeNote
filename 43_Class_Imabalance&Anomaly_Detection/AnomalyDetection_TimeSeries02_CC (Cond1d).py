@@ -31,7 +31,7 @@ try:
     from DS_TorchModule import ScaledDotProductAttention, MultiheadAttention, PreLN_TransformerEncoderLayer, AttentionPooling
     from DS_TorchModule import KwargSequential, ResidualConnection
     from DS_TorchModule import MaskedConv1d
-    from DS_TimeSeries import pad_series_list_1d, pad_series_list_2d, smoothing
+    from DS_TimeSeries import pad_series_list_1d, pad_series_list_2d, series_smoothing
     
 except:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
@@ -46,7 +46,7 @@ except:
             from DS_TorchModule import ScaledDotProductAttention, MultiheadAttention, PreLN_TransformerEncoderLayer, AttentionPooling
             from DS_TorchModule import KwargSequential, ResidualConnection
             from DS_TorchModule import MaskedConv1d
-            from DS_TimeSeries import pad_series_list_1d, pad_series_list_2d, smoothing
+            from DS_TimeSeries import pad_series_list_1d, pad_series_list_2d, series_smoothing
     except:
         import requests
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_TimeSeries.py", verify=False)
@@ -106,8 +106,8 @@ valid_index2 = min_values[min_values > 0.8].index
 df02 = df01[df01['SLAB_NO'].isin(valid_index2)]
 #############################################################################################################
 
-# from DS_TimeSeries import smoothing
-df_timeseries = df02.groupby('SLAB_NO')[X_columns].apply(lambda x: smoothing(x, mask=x<3, window=5, center=True).to_numpy().T)
+# from DS_TimeSeries import series_smoothing
+df_timeseries = df02.groupby('SLAB_NO')[X_columns].apply(lambda x: series_smoothing(x, mask=x<3, window=5, center=True).to_numpy().T)
 
 df_timeseries.apply(lambda x: x.shape)
 

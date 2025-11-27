@@ -1057,7 +1057,7 @@ class FPN1D_Masked(nn.Module):
         self.lateral4 = nn.Conv1d(c4, out_channels, kernel_size=1)
         self.lateral3 = nn.Conv1d(c3, out_channels, kernel_size=1)
 
-        # smoothing conv
+        # series_smoothing conv
         self.smooth5 = nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=1)
         self.smooth4 = nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=1)
         self.smooth3 = nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=1)
@@ -1074,7 +1074,7 @@ class FPN1D_Masked(nn.Module):
         p4 = self.lateral4(c4) + p5
         p3 = self.lateral3(c3) + p4
 
-        # smoothing
+        # series_smoothing
         p5 = self.smooth5(p5)
         p4 = self.smooth4(p4)
         p3 = self.smooth3(p3)
