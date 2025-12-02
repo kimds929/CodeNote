@@ -945,7 +945,7 @@ plt.show()
 
 ##############################################################################################
 from sklearn.metrics import confusion_matrix, precision_recall_curve, auc, classification_report, roc_auc_score
-# threshold = 2.5
+# threshold = 3
 with torch.no_grad():
     model.eval()
     pred_test_y = model(tests_X_tensor_set[0].to(device), tests_X_tensor_set[1].to(device)).detach().to('cpu')

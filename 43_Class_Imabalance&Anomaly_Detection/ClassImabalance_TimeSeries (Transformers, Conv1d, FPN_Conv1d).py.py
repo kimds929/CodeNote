@@ -552,7 +552,7 @@ def cross_entropy_loss(model, batch, optimizer=None):
 
 tm = TorchModeling(model, device)
 
-tm.compile(optim.Adam(model.parameters(), lr=1e-3),
+tm.compile(optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0),
            early_stop_loss = EarlyStopping(patience=50))
 tm.train_model(train_loader, valid_loader, epochs=300, loss_function=cross_entropy_loss)
 
@@ -838,6 +838,7 @@ class TimeSeriesConv1d(nn.Module):
         return out
 ########################################################################################
 ########################################################################################
+
 model = TimeSeriesConv1d(input_dim=1, hidden_dim=64)
 f"{sum(p.numel() for p in model.parameters() if p.requires_grad):,}"
 # model( torch.rand(10,5) )
@@ -856,7 +857,7 @@ def cross_entropy_loss(model, batch, optimizer=None):
 
 tm = TorchModeling(model, device)
 
-tm.compile(optim.Adam(model.parameters(), lr=1e-3),
+tm.compile(optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.01),
            early_stop_loss = EarlyStopping(patience=50))
 tm.train_model(train_loader, valid_loader, epochs=300, loss_function=cross_entropy_loss)
 
@@ -921,8 +922,8 @@ for lx, ly, p, tests_x, true_y in zip(tests_X_tensor_set[2].numpy(), last_values
             if TP == 0:
                 label='TP'
             plt.plot(tests_x, color='orange', alpha=0.3, label=label)
-            # plt.scatter(lx-1, ly, s=3, color='brown')
-            # plt.text(lx-1, ly, f"{p:.2f}")
+            plt.scatter(lx-1, ly, s=3, color='brown')
+            plt.text(lx-1, ly, f"{p:.2f}")
             TP += 1
     else:
         if p > 0.5:
@@ -1177,7 +1178,7 @@ def cross_entropy_loss(model, batch, optimizer=None):
 
 tm = TorchModeling(model, device)
 
-tm.compile(optim.Adam(model.parameters(), lr=1e-3),
+tm.compile(optim.AdamW(model.parameters(), lr=3e-4, weight_decay=1e-2),
            early_stop_loss = EarlyStopping(patience=50))
 tm.train_model(train_loader, valid_loader, epochs=300, loss_function=cross_entropy_loss)
 
