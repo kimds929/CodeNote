@@ -808,6 +808,7 @@ class AnomalyTimeSeriesConv1d(nn.Module):
         # (classification head)
         latent = self.latent_head(pool_out)   # latent : (B, out_channel)
         return torch.tanh(latent)*6
+        # return latent
     
     def forward_gaussian(self, x, mask, batch_seq=-1):
         n_batch = x.size(0)

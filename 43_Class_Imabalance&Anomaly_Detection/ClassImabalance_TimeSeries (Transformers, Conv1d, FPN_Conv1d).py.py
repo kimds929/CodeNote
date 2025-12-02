@@ -771,14 +771,7 @@ class MaskedConv1d(nn.Conv1d):
 class TimeSeriesConv1d(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super().__init__()
-        
-        self.encoder = nn.ModuleDict({})
-        self.encoder['input_conv'] = nn.Conv1d(input_dim, hidden_dim, kernel_size=5, padding=2)
-        self.encoder['input_activation'] = nn.ReLU()
-        
-        self.encoder['input_conv']
-        
-        
+               
         # (convolution encoder)
         self.encoder = KwargSequential(
             # nn.Conv1d(input_dim, hidden_dim, kernel_size=5, padding=2)
