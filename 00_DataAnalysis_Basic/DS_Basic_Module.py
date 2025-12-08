@@ -2844,7 +2844,24 @@ class SummaryPlot():
                     fitted_line = None
                 else:
                     fitted_line = sp.stats.norm
-                sns.distplot(data[x], fit=fitted_line, kde=None, hist_kws={'edgecolor':'grey'}, fit_kws={'color':(1,0.5,0.5)})
+                # sns.distplot(data[x], fit=fitted_line, kde=None, hist_kws={'edgecolor':'grey'}, fit_kws={'color':(1,0.5,0.5)})
+                # 데이터
+                values = data[x].dropna()
+
+                # 히스토그램
+                plt.hist(values, bins=30, edgecolor='grey', color='lightcoral')
+
+                # fitted_line이 있을 경우 직접 계산
+                if fitted_line is not None:
+                    mu, std = fitted_line.fit(values)
+                    xmin, xmax = plt.xlim()
+                    x_vals = np.linspace(xmin, xmax, 100)
+                    p_vals = stats.norm.pdf(x_vals, mu, std)
+
+                    # 히스토그램 스케일에 맞춰서 곡선 높이 조정
+                    scale_factor = len(values) * (xmax - xmin) / 30
+                    plt.plot(x_vals, p_vals * scale_factor, 'r', linewidth=2)
+                    
             elif x in x in time_cols:
                 plt.hist(data[x], edgecolor='grey', color='palegoldenrod')
 
@@ -2895,7 +2912,6 @@ class SummaryPlot():
             plt.show()
             if return_plot:
                 return fig
-
 
 
 
