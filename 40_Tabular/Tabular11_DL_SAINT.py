@@ -93,8 +93,8 @@ dataset_meta = {'datasets_Boston_house':{'y_col':['Target']
 
 ########################################################################################################
 folder_path =f"{base_path}/DataScience"
+db_path = f'{base_path}/DataBase/Data_Tabular'
 # db_path = f'{folder_path}/DataBase/Data_Tabular'
-db_path = f'{folder_path}/DataBase/Data_Tabular'
 
 
 # db_path = f'{folder_path}/DataBase/Data_Education'
@@ -693,18 +693,20 @@ class DenoisingHead(nn.Module):
 # -----------------------------------------------------------------------------------------------------------------
 # SAINT : Pretraing 
 # train_loader, valid_loader, tests_loader = data_prepros.tensor_dataloader.values()
-# n_classes = list(data_prepros.transformed_data['train'][2].max(axis=0).astype(int))
+n_classes = data_prepros.transformed_data['train'][2].max(axis=0).astype(int)
 
 
 model = SAINT(input_n_con=11, input_n_cat=2, hidden_dim=128).to(device)
+# prj_head = ProjectionHead(d_model=32, d_proj=32).to(device)
 prj_head_clean = ProjectionHead(d_model=32, d_proj=32).to(device)
 prj_head_noise = ProjectionHead(d_model=32, d_proj=32).to(device)
 denoise_head = DenoisingHead(n_cont=11, n_cat=2, cat_cardinals=n_classes+1, d_model=32, hidden=64).to(device)
 
 pretrain_optimizer = optim.Adam(list(model.parameters()) +
+                # list(prj_head.parameters()) +
                  list(prj_head_clean.parameters()) +
                  list(prj_head_noise.parameters()) +
-                 list(denoise_head.parameters()), lr=1e-3)
+                list(denoise_head.parameters()), lr=3e-4)
 
 p_cutmix = 0.3
 alpha = 0.2
@@ -734,7 +736,9 @@ def loss_function_SAINT_pretrain(model, batch, optimizer=None):
     cls_clean = model.forward_cls(token_clean)
     cls_noise = model.forward_cls(token_noise)
     
-     # 5) Projection
+    # 5) Projection
+    # z_clean = prj_head(cls_clean)
+    # z_noise = prj_head(cls_noise)
     z_clean = prj_head_clean(cls_clean)
     z_noise = prj_head_noise(cls_noise)
     
@@ -752,7 +756,7 @@ def loss_function_SAINT_pretrain(model, batch, optimizer=None):
 tm_pretrain = TorchModeling(model=model, device=device)
 tm_pretrain.compile(optimizer = pretrain_optimizer
             ,loss_function = loss_function_SAINT_pretrain
-            ,early_stop_loss=EarlyStopping(min_iter=30, patience=50))
+            ,early_stop_loss=EarlyStopping(min_iter=300, patience=50))
 tm_pretrain.train_model(train_loader, valid_loader,
                 epochs=500)
 
