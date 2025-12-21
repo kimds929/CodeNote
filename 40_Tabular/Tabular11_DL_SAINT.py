@@ -553,7 +553,7 @@ print(f"test_loss2 : {np.mean(test_loss2[3:-3]):.3f}")
 #################################################################################################################   
 # CutMix in raw space
 def cutmix(x, sample, p):
-    mask = (torch.rand_like(x.float()) < p).to(x.dtype)
+    mask = (torch.rand_like(x.float()) > p).to(x.dtype)
     x_cm = torch.where(mask.bool(), x, sample)
     return x_cm
 
@@ -578,9 +578,8 @@ def cutmix_raw(x_cont, x_cat, p=0.3):
     return x_cont_cm, x_cat_cm
 
 # ------------------------------------------------------------------------------------------------------------
-def mixup_embedding(p1, p2, alpha=0.2):
-    lam = alpha
-    return lam * p1 + (1 - lam) * p2
+def mixup_embedding(p1, p2, lam=0.2):
+    return (1 - lam)  * p1 + lam * p2
 
 # ------------------------------------------------------------------------------------------------------------
 # Projection
@@ -709,7 +708,7 @@ pretrain_optimizer = optim.Adam(list(model.parameters()) +
                 list(denoise_head.parameters()), lr=3e-4)
 
 p_cutmix = 0.3
-alpha = 0.2
+lam = 0.2
 tau = 0.7
 lambda_pt = 10.0
 
@@ -727,7 +726,7 @@ def loss_function_SAINT_pretrain(model, batch, optimizer=None):
     # 3) Mixup in embedding space
     perm = torch.randperm(B, device=device)
     x_cutmix_perm = x_cutmix[perm]
-    x_noise = mixup_embedding(x_cutmix, x_cutmix_perm, alpha=alpha)
+    x_noise = mixup_embedding(x_cutmix, x_cutmix_perm, lam=lam)
     
     # 4) Encoding
     token_clean = model.forward_encoding(x_clean)
@@ -849,7 +848,7 @@ batch_cat = batch[2].to(device)
 
 
 p_cutmix: float = 0.3
-alpha: float = 0.2
+lam: float = 0.2
 tau: float = 0.7
 lambda_pt: float = 10.0
 
@@ -860,7 +859,7 @@ device = batch_cont.device if batch_cont is not None else batch_cat.device
 # -----------------------------------------------------------------------------------------------------------------------------
 # 1) CutMix in raw space (Eq. 3: x'_i = m * x_i + (1-m) * x_a)
 def cutmix(x, sample, p):
-    mask = (torch.rand_like(x.float()) < p).to(x.dtype)
+    mask = (torch.rand_like(x.float()) > p).to(x.dtype)
     x_cm = torch.where(mask.bool(), x, sample)
     return x_cm
 
@@ -884,9 +883,8 @@ def cutmix_raw(x_cont, x_cat, p=0.3):
     # x_cat_cm = torch.where(m_cat.bool(), x_cat[perm], x_cat)
     return x_cont_cm, x_cat_cm
 
-def mixup_embedding(p1, p2, alpha=0.2):
-    lam = alpha
-    return lam * p1 + (1 - lam) * p2
+def mixup_embedding(p1, p2, lam=0.2):
+    return (1-lam) * p1 + lam * p2
 
 xcm_cont, xcm_cat = cutmix_raw(batch_cont, batch_cat, p=p_cutmix)
 
@@ -899,7 +897,7 @@ x_cutmix = model.forward_embedding(xcm_cont, xcm_cat)          # (B,F,E) : cutmi
 # 3) Mixup in embedding space (Eq. 4: p'_i = α E(x'_i) + (1-α) E(x'_b))
 perm = torch.randperm(B, device=device)
 x_cutmix_perm = x_cutmix[perm]                          # (B,F,E)
-x_noise = mixup_embedding(x_cutmix, x_cutmix_perm, alpha=alpha)  # (B,F,E) : cutmix + mixup
+x_noise = mixup_embedding(x_cutmix, x_cutmix_perm, lam=lam)  # (B,F,E) : cutmix + mixup
 
 # ------------------------------------------------------------------------------------------------------------------------------
 # 4) SAINT backbone 통과 (clean / view 각각)
