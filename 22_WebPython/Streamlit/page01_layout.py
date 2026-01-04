@@ -1,6 +1,7 @@
 import streamlit as st
 import utils  # utils.py의 함수 사용 가능
 
+
 def show():
     st.header("페이지 1")
     st.write("여기는 첫 번째 페이지입니다.")

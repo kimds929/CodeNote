@@ -1,7 +1,8 @@
 
 import os
 import streamlit as st
-
+# "D:/DataScience/★GitHub_kimds929/CodeNote/22_WebPython/Streamlit/main.py"
+# "D:/DataScience/★GitHub_kimds929/CodeNote/22_WebPython/Streamlit/"
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,6 +14,7 @@ import page01_layout
 import page02_input_output
 import page03_dataframe
 import page04_plot
+
 # import page05_query
  
 # streamlit run app.py
@@ -44,14 +46,15 @@ if exit_app:
 # 세션 상태 초기화
 if "counter" not in st.session_state:
     st.session_state.counter = 0
-    
+
+initial_page = "page4"
 # 기본페이지 설정
 if "current_page" not in st.session_state:
-    st.session_state.current_page = "main"
+    st.session_state.current_page = initial_page
 
 # URL 파라미터 읽기
 query_params = st.query_params
-current_page = query_params.get("page", "main")
+current_page = query_params.get("page", initial_page)
 
 
 # st.markdown("""

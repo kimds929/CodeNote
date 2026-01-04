@@ -1,6 +1,7 @@
 import streamlit as st
 import utils
 
+
 def show():
     st.header("페이지 2")
     st.write("여기는 두 번째 페이지입니다.")

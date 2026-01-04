@@ -2,15 +2,29 @@ import streamlit as st
 import utils
 # pip install streamlit-drawable-canvas
 
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+
+
 import plotly.express as px
+import plotly.graph_objects as go
 
 from utils_image import ImageRectAnnotator
 
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+
+
+
+import io
+import streamlit.components.v1 as components
+import base64
+from io import BytesIO
+from PIL import Image
+
+
+
 
 def send_rect(payload: dict):
     """
@@ -42,49 +56,54 @@ def extract_rect_xyxy(obj):
     x2, y2 = left + w, top + h
     return x1, y1, x2, y2
 
-def show():
+def show():  
+    
+    def on_submit(payload):
+        print(payload)
+        st.session_state["submitted"] = payload
+        st.write("✅ on_submit 호출됨")
+        # st.json(payload)
+    
+    
     img_np = np.random.randint(0, 255, (200, 300))
+    # img_np = np.arange(200*300).reshape(200,300)/(200*300)
     fig = plt.figure()
     plt.imshow(img_np, cmap="gray")
     plt.axis("off")
     
-    def on_submit(payload):
-        # 여기에서 "지정된 곳으로 send" 처리
-        # 예: st.session_state["rect_payload"] = payload
-        # st.session_state["rect_payload"] = payload
-        print(payload)
-    
     options = [
-        {"type": "radio", "key": "radio", "label": "", "choices": ["A", "B", "C"], "default": "A", "horizontal":True},
-        # {"type": "selectbox", "key": "label", "label": "라벨", "choices": ["A", "B", "C"], "default": "A"},
+        # {"type": "radio", "key": "radio", "label": "", "choices": ["A", "B", "C"], "default": "A", "horizontal":True},
+        {"type": "selectbox", "key": "label", "label": "라벨", "choices": ["A", "B", "C"], "default": "A"},
         {"type": "checkbox", "key": "verified", "label": "검증됨", "default": False},
-        # {"type": "multiselect", "key": "tags", "label": "태그", "choices": ["x", "y", "z"]},
+        {"type": "multiselect", "key": "tags", "label": "태그", "choices": ["x", "y", "z"]},
         {"type": "text_input", "key": "memo", "label": "메모"},
     ]
+    if st.button('rerun'):
+        st.rerun()
+    
+    if "initialized" not in st.session_state:
+        st.session_state.ann = ImageRectAnnotator(
+            key_prefix="rect_demo",
+            canvas_size=(500, 300),
+            options=options,
+            on_submit=on_submit,
+        )
+        st.session_state.initialized = True
+    
+    st.session_state.ann.add_payload({"study_id": "S123", "operator": "kimds929"})
+    st.session_state.ann.render(fig, orig_size=(300, 200), 
+               init_xyxy = [0, 50, 100, 100], 
+            # show_debug=True
+            )
+    
+    if st.button('set_box'):
+        st.session_state.ann._reset()
+        st.rerun()
 
-    def on_submit(payload):
-        st.session_state["submitted"] = payload
-        print(payload)
-        # {
-        # "images": [
-        #     {"id": 1, "file_name": "img001.jpg", "width": 1920, "height": 1080}
-        # ],
-        # "annotations": [
-        #     {"id": 10, "image_id": 1, "bbox_xyxy": [100, 200, 400, 600], "label": "person"}
-        # ]
-        # }
-
-    ann = ImageRectAnnotator(
-        key_prefix="rect_demo",
-        canvas_size=(500, 300),
-        options=options,
-        element=None,  # 비어도 OK (options만 있으면 UI 뜸)
-        # element_kwargs={"label": "B", "memo": "초기 메모"},  # 일부 초기값 주입
-        on_submit=on_submit,
-    )
-
-    ann.render(fig, orig_size=(300, 200), show_debug=False)
-
-    if "submitted" in st.session_state:
-        st.write("최종 payload:", st.session_state["submitted"])
+        
+    print('aaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    st.write(st.session_state)
+    # if "submitted" in st.session_state:
+    #     st.write("DEBUG coords:", st.session_state.get("rect_demo__coords"))
+    #     st.write("DEBUG pending:", st.session_state.get("rect_demo__pending_submit"))
     st.divider()
