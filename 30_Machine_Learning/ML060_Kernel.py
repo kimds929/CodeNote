@@ -103,35 +103,36 @@ class Kernel:
             dist = self.pairwise_distance(X, Y, Sigma=Sigma)
             return np.exp(-0.5 * dist**2)
 
-        # --- non-gaussian: param is boundary ---
-        boundary = self.default_radius if param is None else param
-
-        # Case 1) scalar radius -> Euclidean dist normalized by r
-        if not self._is_matrix_param(boundary):
-            r = float(boundary)
-            dist = self.pairwise_distance(X, Y, Sigma=None)   # metric fixed to Euclidean
-            u = dist / r                                      # normalized distance
-        # Case 2) matrix boundary -> ellipsoid, normalized so boundary at u=1
         else:
-            # 여기서 boundary는 'ellipsoid를 정의하는 Sigma'로 사용
-            # u = sqrt((x-y)^T Sigma^{-1} (x-y))  (already normalized)
-            u = self.pairwise_distance(X, Y, Sigma=boundary)
+            # --- non-gaussian: param is boundary ---
+            boundary = self.default_radius if param is None else param
 
-        # Now apply compact-support falloff with boundary at u=1
-        if kind == "uniform":
-            return (u <= 1.0).astype(float)
+            # Case 1) scalar radius -> Euclidean dist normalized by r
+            if not self._is_matrix_param(boundary):
+                r = float(boundary)
+                dist = self.pairwise_distance(X, Y, Sigma=None)   # metric fixed to Euclidean
+                u = dist / r                                      # normalized distance
+            # Case 2) matrix boundary -> ellipsoid, normalized so boundary at u=1
+            else:
+                # 여기서 boundary는 'ellipsoid를 정의하는 Sigma'로 사용
+                # u = sqrt((x-y)^T Sigma^{-1} (x-y))  (already normalized)
+                u = self.pairwise_distance(X, Y, Sigma=boundary)
 
-        if kind == "linear":
-            return np.clip(1.0 - u, 0.0, 1.0)
+            # Now apply compact-support falloff with boundary at u=1
+            if kind == "uniform":
+                return (u <= 1.0).astype(float)
 
-        if kind == "epanechnikov":
-            return np.clip(1.0 - u**2, 0.0, 1.0)
+            if kind == "linear":
+                return np.clip(1.0 - u, 0.0, 1.0)
 
-        if kind == "quartic":
-            t = np.clip(1.0 - u**2, 0.0, 1.0)
-            return t**2
+            if kind == "epanechnikov":
+                return np.clip(1.0 - u**2, 0.0, 1.0)
 
-        raise ValueError("kind must be one of: 'gaussian', 'uniform', 'linear', 'epanechnikov', 'quartic'")
+            if kind == "quartic":
+                t = np.clip(1.0 - u**2, 0.0, 1.0)
+                return t**2
+
+            raise ValueError("kind must be one of: 'gaussian', 'uniform', 'linear', 'epanechnikov', 'quartic'")
 
     def __call__(self, X, Y=None, param=None, kind=None):
         self.transform(X, Y, param, kind)
