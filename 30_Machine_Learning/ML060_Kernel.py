@@ -119,7 +119,7 @@ class Kernel:
 
         # Now apply compact-support falloff with boundary at u=1
         if kind == "uniform":
-            return (u < 1.0).astype(float)
+            return (u <= 1.0).astype(float)
 
         if kind == "linear":
             return np.clip(1.0 - u, 0.0, 1.0)
@@ -162,21 +162,23 @@ class Kernel:
 # ################################################################################
 
 # (visualize kernels) normalized distance u = d / r
-u = np.linspace(0, 2.0, 500)
+base_point = np.zeros([1,1])
+u = np.linspace(0, 2.0, 100).reshape(-1,1)
 
-K_gaussian = np.exp(-0.5 * u**2)
-K_uniform = (u <= 1.0).astype(float)
-K_linear = np.clip(1.0 - u, 0.0, 1.0)
-K_epanechnikov = np.clip(1.0 - u**2, 0.0, 1.0)
-K_quartic = np.clip(1.0 - u**2, 0.0, 1.0)**2
+kernel = Kernel()
+K_gaussian = kernel.transform(u, base_point, kind='gaussian').sum(-1)           # exp(-1/2 u^2) : np.exp(-0.5 * u**2)
+K_uniform = kernel.transform(u, base_point, kind='uniform').sum(-1)             # 1 (u≤1), 0 (u>1) : (u <= 1.0).astype(float)
+K_linear = kernel.transform(u, base_point, kind='linear').sum(-1)               # max(0, 1-u) : np.clip(1.0 - u, 0.0, 1.0)
+K_epanechnikov = kernel.transform(u, base_point, kind='epanechnikov').sum(-1)   # max(0, 1-u^2) : np.clip(1.0 - u**2, 0.0, 1.0)
+K_quartic = kernel.transform(u, base_point, kind='quartic').sum(-1)             # max(0, (1-u^2)^2) : np.clip(1.0 - u**2, 0.0, 1.0)**2
 
+# visualize plot
 plt.figure(figsize=(7,5))
-
-plt.plot(u, K_gaussian, label="Gaussian", linewidth=2)          # exp(-1/2 u^2)
-plt.plot(u, K_uniform, label="Uniform", linewidth=2)            # 1 (u≤1), 0 (u>1)
-plt.plot(u, K_linear, label="Linear", linewidth=2)              # max(0, 1-u)
-plt.plot(u, K_epanechnikov, label="Epanechnikov", linewidth=2)  # max(0, 1-u^2)
-plt.plot(u, K_quartic, label="Quartic", linewidth=2)            # max(0, (1-u^2)^2)
+plt.plot(u, K_gaussian, label="Gaussian", linewidth=2)          # exp(-1/2 u^2) : np.exp(-0.5 * u**2)
+plt.plot(u, K_uniform, label="Uniform", linewidth=2)            # 1 (u≤1), 0 (u>1) : (u <= 1.0).astype(float)
+plt.plot(u, K_linear, label="Linear", linewidth=2)              # max(0, 1-u) : np.clip(1.0 - u, 0.0, 1.0)
+plt.plot(u, K_epanechnikov, label="Epanechnikov", linewidth=2)  # max(0, 1-u^2) : np.clip(1.0 - u**2, 0.0, 1.0)
+plt.plot(u, K_quartic, label="Quartic", linewidth=2)            # max(0, (1-u^2)^2) : np.clip(1.0 - u**2, 0.0, 1.0)**2
 
 plt.axvline(1.0, color="gray", linestyle="--", alpha=0.6)
 plt.text(1.02, 0.5, "boundary (u=1)", color="gray")
