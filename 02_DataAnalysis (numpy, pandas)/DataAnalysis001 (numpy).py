@@ -4,6 +4,28 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
+# Part 1. NumPy = 데이터 컨테이너
+# - ndarray 구조
+# - shape / dtype / memory
+
+# Part 2. 데이터 생성 & 조작
+# - indexing / slicing
+# - reshape / axis
+
+# Part 3. ML을 위한 연산 패턴
+# - normalization
+# - distance
+# - aggregation
+# - mask / where
+
+# Part 4. 선형대수 = 모델의 언어
+# - dot / matmul
+# - solve / eig
+
+# Part 5. (Optional) 고급 NumPy
+# - broadcasting 심화
+# - einsum
+
 # [ndarray 정보] -----------------------------------------------------------
 a = np.array([[1,2],[3,4]])
 
@@ -355,6 +377,35 @@ a_array
 
 
 
+# view vs copy (학습 데이터 오염 방지)
+X = np.arange(10)
+train_view = X[:5]          # view(참조)
+train_copy = X[:5].copy()   # copy(복사)
+
+train_view[0] = 999
+print("원본 X (오염됨) :", X)
+
+# 원본을 다시 만들고 copy가 안전한지 확인
+X = np.arange(10)
+train_copy = X[:5].copy()
+train_copy[0] = 999
+print("원본 X (안전)  :", X)
+print("train_copy     :", train_copy)
+
+# (추가 팁) reshape도 view일 수 있음
+A = np.arange(12)
+B = A.reshape(3,4)  # 보통 view
+B[0,0] = 777
+print("A도 바뀜? :", A[0])  # 777 (일어날 수 있음)
+
+
+
+
+
+
+
+
+
 
 # [ndarray 데이터 형태 바꾸기(reshape, flatten)] -----------------------------------------------------------
     # ravel : 다차원 → 1차원
@@ -532,6 +583,40 @@ df_np2 = df_np[:,idx_col_valid]
 print(df_np2)
 
 
+
+
+
+# mask + where로 전처리 패턴 만들기
+X = np.array([10, 200, -5, 30, 999, 45, 300])
+
+# 규칙 기반 클리닝: 음수는 결측 처리, 너무 큰 값도 결측 처리
+X_clean = np.where(X < 0, np.nan, X.astype(float))
+X_clean = np.where(X_clean > 300, np.nan, X_clean)
+
+print("원본:", X)
+print("클리닝:", X_clean)
+
+# 결측치 대체: 평균 대체 (간단 버전)
+mean_val = np.nanmean(X_clean)
+X_imputed = np.where(np.isnan(X_clean), mean_val, X_clean)
+print("대체 후:", X_imputed)
+
+# boolean mask 예시: 유효값만 뽑아 학습에 쓰기
+mask_valid = ~np.isnan(X_clean)
+X_valid = X_clean[mask_valid]
+print("유효값만:", X_valid)
+
+
+
+
+
+
+
+
+
+
+
+
 # [기본 내장함수 및 통계함수] ------------------------------------------------------------------------------------
     # Numpy 수치 함수
 np.pi
@@ -544,6 +629,8 @@ np.cos(0)
 np.tanh()
 np.sinh()
 np.cosh(0)
+
+
 
 
 
@@ -572,6 +659,30 @@ np.min(y)
 np.argmin(y)    # min값이 존재하는 위치의 index (flatten한 상태로 가정)
 
 np.median(y)    # y.median() Error
+
+
+
+
+
+# axis 개념 (batch / feature 관점)
+#   - ML 데이터는 보통 X: (n_samples, n_features)
+#       - axis=0 : 샘플 방향으로 모아서 "feature별" 통계
+#       - axis=1 : feature 방향으로 모아서 "샘플별" 통계
+
+X = np.arange(24).reshape(4, 3, 2)
+print("X.shape =", X.shape)  # (batch=4, feature=3, channel=2)
+
+# batch 방향으로 합치기 -> feature×channel만 남음
+s0 = X.sum(axis=0)
+print("sum(axis=0).shape =", s0.shape)  # (3,2)
+
+# feature 방향으로 합치기 -> batch×channel만 남음
+m1 = X.mean(axis=1)
+print("mean(axis=1).shape =", m1.shape)  # (4,2)
+
+# 여러 축을 동시에 줄이기
+std01 = X.std(axis=(0,1))
+print("std(axis=(0,1)).shape =", std01.shape)  # (2,)
 
 
     # 집계 함수
@@ -627,6 +738,44 @@ np.where((y >10) & (y < 30), 999, 0)     # (조건, True, False)
 
 
 
+
+
+# Standard Scaling (Normalizing), Min-Max scaling
+np.random.seed(0)
+
+# (n_samples, n_features)
+X = np.random.randn(100, 5) * 10 + 50
+
+# feature별 평균/표준편차 (axis=0)
+mu = X.mean(axis=0)
+sigma = X.std(axis=0)
+
+X_z = (X - mu) / (sigma + 1e-12)
+
+print("표준화 후 feature 평균(≈0):", X_z.mean(axis=0))
+print("표준화 후 feature 표준편차(≈1):", X_z.std(axis=0))
+
+# Min-Max scaling
+x_min = X.min(axis=0)
+x_max = X.max(axis=0)
+X_mm = (X - x_min) / (x_max - x_min + 1e-12)
+
+print("MinMax 후 feature 최소(≈0):", X_mm.min(axis=0))
+print("MinMax 후 feature 최대(≈1):", X_mm.max(axis=0))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # broadcasting : shape이 다른경우 shape을 맞춰주는 방법
 # 뒷 차원에서부터 비교하여 shape이 같거나, 차원 중 값이 1인 것이 존재하면 가능
 
@@ -669,6 +818,8 @@ rx2 + rz
 rx + ry2
 
 
+
+
 # 차원 확장 & 축소 ----------------------------------------------------------
 np_dim = np.random.rand(3,1,2)
 print(np_dim)
@@ -684,6 +835,11 @@ print(np.expand_dims(np_dim, -1).shape)
 
 print(np_dim[np.newaxis, ...].shape)
 print(np_dim[..., np.newaxis].shape)
+
+print(np_dim[None,:,:,:])
+print(np_dim[:,None,:,:])
+print(np_dim[:,:,None,:])
+print(np_dim[:,:,:,None])
 
 
 # 차원축소
@@ -704,6 +860,26 @@ print(np_dim.ravel().shape)
 
 print(np_dim.flatten())
 print(np_dim.flatten().shape)
+
+
+
+
+# pairwise distance (유클리드 거리행렬)
+np.random.seed(1)
+X = np.random.rand(6, 2)   # 6개 샘플, 2차원
+print("X.shape =", X.shape)
+
+# (N,1,D) - (1,N,D) -> (N,N,D) -> sum(D) -> (N,N)
+diff = X[:, None, :] - X[None, :, :]
+dist = np.sqrt((diff**2).sum(axis=2))
+
+print("dist.shape =", dist.shape)
+print(dist)
+
+# 응용: 각 샘플의 "가장 가까운 이웃(자기 자신 제외)" index
+np.fill_diagonal(dist, np.inf)
+nn_idx = dist.argmin(axis=1)
+print("nearest neighbor index:", nn_idx)
 
 
 
