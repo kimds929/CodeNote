@@ -23,9 +23,8 @@ import matplotlib.pyplot as plt
 
 
 try:
-    from DS_Torch import TorchDataLoader, TorchModeling, AutoML
-    from DS_MachineLearning import LabelEncoder2D, DataPreprocessing
-    from DS_DeepLearning import EarlyStopping
+    from DS_MachineLearning import DS_LabelEncoder, DataPreprocessing
+    from DS_DeepLearning import TorchDataLoader, TorchModeling, AutoML, EarlyStopping
     from DS_TorchModule import CategoricalEmbedding, EmbeddingLinear, ContinuousEmbeddingBlock
     from DS_TorchModule import PositionalEncoding, LearnablePositionalEncoding, FeatureWiseEmbeddingNorm
     from DS_TorchModule import ScaledDotProductAttention, MultiheadAttention, PreLN_TransformerEncoderLayer, AttentionPooling
@@ -38,8 +37,7 @@ except:
     try:
         import httpimport
         with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-            from DS_Torch import TorchDataLoader, TorchModeling, AutoML
-            from DS_MachineLearning import LabelEncoder2D, DataPreprocessing
+            from DS_MachineLearning import DS_LabelEncoder, DataPreprocessing, TorchDataLoader, TorchModeling, AutoML
             from DS_DeepLearning import EarlyStopping
             from DS_TorchModule import CategoricalEmbedding, EmbeddingLinear, ContinuousEmbeddingBlock
             from DS_TorchModule import PositionalEncoding, LearnablePositionalEncoding, FeatureWiseEmbeddingNorm
@@ -50,9 +48,6 @@ except:
     except:
         import requests
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_TimeSeries.py", verify=False)
-        exec(response.text)
-        
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_Torch.py", verify=False)
         exec(response.text)
         
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_MachineLearning.py", verify=False)
