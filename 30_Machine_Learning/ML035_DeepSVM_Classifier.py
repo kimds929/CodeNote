@@ -323,6 +323,13 @@ train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
 
 
+
+
+
+
+
+
+
 ##########################################################################################
 # 【 Deep SVM Kernel Model 】#############################################################
 ##########################################################################################
@@ -512,15 +519,22 @@ class ConvKernelModel(nn.Module):
         intensives = []
         # max_intensives = torch.full((*X_sorted.shape[:-2], seq_len, 1), 0.0, device=X.device, dtype=X.dtype)
         for i in range(n_window):
-            i_start, i_end = i*self.stride, i*self.stride+self.window_size
+            i_start, i_end = i*self.stride, min(i*self.stride+self.window_size, seq_len)
+            if i_end - i_start <= 0:
+                continue
             # print(i_start, i_end)
             X_window = X_sorted[...,i_start:i_end,:]
             intensive_window = self.dist_layer(X_window, Y, Sigma=self.Sigma)
             # intensive_window = self.dist_layer(X_window, Y, boundary=self.boundary)
         
             intensives.append(intensive_window)
+            # 1안)
             # cur_intensives = max_intensives[..., i_start:i_end, :].clone()
             # max_intensives[..., i_start:i_end, :] = torch.maximum(cur_intensives, intensive_window)
+            
+            # 2안)
+            # idx = torch.arange(i_start, i_end, device=X.device).view(*([1]*(intensive_window.ndim-2)), i_end - i_start , 1).expand_as(intensive_window)
+            # max_intensives = max_intensives.scatter_reduce(dim=-2, index=idx, src=intensive_window, reduce="amax", include_self=True)
         intensives_cat = torch.concat(intensives, dim=-2)
         return intensives_cat
     
