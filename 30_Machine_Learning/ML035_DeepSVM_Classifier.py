@@ -138,13 +138,14 @@ class Distance(nn.Module):
         self.Sigma = nn.Parameter(torch.rand(1)) if Sigma is None else Sigma
         self.boundary = nn.Parameter(torch.rand(1)) if boundary is None else boundary
         self.valid_masking = valid_masking
+        self.epsilon = 1e-6
         
         self.kernel = kernel
     
     def _is_mat(self, p):
         return p is not None and getattr(p, "ndim", 0) == 2
     
-    def mahalanobis_dist(self, X, Y=None, Sigma=None):
+    def square_mahalanobis_dist(self, X, Y=None, Sigma=None):
         """pairwise distance: Euclidean (optional /sigma) or Mahalanobis (Sigma matrix)."""
         Y = X if Y is None else Y
         D = X.unsqueeze(-2) - Y.unsqueeze(-3)                # (B,n,m,d)
@@ -163,8 +164,8 @@ class Distance(nn.Module):
     def _u(self, X, Y=None, boundary=1.0):
         """normalized distance for compact kernels."""
         if self._is_mat(boundary):          # ellipsoid: already normalized, boundary at u<=1
-            return self.mahalanobis_dist(X, Y, Sigma=boundary)
-        return self.mahalanobis_dist(X, Y) / boundary
+            return torch.sqrt( self.square_mahalanobis_dist(X, Y, Sigma=boundary**2) + self.epsilon )     # gradient explosion 방지
+        return torch.sqrt( self.square_mahalanobis_dist(X, Y) + self.epsilon ) / boundary     # gradient explosion 방지
 
     def _valid_seq_len(self, X):
         """
@@ -172,14 +173,14 @@ class Distance(nn.Module):
         각 배치별로 유효한 시퀀스 길이를 반환 (list of lengths)
         """
         # 마지막 Feature 차원 기준으로 유효 여부 판단
-        valid_mask = ((X > 0) & (X < torch.inf)).all(dim=-1)  # (..., Seq)
+        valid_mask = ((X >= 0) & (X < torch.inf)).all(dim=-1)  # (..., Seq)
         # 각 배치별 유효한 시퀀스 길이 계산
         valid_len = valid_mask.sum(dim=-1)  # (...,)
         return valid_len
     
     def gaussian_kernel(self, X, Y=None, Sigma=1.0):
-        d = self.mahalanobis_dist(X, Y, Sigma=Sigma)
-        return torch.exp(-0.5 * d * d)
+        d_square = self.square_mahalanobis_dist(X, Y, Sigma=Sigma)
+        return torch.exp(-0.5 * d_square)
 
     def uniform_kernel(self, X, Y=None, boundary=1.0):
         u = self._u(X, Y, boundary)
@@ -255,9 +256,8 @@ class Distance(nn.Module):
 # X.shape # (N, Seq, f)
 
 # distance
-dist = Distance(Sigma=torch.tensor(2.25), kernel='gaussian')
-# dist = Distance( boundary=torch.tensor(4.0), kernel='linear')
-
+# dist = Distance(Sigma=torch.tensor(2.25), kernel='gaussian')
+dist = Distance( boundary=torch.tensor(4), kernel='linear')
 
 
 dist_mat = dist.forward_kernel(pad_series_torch[:,:,-2:])
@@ -415,7 +415,7 @@ class KernelModel(nn.Module):
         return output 
 
 # torch.autograd.set_detect_anomaly(False)
-model = KernelModel().to(device)
+model = KernelModel(kernel='gaussian').to(device)
 # model(pad_series_torch[:,:,-2:].to(device))
 print(f"{sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
@@ -507,7 +507,7 @@ print(classification_report(pred_label, label_true))    # pred - true
 xx, yy = np.meshgrid(np.linspace(0, 1, 50), np.linspace(0, 1, 50))
 grid = np.c_[xx.ravel(), yy.ravel()]  # (40000, 2)
 
-i = 4
+i = 6
 mtl_sample = mtl_list[i]
 x_scale, y_scale = map(lambda x: x.item(), mtl_sample.mean(0)[:2])
 gird_scale = grid * np.array([x_scale, y_scale])
@@ -737,7 +737,7 @@ squared_hinge_loss = BatchSquareHingeLoss(num_classes, weights_method='exp')  # 
 # squared_hinge_loss = BatchSquareHingeLoss(weights_method='exp')  # num_classes
 
 tm = TorchModeling(model)
-tm.compile(optimizer=optim.AdamW(model.parameters(), lr=3e-4)
+tm.compile(optimizer=optim.AdamW(model.parameters(), lr=1e-3)
            ,loss_function=squared_hinge_loss.loss_function)
 tm.train_model(train_loader, epochs=500)
 
