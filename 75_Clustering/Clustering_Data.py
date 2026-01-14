@@ -506,15 +506,37 @@ def evaluate_clustering(X, y_true, y_pred, ignore_label=-1):
 # ============================================================
 # Quick Demo
 # ============================================================
-# 예시 1) 2D moons
-X, y_true = generate_dataset("moons", n=2500, seed=42, noise=0.08)
+def basic_unsupervised_report(X, labels):
+    # 노이즈(-1) 라벨이 있으면 실루엣은 제외하거나 노이즈 제거 후 계산하는 게 안전
+    unique = set(labels)
+    has_noise = (-1 in unique)
+    n_clusters = len(unique) - (1 if has_noise else 0)
+
+    out = {"n_clusters": n_clusters, "has_noise": has_noise}
+    if n_clusters >= 2:
+        # 노이즈가 있으면 노이즈 제외 버전도 같이 계산
+        if has_noise:
+            mask = labels != -1
+            X2, y2 = X[mask], labels[mask]
+            if len(set(y2)) >= 2:
+                out["silhouette(noise_excluded)"] = silhouette_score(X2, y2)
+        else:
+            out["silhouette"] = silhouette_score(X, labels)
+
+        out["davies_bouldin"] = davies_bouldin_score(X, labels)
+        out["calinski_harabasz"] = calinski_harabasz_score(X, labels)
+    return out
+
+
+# 예시 1) 2D moons ----------------------------------------------------------
+X, y = generate_dataset("moons", n=2500, seed=42, noise=0.08)
 # y_pred = cluster_kmeans(X, k=2, seed=0)  # moons는 KMeans가 약한 편
 # m = evaluate_clustering(X, y_true, y_pred)
 # print("[moons] metrics:", m)
-plot_2d(X, y_true, "moons: y_true")
+plot_2d(X, y, "moons: y_true")
 # plot_2d(X, y_pred, "moons: y_pred (KMeans)")
 
-
+# ---------------------------------------------------------------------------
 # 2D varied_density
 X, y = generate_dataset("varied_density", n=2500, seed=42)
 plot_2d(X, y, "varied_density (2D)")
@@ -546,3 +568,107 @@ Xo, yo = generate_dataset("outliers", n=5000, d=20, k=4, seed=0, outlier_ratio=0
 y_pred_o = cluster_kmeans(Xo, k=4, seed=0)
 mo = evaluate_clustering(Xo, yo, y_pred_o, ignore_label=-1)
 print("[outliers] metrics(ignore -1):", mo)
+#################################################################################
+
+#--------------------------------------------------------------------------------
+# K-means
+from sklearn.cluster import KMeans
+kmeans = KMeans(n_clusters=2, n_init="auto").fit(X)
+
+pred_y = kmeans.predict(X)
+basic_unsupervised_report(X, pred_y)
+
+plot_2d(X, pred_y)
+
+
+#--------------------------------------------------------------------------------
+# Gaussian Mixture Model
+from sklearn.mixture import GaussianMixture
+gmm = GaussianMixture(n_components=2, covariance_type="full", reg_covar=1e-6).fit(X)
+
+pred_y = gmm.predict(X)
+basic_unsupervised_report(X, pred_y)
+
+plot_2d(X, pred_y)
+# plot_3d(X, pred_y)
+
+
+#--------------------------------------------------------------------------------
+# Hierarchical
+from scipy.cluster.hierarchy import linkage, dendrogram
+from sklearn.cluster import AgglomerativeClustering
+
+Z = linkage(X, method='single')  # ward는 유클리드 기반에서 가장 흔함
+dend = dendrogram(Z, truncate_mode='lastp', p=30)  
+
+hierarchy = AgglomerativeClustering(n_clusters=2, linkage="ward")   # 합칠 때, 군집 내 분산(SSE) 증가량을 최소화
+pred_y = hierarchy.fit_predict(X)
+basic_unsupervised_report(X, pred_y)
+
+plot_2d(X, pred_y)
+
+
+hierarchy = AgglomerativeClustering(n_clusters=2, linkage="single")     # 두 군집의 점들 중 가장 가까운 점끼리 거리
+pred_y = hierarchy.fit_predict(X)
+basic_unsupervised_report(X, pred_y)
+
+plot_2d(X, pred_y)
+
+hierarchy = AgglomerativeClustering(n_clusters=2, linkage="complete")   # 두 군집 점들 중 가장 먼 점끼리 거리
+pred_y = hierarchy.fit_predict(X)
+basic_unsupervised_report(X, pred_y)
+
+plot_2d(X, pred_y)
+
+
+hierarchy = AgglomerativeClustering(n_clusters=2, linkage="average")   # 두 군집의 모든 쌍 거리 평균
+pred_y = hierarchy.fit_predict(X)
+basic_unsupervised_report(X, pred_y)
+
+plot_2d(X, pred_y)
+
+
+#--------------------------------------------------------------------------------
+# DBSCAN
+from sklearn.cluster import DBSCAN
+
+dbscan = DBSCAN(eps=0.1, min_samples=10)
+pred_y = dbscan.fit_predict(X)  # 노이즈는 -1
+basic_unsupervised_report(X, pred_y)
+
+plot_2d(X, pred_y)
+
+#--------------------------------------------------------------------------------
+# # HDBSCAN
+# import hdbscan
+# hdbscan_cluster = hdbscan.HDBSCAN(
+#     min_cluster_size=30,
+#     min_samples=10
+# )
+# pred_y = hdbscan_cluster.fit_predict(X)
+
+# basic_unsupervised_report(X, pred_y)
+
+# plot_2d(X, pred_y)
+
+
+
+#--------------------------------------------------------------------------------
+# Spectral Clustering
+from sklearn.cluster import SpectralClustering
+
+spectral = SpectralClustering(
+    n_clusters=2,
+    affinity="nearest_neighbors",  # 또는 "rbf"
+    n_neighbors=10,
+    assign_labels="kmeans",
+    random_state=0
+)
+
+pred_y = spectral.fit_predict(X)
+basic_unsupervised_report(X, pred_y)
+
+plot_2d(X, pred_y)
+
+
+#################################################################################
