@@ -1,13 +1,11 @@
 import os
 import sys
-if 'd:' in os.getcwd().lower():
-    os.chdir("D:/DataScience/")
-# else:
-#     os.chdir("/home/pd299370/")
-sys.path.append(f"{os.getcwd()}/DataScience/00_DataAnalysis_Basic")
-sys.path.append(f"{os.getcwd()}/DataScience/DS_Library")
-sys.path.append(r'D:\DataScience\00_DataAnalysis_Basic')
-
+if 'home' not in os.getcwd():
+    base_path = 'D:'
+else:
+    base_path = os.getcwd()    
+folder_path =f"{base_path}/DataScience"
+sys.path.append(f"{folder_path}/DS_Library")
 
 import numpy as np
 import pandas as pd 
@@ -15,50 +13,27 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as colors
 
+
 import torch
 
 device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 print(f"torch_device : {device}")
 
+
 try:
-    from DS_MachineLearning import DS_LabelEncoder, DataPreprocessing
-    from DS_DeepLearning import EarlyStopping, TorchDataLoader, TorchModeling
-    from DS_TorchModule import CategoricalEmbedding, EmbeddingLinear, ContinuousEmbeddingBlock
-    from DS_TorchModule import PositionalEncoding, LearnablePositionalEncoding, FeatureWiseEmbeddingNorm
-    from DS_TorchModule import ScaledDotProductAttention, MultiheadAttention, PreLN_TransformerEncoderLayer, AttentionPooling
-    from DS_TorchModule import KwargSequential, ResidualConnection
-    from DS_TorchModule import MaskedConv1d
-    from DS_TimeSeries import pad_series_list, series_smoothing
+    from DS_DeepLearning import EarlyStopping, TorchModeling
     
 except:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
     try:
         import httpimport
         with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-            from DS_MachineLearning import DS_LabelEncoder, DataPreprocessing
-            from DS_DeepLearning import EarlyStopping, TorchDataLoader, TorchModeling
-            from DS_TorchModule import CategoricalEmbedding, EmbeddingLinear, ContinuousEmbeddingBlock
-            from DS_TorchModule import PositionalEncoding, LearnablePositionalEncoding, FeatureWiseEmbeddingNorm
-            from DS_TorchModule import ScaledDotProductAttention, MultiheadAttention, PreLN_TransformerEncoderLayer, AttentionPooling
-            from DS_TorchModule import KwargSequential, ResidualConnection
-            from DS_TorchModule import MaskedConv1d
-            from DS_TimeSeries import pad_series_list, series_smoothing
+            from DS_DeepLearning import EarlyStopping, TorchModeling
     except:
         import requests
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_TimeSeries.py", verify=False)
-        exec(response.text)
-        
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_MachineLearning.py", verify=False)
-        exec(response.text)
-        
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_DeepLearning.py", verify=False)
         exec(response.text)
         
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_TorchModule.py", verify=False)
-        exec(response.text)
-        
-
-
 
 ###################################################################################################
 rng = np.random.RandomState(1)
@@ -72,12 +47,12 @@ scale = 1/50
 
 n_mean = 30
 n_std = 10
-n_sample = 500       # n_samples ★
+n_sample = 800       # n_samples ★
 n_defect = rng.normal(loc=n_mean, scale=n_std, size=n_sample).astype(int)
 
 # visualize
 plt.title('Distribution of N-Defect')
-plt.hist(n_defect, bins=30)
+plt.hist(n_defect, bins=30, color='skyblue', edgecolor='gray')
 plt.show()
 # --------------------------------------------------------------------------------------------------
 
@@ -102,29 +77,43 @@ for i in range(n_sample):
         mtl_mat = np.concatenate([size_broadcast, defect_locs], axis=1)
         mtl_list.append(mtl_mat)
         df_sub = pd.DataFrame(mtl_mat, columns=['W', 'L', 'loc_w', 'loc_l'])
-        df_sub.insert(0, 'mtl_idx', f"mtl_{i:02d}")
+        df_sub.insert(0, 'mtl_idx', f"mtl_{i:05d}")
         df = pd.concat([df, df_sub], axis=0)
 
-    
-df.groupby(['mtl_idx']).size()
+
+df.groupby(['mtl_idx']).size().sample(10)
 
 # --------------------------------------------------------------------------------
 # visualize
-i = 2
-mtl_sample = mtl_list[i]
-plt.figure(figsize=[mtl_sample[0][0]/6 , mtl_sample[0][1]/3])
-plt.scatter(mtl_sample[:,-2], mtl_sample[:,-1], c="black", s=3)
+# plt.figure(figsize=[mtl_sample[0][0]/6 , mtl_sample[0][1]/3])
+# idx = 2
+
+
+plt.figure(figsize=(15,8))
+for i, idx in enumerate([376, 6, 497, 147, 3, 67]):
+    ax = plt.subplot(1,6, i+1)
+    ax.set_title(f"MTL_{idx:05d}")
+    mtl_sample = mtl_list[idx]
+    plt.scatter(mtl_sample[:,-2], mtl_sample[:,-1], c="black", s=3)
+    
+    pos = ax.get_position()     # 현재 위치 가져오기
+    
+    w_width = mtl_sample[0][0] / sizes.max(axis=0)[0]
+    w_height = mtl_sample[0][1] / sizes.max(axis=0)[1]
+    new_height = pos.height * w_height
+    new_y0 = pos.y0 + (pos.height - new_height)  # 위쪽 고정
+    
+    ax.set_position([pos.x0, new_y0, pos.width*w_width, pos.height*w_height]) # 크기 조정 (width, height 변경)
+
 plt.show()
 
 
 # --------------------------------------------------------------------------------
 # from DS_TimeSeries import pad_series_list
-pad_series = pad_series_list(mtl_list, pad_value=-1)        # (N, Seq, features)
-print(pad_series.shape)
+from torch.nn.utils.rnn import pad_sequence
+mtl_list_torch = [torch.FloatTensor(mtl) for mtl in mtl_list]
 
-
-pad_series_torch = torch.FloatTensor(pad_series)
-
+pad_series_torch = pad_sequence(mtl_list_torch, padding_value=-1, batch_first=True)     # (N, Seq, features)
 
 
 
@@ -132,7 +121,7 @@ pad_series_torch = torch.FloatTensor(pad_series)
 import torch.nn as nn
 import torch.optim as optim
 
-class Distance(nn.Module):
+class Kernel(nn.Module):
     def __init__(self, Sigma=None, boundary=None, kernel='gaussian', valid_masking=True):
         super().__init__()
         self.Sigma = nn.Parameter(torch.rand(1)) if Sigma is None else Sigma
@@ -248,16 +237,99 @@ class Distance(nn.Module):
         dist = torch.sum(dist_mat, dim=-1, keepdim=True)
         return dist
 
+################################################################################
 
+# (visualize kernels) normalized distance u = d / r
+base_point = torch.zeros([1,1])
+u = torch.linspace(0, 2.0, 100).reshape(-1,1)
+
+
+kernel = Kernel(Sigma=1, boundary=1)
+with torch.no_grad():
+    K_gaussian = kernel.forward_kernel(u, base_point, kernel='gaussian')[0].sum(-1)           # exp(-1/2 u^2) : np.exp(-0.5 * u**2)
+    K_uniform = kernel.forward_kernel(u, base_point, kernel='uniform')[0].sum(-1)             # 1 (u≤1), 0 (u>1) : (u <= 1.0).astype(float)
+    K_linear = kernel.forward_kernel(u, base_point, kernel='linear')[0].sum(-1)               # max(0, 1-u) : np.clip(1.0 - u, 0.0, 1.0)
+    K_epanechnikov = kernel.forward_kernel(u, base_point, kernel='epanechnikov')[0].sum(-1)   # max(0, 1-u^2) : np.clip(1.0 - u**2, 0.0, 1.0)
+    K_quartic = kernel.forward_kernel(u, base_point, kernel='quartic')[0].sum(-1)             # max(0, (1-u^2)^2) : np.clip(1.0 - u**2, 0.0, 1.0)**2
+
+
+# visualize plot
+plt.figure(figsize=(7,5))
+plt.plot(u, K_gaussian, label="Gaussian", linewidth=2)          # exp(-1/2 u^2) : np.exp(-0.5 * u**2)
+plt.plot(u, K_uniform, label="Uniform", linewidth=2)            # 1 (u≤1), 0 (u>1) : (u <= 1.0).astype(float)
+plt.plot(u, K_linear, label="Linear", linewidth=2)              # max(0, 1-u) : np.clip(1.0 - u, 0.0, 1.0)
+plt.plot(u, K_epanechnikov, label="Epanechnikov", linewidth=2)  # max(0, 1-u^2) : np.clip(1.0 - u**2, 0.0, 1.0)
+plt.plot(u, K_quartic, label="Quartic", linewidth=2)            # max(0, (1-u^2)^2) : np.clip(1.0 - u**2, 0.0, 1.0)**2
+
+plt.axvline(1.0, color="gray", linestyle="--", alpha=0.6)
+plt.text(1.02, 0.5, "boundary (u=1)", color="gray")
+
+plt.xlabel("normalized distance  u = d / r")
+plt.ylabel("kernel value")
+plt.title("1D influence profiles of kernels")
+plt.ylim(-0.05, 1.05)
+plt.grid(alpha=0.3)
+plt.legend()
+plt.tight_layout()
 
 ################################################################################
+
+
+
+# Influence Visualize
+def plot_influence(points, boundary=1, kernel='linear'):
+    kernel_instance = Kernel(kernel=kernel, boundary=boundary, valid_masking=False)
+    x_grid = torch.linspace(-3, 3, 300).reshape(-1, 1)  # 1D grid
+    
+    total_influence = torch.zeros_like(x_grid[:, 0])
+    
+    # 각 점의 영향력 계산 및 개별 곡선 그리기
+    for p in points:
+        with torch.no_grad():
+            influence = kernel_instance.forward_kernel(x_grid, torch.FloatTensor([[p]]))[:,0]
+        plt.scatter(p,0, s=80)
+        total_influence += influence
+        plt.plot(x_grid, influence, label=f'Point {p}', alpha=0.7)
+        
+
+    # 전체 합산 영향력
+    plt.plot(x_grid, total_influence, 'k-', linewidth=2, label='Total Influence')
+
+    # 각 점 위치에서 total influence 값 표시
+    for p in points:
+        idx = np.argmin(np.abs(x_grid[:, 0] - p))  # p에 가장 가까운 grid index
+        total_val = total_influence[idx]
+        plt.text(p, total_val + 0.05, f"{total_val:.2f}", 
+                 ha='center', color='red', fontsize=9, fontweight='bold')
+    
+    plt.title(f"{kernel.capitalize()} influence, boundary={boundary}, points={points}")
+    plt.xlabel("Position")
+    plt.ylabel("Influence")
+    plt.legend()
+    plt.ylim(-0.05, 2.5)
+
+plt.figure(figsize=(15, 4))
+plt.subplot(1,2,1)
+plot_influence(points=[-1.5, 0, 1.5], boundary=1, kernel='linear')
+plt.subplot(1,2,2)
+plot_influence(points=[-0.5, 0, 0.5], boundary=1, kernel='linear')
+plt.show()
+
+
+
+
+
+##########################################################################################
+
+Sigma = 2.0
+threshold = 4       # true threshold
 
 # X = pad_series_torch[:,:,-2:]
 # X.shape # (N, Seq, f)
 
 # distance
-# dist = Distance(Sigma=torch.tensor(2.25), kernel='gaussian')
-dist = Distance( boundary=torch.tensor(4), kernel='linear')
+dist = Kernel(Sigma=torch.tensor(Sigma), kernel='gaussian')
+# dist = Kernel( boundary=torch.tensor(4), kernel='linear')
 
 
 dist_mat = dist.forward_kernel(pad_series_torch[:,:,-2:])
@@ -266,9 +338,6 @@ intensives = dist.forward(pad_series_torch[:,:,-2:]).squeeze(-1)
 max_intensives = intensives.max(dim=-1)[0].numpy()
 
 
-
-
-# --------------------------------------------------------------------------------
 # intensive
 print(n_defect)
 print(max_intensives)
@@ -278,53 +347,98 @@ plt.title('Distribution of Max-Intensive')
 plt.hist(max_intensives, bins=30, edgecolor='gray', alpha=0.5)
 plt.show()
 
-# --------------------------------------------------------------------------------
+
+
+
 # Visualize
 xx, yy = np.meshgrid(np.linspace(0, 1, 50), np.linspace(0, 1, 50))
 grid = np.c_[xx.ravel(), yy.ravel()]  # (40000, 2)
 
-i = 6
-mtl_sample = mtl_list[i]
-x_scale, y_scale = map(lambda x: x.item(), mtl_sample.mean(0)[:2])
-gird_scale = grid * np.array([x_scale, y_scale])
-xx_scale = xx * x_scale
-yy_scale = yy * y_scale
-Z = dist.forward(torch.FloatTensor(gird_scale), torch.FloatTensor(mtl_sample[:, -2:]) ).view(xx_scale.shape).detach().numpy()
-intensive = intensives[i]
+# i = 6
+# mtl_sample = mtl_list[i]
+# x_scale, y_scale = map(lambda x: x.item(), mtl_sample.mean(0)[:2])
+# gird_scale = grid * np.array([x_scale, y_scale])
+# xx_scale = xx * x_scale
+# yy_scale = yy * y_scale
+# Z = dist.forward(torch.FloatTensor(gird_scale), torch.FloatTensor(mtl_sample[:, -2:]) ).view(xx_scale.shape).detach().numpy()
+# intensive = intensives[i]
 
-plt.figure(figsize=[mtl_sample[0][0].item()/6 , mtl_sample[0][1].item()/3])
-# cont = plt.contourf(xx_scale, yy_scale, Z, cmap="RdYlGn_r", alpha=0.3, level=np.round(np.sqrt(np.linspace(1, 5**2, 11)), 1))
-cont = plt.contourf(xx_scale, yy_scale, Z, cmap="RdYlGn_r", alpha=0.3, vmin=0, vmax=5)
+# plt.figure(figsize=[mtl_sample[0][0].item()/6 , mtl_sample[0][1].item()/3])
+# # cont = plt.contourf(xx_scale, yy_scale, Z, cmap="RdYlGn_r", alpha=0.3, level=np.round(np.sqrt(np.linspace(1, 5**2, 11)), 1))
+# cont = plt.contourf(xx_scale, yy_scale, Z, cmap="RdYlGn_r", alpha=0.3, vmin=0, vmax=5)
 
-for (xp, yp), val in zip(mtl_sample[:,-2:], intensive):
-    color='black'
-    alpha=0.5
-    if val >= 4:
-        color='red'
-        alpha= 1
-    plt.scatter(xp.item(), yp.item(), color=color, s=2)
-    plt.text(xp.item(), yp.item(), round(val.item(),1), color=color, alpha=alpha, fontsize=8)
+# for (xp, yp), val in zip(mtl_sample[:,-2:], intensive):
+#     color='black'
+#     alpha=0.5
+#     if val >= 4:
+#         color='red'
+#         alpha= 1
+#     plt.scatter(xp.item(), yp.item(), color=color, s=2)
+#     plt.text(xp.item(), yp.item(), round(val.item(),1), color=color, alpha=alpha, fontsize=8)
 
-plt.colorbar(cont)
+# plt.colorbar(cont)
+# plt.show()
+
+
+
+xx, yy = np.meshgrid(np.linspace(0, 1, 50), np.linspace(0, 1, 50))
+grid = np.c_[xx.ravel(), yy.ravel()]  # (2500, 2)
+
+plt.figure(figsize=(15, 13))
+for i, idx in enumerate([376, 6, 497, 147, 3, 67]):
+    ax = plt.subplot(1, 6, i+1)
+    ax.set_title(f"MTL_{idx:05d}")
+    
+    mtl_sample = mtl_list[idx]
+    x_scale, y_scale = map(lambda x: x.item(), mtl_sample.mean(0)[:2])
+    gird_scale = grid * np.array([x_scale, y_scale])
+    xx_scale = xx * x_scale
+    yy_scale = yy * y_scale
+    
+    Z = dist.forward(
+        torch.FloatTensor(gird_scale),
+        torch.FloatTensor(mtl_sample[:, -2:])
+    ).view(xx_scale.shape).detach().numpy()
+    
+    intensive = intensives[idx]
+    
+    # contour plot
+    cont = ax.contourf(xx_scale, yy_scale, Z, cmap="RdYlGn_r", alpha=0.3, vmin=0, vmax=5)
+    
+    # scatter + text
+    for (xp, yp), val in zip(mtl_sample[:, -2:], intensive):
+        color = 'black'
+        alpha = 0.5
+        if val >= threshold:
+            color = 'red'
+            alpha = 1
+        ax.scatter(xp.item(), yp.item(), color=color, s=2)
+        ax.text(xp.item(), yp.item(), round(val.item(), 1), color=color, alpha=alpha, fontsize=8)
+    
+    # subplot 위치 조정
+    pos = ax.get_position()
+    w_width = mtl_sample[0][0].item() / sizes.max(axis=0)[0]
+    w_height = mtl_sample[0][1].item() / sizes.max(axis=0)[1]
+    new_height = pos.height * w_height
+    new_y0 = pos.y0 + (pos.height - new_height)  # 위쪽 고정
+    ax.set_position([pos.x0, new_y0, pos.width * w_width, pos.height * w_height])
+
+
+# 공통 colorbar
+cbar_ax = plt.gcf().add_axes([0.90, 0.6, 0.01, 0.3]) 
+plt.colorbar(cont, cax=cbar_ax)
+
 plt.show()
-
-
-
-
-
-
-
 
 ##########################################################################################
 # --------------------------------------------------------------------------------
 
 # calculate intensive
-dist = Distance(Sigma=torch.tensor(1.5), kernel='gaussian')
+dist = Kernel(Sigma=torch.tensor(2.0), kernel='gaussian')
 intensives = dist.forward(pad_series_torch[:,:,-2:]).squeeze(-1)
 max_intensives = intensives.max(dim=-1)[0].numpy()
 
-# label
-threshold = 4       # true threshold
+# Labeling
 noise = rng.normal(loc=0, scale=0.5, size=max_intensives.shape)
 label_true = ((max_intensives) > threshold).astype(int)
 label_obs = ((max_intensives + noise) > threshold).astype(int)
@@ -333,16 +447,49 @@ label_torch = torch.LongTensor(label_obs)
 num_classes = torch.unique(label_torch, return_counts=True)[1]
 print(num_classes)
 
+# visualize
+plt.hist([max_intensives[label_obs==0], max_intensives[label_obs==1]],
+        bins=30, alpha=0.7, label=['Obs_Normal','Obs_Abnormal'])
+plt.legend()
+plt.axvline(threshold, color='red', alpha=0.7, ls='--')
+plt.show()
+
+
+
+from sklearn.metrics import confusion_matrix, classification_report
+print(confusion_matrix(label_true, label_torch))   # true - obs
+print(classification_report(label_torch, label_true))   # true - obs
+##########################################################################################
 
 
 # --------------------------------------------------------------------------------
 from torch.utils.data import TensorDataset, DataLoader
-train_dataset = TensorDataset(pad_series_torch[:,:,-2:], label_torch)
+
+permute_indices = torch.LongTensor(rng.permutation(np.arange(pad_series_torch.shape[0])))
+train_idx = permute_indices[:400]
+valid_idx = permute_indices[400:600]
+tests_idx = permute_indices[600:]
+
+plt.hist([max_intensives[train_idx], max_intensives[valid_idx], max_intensives[tests_idx]], 
+        bins=30, alpha=0.5, label=['train_set', 'valid_set','tests_set'])
+plt.axvline(threshold, color='red', alpha=0.7, ls='--')
+plt.legend()
+plt.show()
+
+
+from sklearn.metrics import confusion_matrix, classification_report
+print(confusion_matrix(label_true[tests_idx], label_torch[tests_idx]))   # true - obs
+print(classification_report(label_torch[tests_idx], label_true[tests_idx]))   # true - obs
+
+# Dataset
+train_dataset = TensorDataset(pad_series_torch[train_idx,:,-2:], label_torch[train_idx])
+valid_dataset = TensorDataset(pad_series_torch[valid_idx,:,-2:], label_torch[valid_idx])
+tests_dataset = TensorDataset(pad_series_torch[tests_idx,:,-2:], label_torch[tests_idx])
+
+# DataLoader
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-
-# x = pad_series_torch[[5, 11],:10,-2:]
-
-
+valid_loader = DataLoader(valid_dataset, batch_size=64, shuffle=True)
+tests_loader = DataLoader(tests_dataset, batch_size=64, shuffle=True)
 
 
 
@@ -367,8 +514,23 @@ train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ##########################################################################################
-# 【 Deep SVM Kernel Model 】#############################################################
+# 【 Learnable SVM Kernel Model 】########################################################
 ##########################################################################################
 import torch.nn as nn
 import torch.optim as optim
@@ -387,7 +549,7 @@ class KernelModel(nn.Module):
         self.Sigma_vec = None
         self.boundary = None
         self.threshold = None
-        self.dist_layer = Distance(kernel=kernel)
+        self.dist_layer = Kernel(kernel=kernel)
     
     def make_positive_params(self):
         # self.Sigma = nn.functional.softplus(self.params_Sigma) 
@@ -473,10 +635,14 @@ class BatchSquareHingeLoss():
 squared_hinge_loss = BatchSquareHingeLoss(num_classes, weights_method='exp')  # num_classes   
 # squared_hinge_loss = BatchSquareHingeLoss(weights_method='exp')  # num_classes
 
+
+
 tm = TorchModeling(model)
-tm.compile(optimizer=optim.AdamW(model.parameters(), lr=1e-3)
-           ,loss_function=squared_hinge_loss.loss_function)
-tm.train_model(train_loader, epochs=500)
+tm.compile(optimizer=optim.AdamW(model.parameters(), lr=5e-4)
+        #    ,early_stop_loss = EarlyStopping(min_iter=1200, patience=300)
+           )
+tm.train_model(train_loader, valid_loader, epochs=500,
+               loss_function=squared_hinge_loss.loss_function)
 
 print(model.Sigma.detach(), model.threshold.detach())
 # print(model.Sigma.detach(), model.threshold.detach())
@@ -487,18 +653,21 @@ print(model.Sigma.detach(), model.threshold.detach())
 # torch.save(model.state_dict(), "D:/DataScience/Model/DeepSVM_params_linear.pth")
 
 
+
+
+
 # ----------------------------------------------------------------------
-pred = model(pad_series_torch[:,:,-2:]).detach().to('cpu').numpy()
+pred = model(pad_series_torch[tests_idx,:,-2:]).detach().to('cpu').numpy()
 pred_label = ((np.sign(pred)+1)/2).ravel()
 
 from sklearn.metrics import confusion_matrix, classification_report
-confusion_matrix(pred_label, label_torch)   # pred - obs
-confusion_matrix(label_true, label_torch)   # true - obs
-confusion_matrix(pred_label, label_true)    # pred - true
+confusion_matrix(pred_label, label_torch[tests_idx])   # pred - obs
+confusion_matrix(label_true[tests_idx], label_torch[tests_idx])   # true - obs
+confusion_matrix(pred_label, label_true[tests_idx])    # pred - true
 
-print(classification_report(pred_label, label_torch))   # pred - obs
-print(classification_report(label_torch, label_true))   # true - obs
-print(classification_report(pred_label, label_true))    # pred - true
+print(classification_report(pred_label, label_torch[tests_idx]))   # pred - obs
+print(classification_report(label_torch[tests_idx], label_true[tests_idx]))   # true - obs
+print(classification_report(pred_label, label_true[tests_idx]))    # pred - true
 
 
 
@@ -515,7 +684,7 @@ xx_scale = xx * x_scale
 yy_scale = yy * y_scale
 
 # visual dict
-dist = Distance(Sigma=torch.tensor(1.5), kernel='gaussian')
+dist = Kernel(Sigma=torch.tensor(1.5), kernel='gaussian')
 
 Z_true = dist.forward(torch.FloatTensor(gird_scale), torch.FloatTensor(mtl_sample[:, -2:]) ).view(xx_scale.shape).detach().numpy()
 intensive_true = dist.forward(torch.FloatTensor(mtl_sample[:, -2:])).squeeze()
@@ -551,8 +720,18 @@ plt.show()
 
 
 
+
+
+
+
+
+
+
+
+
+
 ##########################################################################################
-# 【 Convolutional Deep SVM Kernel Model 】###############################################
+# 【 Convolutional Learnable SVM Kernel Model 】##########################################
 ##########################################################################################
 import torch.nn as nn
 import torch.optim as optim
@@ -573,7 +752,7 @@ class ConvKernelModel(nn.Module):
         self.Sigma_vec = None
         self.boundary = None
         self.threshold = None
-        self.dist_layer = Distance(kernel=kernel)
+        self.dist_layer = Kernel(kernel=kernel)
     
     def sort_sequence(self, X, padding_value=-1.0, pad_all_features=True, descending=False):
             """
@@ -737,31 +916,39 @@ squared_hinge_loss = BatchSquareHingeLoss(num_classes, weights_method='exp')  # 
 # squared_hinge_loss = BatchSquareHingeLoss(weights_method='exp')  # num_classes
 
 tm = TorchModeling(model)
-tm.compile(optimizer=optim.AdamW(model.parameters(), lr=1e-3)
-           ,loss_function=squared_hinge_loss.loss_function)
-tm.train_model(train_loader, epochs=500)
+tm.compile(optimizer=optim.AdamW(model.parameters(), lr=5e-4)
+        #    ,early_stop_loss = EarlyStopping(min_iter=1200, patience=300)
+           )
+tm.train_model(train_loader, valid_loader, epochs=500,
+               loss_function=squared_hinge_loss.loss_function)
 
 # print(model.Sigma.detach(), model.threshold.detach())
 # print(model.Sigma.detach(), model.threshold.detach())
 # print(model.Precision.detach(), model.threshold.detach())
 print(model.boundary.detach(), model.threshold.detach())
 
-
 # torch.save(model.state_dict(), "D:/DataScience/Model/ConvDeepSVM_params_linear.pth")
 
+
+
+
+
+
+
+
+
 # ----------------------------------------------------------------------
-pred = model(pad_series_torch[:,:,-2:]).detach().to('cpu').numpy()
+pred = model(pad_series_torch[tests_idx,:,-2:]).detach().to('cpu').numpy()
 pred_label = ((np.sign(pred)+1)/2).ravel()
 
-
 from sklearn.metrics import confusion_matrix, classification_report
-confusion_matrix(pred_label, label_torch)   # pred - obs
-confusion_matrix(label_true, label_torch)   # true - obs
-confusion_matrix(pred_label, label_true)    # pred - true
+confusion_matrix(pred_label, label_torch[tests_idx])   # pred - obs
+confusion_matrix(label_true[tests_idx], label_torch[tests_idx])   # true - obs
+confusion_matrix(pred_label, label_true[tests_idx])    # pred - true
 
-print(classification_report(pred_label, label_torch))   # pred - obs
-print(classification_report(label_torch, label_true))   # true - obs
-print(classification_report(pred_label, label_true))    # pred - true
+print(classification_report(pred_label, label_torch[tests_idx]))   # pred - obs
+print(classification_report(label_torch[tests_idx], label_true[tests_idx]))   # true - obs
+print(classification_report(pred_label, label_true[tests_idx]))    # pred - true
 
 
 # ----------------------------------------------------------------------
@@ -782,7 +969,7 @@ xx_scale = xx * x_scale
 yy_scale = yy * y_scale
 
 # visual dict
-dist = Distance(Sigma=torch.tensor(1.5), kernel='gaussian')
+dist = Kernel(Sigma=torch.tensor(1.5), kernel='gaussian')
 
 Z_true = dist.forward(torch.FloatTensor(gird_scale), torch.FloatTensor(mtl_sample[:, -2:]) ).view(xx_scale.shape).detach().numpy()
 intensive_true = dist.forward(torch.FloatTensor(mtl_sample[:, -2:])).squeeze()
@@ -818,5 +1005,4 @@ for ei, ((Z_name, Z_value), (i_name, i_value), (param_name, param_values)) in en
 plt.show()
 
 ##########################################################################################
-
 

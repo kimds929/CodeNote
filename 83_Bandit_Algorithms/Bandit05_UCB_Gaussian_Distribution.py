@@ -58,7 +58,7 @@ if example:
 
 
 #########################################################################################
-class UCB():
+class UCB_Gaussian():
     def __init__(self, actions, sigma=1, delta=0.05):
         self.actions = actions
         self.sigma = sigma
@@ -80,15 +80,12 @@ class UCB():
         self.history['actions'] = []
         self.history['rewards'] = []
     
-    def select_arm(self, verbose=0):
+    def calculate_ucb(self, verbose=0):
         if (self.state == 'ready' or self.state=='observe_reward'):
             if len(self.history['rewards']) == 0:
-                action = np.random.choice(range(self.n_actions))
-
-                self.history['mu'].append([0] * self.n_actions)
-                self.history['std'].append([np.inf] * self.n_actions)
-                self.history['ucb'].append([np.inf] * self.n_actions)
-            
+                mu = [0] * self.n_actions
+                std = [np.inf] * self.n_actions
+                ucb = [np.inf] * self.n_actions
             else:
                 prev_mu = self.history['mu'][-1]
                 mu = [0] * self.n_actions
@@ -100,18 +97,27 @@ class UCB():
                         mu[i] = (self.cum_rewards[i]-self.batched_cum_rewards[i]) / (self.cum_n[i]-self.batched_cum_n[i])
                         std[i] = np.sqrt(2 * self.sigma * np.log(1/self.delta) / self.cum_n[i])
                         ucb[i] = mu[i] + std[i]
-                action = np.argmax(ucb)
-                
-                self.history['mu'].append(mu)
-                self.history['std'].append(std)
-                self.history['ucb'].append(ucb)
-
-            self.history['actions'].append(action)
-            self.state = 'select_arm'
-            
-
             if verbose:
-                print(f"action: {action}", end='\t')
+                print(f"ucb : {ucb}")
+                print(f"mu : {mu}")
+                print(f"std : {std}")
+            return ucb, mu, std
+    
+    def select_arm(self, ucb, mu, std, verbose=0):
+        if all([ucb_element==np.inf for ucb_element in ucb]):
+            action = np.random.choice(range(self.n_actions))
+        else:
+            action = np.argmax(ucb)
+            
+        self.history['mu'].append(mu)
+        self.history['std'].append(std)
+        self.history['ucb'].append(ucb)
+
+        self.history['actions'].append(action)
+        self.state = 'select_arm'
+
+        if verbose:
+            print(f"action: {action}", end='\t')
 
     def observe_reward(self, verbose=0):
         if self.state == 'select_arm':
@@ -136,7 +142,8 @@ class UCB():
     def run(self, update=True, verbose=0):
         if verbose:
             print(f"(step {self.t}) ", end="")
-        self.select_arm(verbose=verbose)
+        ucb, mu, std = self.calculate_ucb(verbose=verbose)
+        self.select_arm(ucb, mu, std, verbose=verbose)
         self.observe_reward(verbose=verbose)
         if update:
             self.update_params()
@@ -175,15 +182,15 @@ if example:
     gs3 = GaussianSample(draw_option='binomial')
     actions = [gs1, gs2, gs3]
 
-    ucb = UCB(actions)
+    ucb = UCB_Gaussian(actions)
     ucb.run(update=False)
     ucb.visualize()
     ucb.update_params()
     ucb.history.keys()
 
-    ucb = UCB(actions)
+    ucb = UCB_Gaussian(actions)
     for _ in range(100):
-        ucb.run()
+        ucb.run(verbose=1)
     ucb.visualize()
 
     # ucb.history['mu']
@@ -206,10 +213,12 @@ if example:
     gs2 = GaussianSample(draw_option='binomial')
     gs3 = GaussianSample(draw_option='binomial')
     actions = [gs1, gs2, gs3]
-    ucb = UCB(actions)
-
-    vis_interval = 5
-    for i in range(300):
+    ucb = UCB_Gaussian(actions)
+    # print(gs1.mu, gs2.mu, gs3.mu)
+    # plt.scatter(ucb.history['actions'], range(len(ucb.history['actions'])))
+    
+    vis_interval = 20
+    for i in range(1000):
         ucb.run(0)
 
         if i % vis_interval == 0: 

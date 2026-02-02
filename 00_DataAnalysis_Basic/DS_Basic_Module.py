@@ -2844,24 +2844,7 @@ class SummaryPlot():
                     fitted_line = None
                 else:
                     fitted_line = sp.stats.norm
-                # sns.distplot(data[x], fit=fitted_line, kde=None, hist_kws={'edgecolor':'grey'}, fit_kws={'color':(1,0.5,0.5)})
-                # 데이터
-                values = data[x].dropna()
-
-                # 히스토그램
-                plt.hist(values, bins=30, edgecolor='grey', color='lightcoral')
-
-                # fitted_line이 있을 경우 직접 계산
-                if fitted_line is not None:
-                    mu, std = fitted_line.fit(values)
-                    xmin, xmax = plt.xlim()
-                    x_vals = np.linspace(xmin, xmax, 100)
-                    p_vals = stats.norm.pdf(x_vals, mu, std)
-
-                    # 히스토그램 스케일에 맞춰서 곡선 높이 조정
-                    scale_factor = len(values) * (xmax - xmin) / 30
-                    plt.plot(x_vals, p_vals * scale_factor, 'r', linewidth=2)
-                    
+                sns.distplot(data[x], fit=fitted_line, kde=None, hist_kws={'edgecolor':'grey'}, fit_kws={'color':(1,0.5,0.5)})
             elif x in x in time_cols:
                 plt.hist(data[x], edgecolor='grey', color='palegoldenrod')
 
@@ -2912,6 +2895,7 @@ class SummaryPlot():
             plt.show()
             if return_plot:
                 return fig
+
 
 
 
@@ -3537,7 +3521,7 @@ import os
 from PIL import Image   # PIL는 이미지를 load 할 때 이용
 
 from io import StringIO,  BytesIO
-import win32clipboard
+
 
 from IPython.display import clear_output
 from IPython.core.display import display, HTML
@@ -3551,26 +3535,30 @@ from IPython.core.display import display, HTML
 # from io import StringIO,  BytesIO
 # import win32clipboard
 
-def fun_Send_To_Clipboard(clip_type, data):
-    win32clipboard.OpenClipboard()
-    win32clipboard.EmptyClipboard()
-    win32clipboard.SetClipboardData(clip_type, data)
-    win32clipboard.CloseClipboard()
+try:
+    import win32clipboard
 
-def img_to_clipboard(fig, format='jpeg', dpi='figure'):
-    '''
-    fig: pyplot figure
-    '''
-    fig.savefig(f'pyplot_temper_img.{format}', bbox_inches='tight', dpi=dpi)    # png파일로저장
-    PIL_img = Image.open(f'pyplot_temper_img.{format}').copy()   #png파일 PIL image형태로 불러오기
-    os.remove(f'pyplot_temper_img.{format}')  # png파일 지우기
-    output = BytesIO()
-    PIL_img.convert("RGB").save(output, "BMP")
-    data = output.getvalue()[14:]
-    output.close()
-    fun_Send_To_Clipboard(win32clipboard.CF_DIB, data)
+    def fun_Send_To_Clipboard(clip_type, data):
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardData(clip_type, data)
+        win32clipboard.CloseClipboard()
 
+    def img_to_clipboard(fig, format='jpeg', dpi='figure'):
+        '''
+        fig: pyplot figure
+        '''
+        fig.savefig(f'pyplot_temper_img.{format}', bbox_inches='tight', dpi=dpi)    # png파일로저장
+        PIL_img = Image.open(f'pyplot_temper_img.{format}').copy()   #png파일 PIL image형태로 불러오기
+        os.remove(f'pyplot_temper_img.{format}')  # png파일 지우기
+        output = BytesIO()
+        PIL_img.convert("RGB").save(output, "BMP")
+        data = output.getvalue()[14:]
+        output.close()
+        fun_Send_To_Clipboard(win32clipboard.CF_DIB, data)
 
+except:
+    pass
 
 
 
@@ -3729,6 +3717,9 @@ def jitter(x, ratio=0.6, method='uniform', sigma=5, transform=True):
         result = jitter.values
     
     return result
+
+
+
 
 
 # -----------------------------------------------------------------------------------------------------
@@ -3904,7 +3895,11 @@ def distbox(data, on, group=None, figsize='auto', title='auto', bins='auto',
         pass
     return figs
 
-    
+
+
+
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------------
 # Histogram Compare Graph Function
 def hist_compare(data1, data2, figsize=None, title=None, bins=30, label=None, hist_alpha=0.5, histtype='stepfilled',
     legend=True, color=['skyblue','orange'], cpk_color=None, lsl=None, usl=None,
@@ -4001,6 +3996,9 @@ def hist_compare(data1, data2, figsize=None, title=None, bins=30, label=None, hi
         pass
 
 
+
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------------
 # violin_box_plot
 def violin_box_plot(x=None, y=None, data=None, group=None, figsize=None,
     title=None, color=None, label=None, return_plot=True):
@@ -4098,10 +4096,19 @@ def violin_box_plot(x=None, y=None, data=None, group=None, figsize=None,
 
 
 
+
+
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------------
+# group plots
 def group_plots(data, x=None, group=None, xlabel=None, group_labels=None, 
-                figsize=None, title=None, display_pvalue=True, color='steelblue', alpha=0.5, bins=30, hist_width=0.5, xlabel_rotation=0, return_plot=True,
+                figsize=None, title=None, display_pvalue=True, color='steelblue', alpha=0.5, bins=30, 
+                ylim= None, hist_width=0.5, xlabel_rotation=0, return_plot=True,
                 box_plot=True, violin_plot=False, norm_dist=False, hist_plot=False, mean_points=True,
-                box_kwargs={}, voline_kwargs={}, norm_kwarg={}, hist_kwars={}):
+                mean_annot=False, mean_fontsize=None, mean_annot_format=None,
+                hist_annot=False, hist_fontsize=None, hist_annot_format=None,
+                box_kwargs={}, voline_kwargs={}, norm_kwarg={}, hist_kwars={}
+                ):
     # data preprocessing → to_statistics_dataframe
     if x is None and group is None:
         if type(data) == list:
@@ -4122,8 +4129,8 @@ def group_plots(data, x=None, group=None, xlabel=None, group_labels=None,
             indices = [1]
         else:
             data_group = data.groupby(group)[x]
-            data_list = list(map(lambda z: data.loc[z][x].to_numpy(), data_group.groups.values()))
-            df_statistics = data_group.describe()[['count','mean','std']]
+            df_statistics = data_group.describe()[['count','mean','std']].sort_index()
+            data_list = [data_group.get_group(name).to_numpy() for name in df_statistics.index]
             indices = range(1,len(df_statistics.index)+1)
         if xlabel is None:
             xlabel = x
@@ -4162,7 +4169,6 @@ def group_plots(data, x=None, group=None, xlabel=None, group_labels=None,
         display_group_label = f"[{xlabel}]\n{join_display_groups}\n → p-value : {p_value}"
     else:
         display_group_label = f"[{xlabel}]\n{join_display_groups}"
-
 
     # (figure) ---------------------------------------------------------------------------------------------
     if return_plot is True:
@@ -4209,38 +4215,84 @@ def group_plots(data, x=None, group=None, xlabel=None, group_labels=None,
     # (histogram) ---------------------------------------------------------------------------------------------
     if hist_plot is True:
         for i, d in enumerate(data_list, start=1):
-            # 히스토그램 계산
-            counts, bin = np.histogram(d, bins=bins, density=True)
-            counts_norm = counts/counts.max()*0.8
-            # 히스토그램을 세로로 누이기 위해 x축을 조정
-            # boxplot이 x=i에 있으므로, hist는 i+hist_width 만큼 오른쪽에 그림
-            x_left = i 
-            # 각 bin에 대해 사각형 그리기
-            for c, b0, b1 in zip(counts_norm, bin[:-1], bin[1:]):
-                c = 0 if np.isnan(c) else c
-                # 오른쪽
-                plt.fill_betweenx([b0, b1], x_left, x_left + c*hist_width, color=color, alpha=alpha, edgecolor='gray')
-                # 왼쪽
-                plt.fill_betweenx([b0, b1], x_left, x_left - c*hist_width, color=color, alpha=alpha, edgecolor='gray')
-
-    # mean point ---------------------------------------------------------------------------------------------
+            # 카테고리형 데이터인지 확인
+            if pd.api.types.is_numeric_dtype(d) is False:
+                # 카테고리별 개수
+                vc = pd.Series(d).value_counts().sort_index()
+                categories = vc.index.tolist()
+                counts = vc.values
+                # 막대 그리기
+                for idx_cat, (cat, cnt) in enumerate(zip(categories, counts)):
+                    y_pos = idx_cat  # 카테고리 위치
+                    plt.barh(y_pos + i*0.5, cnt, height=0.4, color=color, alpha=alpha)
+                    if hist_annot and cnt > 0:
+                        if hist_annot_format is not None:
+                            try:
+                                text_val = f"{cnt:{hist_annot_format}}"
+                            except:
+                                text_val = str(cnt)
+                        else:
+                            text_val = str(cnt)
+                        plt.text(cnt + 0.1, y_pos + i*0.5, text_val,
+                                va='center', ha='left',
+                                fontsize=hist_fontsize if hist_fontsize is not None else plt.rcParams['font.size'])
+            else:
+                # 기존 연속형 데이터 처리
+                counts, bin_edges = np.histogram(d, bins=bins)
+                counts_norm = counts / counts.max() * 0.8
+                x_left = i 
+                for idx_bin, (c, b0, b1) in enumerate(zip(counts_norm, bin_edges[:-1], bin_edges[1:])):
+                    if counts[idx_bin] > 0:
+                        plt.fill_betweenx([b0, b1], x_left, x_left + c*hist_width, color=color, alpha=alpha, edgecolor='gray')
+                        plt.fill_betweenx([b0, b1], x_left, x_left - c*hist_width, color=color, alpha=alpha, edgecolor='gray')
+                        if hist_annot:
+                            count_val = counts[idx_bin]
+                            if hist_annot_format is not None:
+                                try:
+                                    text_val = f"{count_val:{hist_annot_format}}"
+                                except:
+                                    text_val = str(count_val)
+                            else:
+                                text_val = str(count_val)
+                            y_pos = (b0 + b1) / 2
+                            plt.text(x_left + c*hist_width + 0.02, y_pos, text_val,
+                                    va='center', ha='left',
+                                    fontsize=hist_fontsize if hist_fontsize is not None else plt.rcParams['font.size'])
+    # (mean point) ---------------------------------------------------------------------------------------------
     if mean_points is True:
         for i, d in enumerate(data_list, start=1):
             mu = np.mean(d)
             # 평균 위치에 빨간 점 찍기
             plt.scatter(i, mu, color='red', edgecolors='gray', s=60, zorder=10, label='Mean' if i==1 else "")
 
+    # (annotation for counts) --------------------------------------------------------------------------------
+    if mean_annot is True:
+        for i, d in enumerate(data_list, start=1):
+            count_val = len(d)
+            if mean_annot_format is not None:
+                try:
+                    text_val = f"{count_val:{mean_annot_format}}"
+                except:
+                    text_val = str(count_val)
+            else:
+                text_val = str(count_val)
+            # y 위치는 평균보다 약간 위로
+            y_pos = np.mean(d) + (np.max(d) - np.min(d)) * 0.05
+            plt.text(i, y_pos, text_val, ha='center', fontsize=mean_fontsize if mean_fontsize is not None else plt.rcParams['font.size'])
+
     # ---------------------------------------------------------------------------------------------
 
     plt.ylabel(xlabel)
     plt.xticks(indices, group_indices, rotation=xlabel_rotation)
     plt.xlabel(display_group_label, fontsize=12, loc='left')
+    if ylim is not None:
+        plt.ylim(ylim)
 
     if return_plot:
         plt.close()
         return fig
 
-
+# --------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 

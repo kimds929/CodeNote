@@ -639,17 +639,17 @@ basic_unsupervised_report(X, pred_y)
 plot_2d(X, pred_y)
 
 #--------------------------------------------------------------------------------
-# # HDBSCAN
-# import hdbscan
-# hdbscan_cluster = hdbscan.HDBSCAN(
-#     min_cluster_size=30,
-#     min_samples=10
-# )
-# pred_y = hdbscan_cluster.fit_predict(X)
+# HDBSCAN
+import hdbscan
+hdbscan_cluster = hdbscan.HDBSCAN(
+    min_cluster_size=30,
+    min_samples=10
+)
+pred_y = hdbscan_cluster.fit_predict(X)
 
-# basic_unsupervised_report(X, pred_y)
+basic_unsupervised_report(X, pred_y)
 
-# plot_2d(X, pred_y)
+plot_2d(X, pred_y)
 
 
 
