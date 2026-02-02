@@ -1,11 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.patches import Rectangle
 
 from scipy.stats import beta
-
-
-
 
 
 ########################################################################################################
@@ -249,7 +247,7 @@ def make_fac_plot(n_fac_in_process, pathes=[], label=[], abnormal=[]):
     for (axi, ayi, p) in abnormal:
         scatter  = plt.scatter(x_pos[axi-1][ayi], y_pos[axi-1][ayi], color=((p/2), 0, 0))
         scateter_color = scatter.get_facecolor()
-        plt.text(x_pos[axi-1][ayi]+0.05, y_pos[axi-1][ayi], f"{p:.2f}", fontsize=8, color=scateter_color)
+        plt.text(x_pos[axi-1][ayi]-0.075, y_pos[axi-1][ayi]-0.13, f"{p:.2f}", fontsize=8, color=scateter_color)
     
     # path
     for pi, path in enumerate(pathes):
@@ -395,8 +393,130 @@ for x_alpha_, x_beta_ in zip(process_param_alpha, process_param_beta):
 
 
 
+def make_fac_plot(n_fac_in_process, pathes=[], label=[], abnormal=[], beta_dist=None,
+            box_kwargs=dict(conf=0.90, box_width=0.2, box_height=0.5, box_dx=0.1, text_fs=5) ):
+    conf      = box_kwargs["conf"]
+    box_width = box_kwargs["box_width"]
+    box_height= box_kwargs["box_height"]
+    box_dx    = box_kwargs["box_dx"]
+    text_fs   = box_kwargs["text_fs"]
+
+    # -------------------------
+    x_pos, y_pos = make_pos(n_fac_in_process)
+
+    # -------------------------
+    # point
+    for x_list, y_list in zip(x_pos, y_pos):
+        for yi, (x, y) in enumerate(zip(x_list, y_list)):
+            if not np.isnan(x):
+                plt.scatter(x, y, color='gray')
+                plt.text(x-0.3, y+0.1, f"x{x}_y{yi}", fontsize=8, alpha=0.7)
+
+    # -------------------------
+    # abnormal
+    for (axi, ayi, p) in abnormal:
+        scatter = plt.scatter(x_pos[axi-1][ayi], y_pos[axi-1][ayi], color=((p/2), 0, 0))
+        scateter_color = scatter.get_facecolor()
+        plt.text(x_pos[axi-1][ayi]-0.075, y_pos[axi-1][ayi]-0.1, f"{p:.2f}", fontsize=8, color=scateter_color)
+
+    # -------------------------
+    # path
+    for pi, path in enumerate(pathes):
+        path_pos = [(x[p], y[p]) for x, y, p in zip(x_pos, y_pos, path) if not np.isnan(x[p])]
+        path_pos_T = np.array(path_pos).T
+        line, = plt.plot(*path_pos_T, alpha=0.5)
+        line_color = line.get_color()
+
+        if len(label) == len(pathes):
+            plt.text(*path_pos_T[:, -1], f"MTL_{pi} ({label[pi]})", fontsize=8, color=line_color)
+        else:
+            plt.text(*path_pos_T[:, -1], f"MTL_{pi}", fontsize=8, color=line_color)
+
+    
+    
+    # -------------------------
+    # beta box per point
+    # beta_dist[x_index][y_index] = Beta(a,b)
+    # y_index=0은 표시하지 않음
+    if beta_dist is not None:
+        # 네가 제시한 방식에 맞춰서 "미리 mean/lcb/ucb를 리스트로 계산"해둠
+        mean_list = [[float(y.mean()) for y in x] for x in beta_dist]
+        lcb_list  = [[float(y.interval(conf)[0]) for y in x] for x in beta_dist]
+        ucb_list  = [[float(y.interval(conf)[1]) for y in x] for x in beta_dist]
+
+        for xi, f in enumerate(n_fac_in_process, start=1):  # xi=1..n_process
+            f = int(f)
+            for yi in range(1, f+1):  # ★ y=0 제외
+                # 좌표
+                x0 = x_pos[xi-1][yi]
+                y0 = y_pos[xi-1][yi]
+
+                # beta_dist 길이 부족시 스킵(안전)
+                if (xi-1) >= len(beta_dist) or yi >= len(beta_dist[xi-1]):
+                    continue
+
+                bobj = beta_dist[xi-1][yi]
+                mean = mean_list[xi-1][yi]
+                lcb  = lcb_list[xi-1][yi]
+                ucb  = ucb_list[xi-1][yi]
+
+                # a,b 표기용(가능하면 표시)
+                a = getattr(bobj, "a", None)
+                b = getattr(bobj, "b", None)
+                if (a is None or b is None) and hasattr(bobj, "args"):
+                    try:
+                        a, b = bobj.args[:2]
+                    except Exception:
+                        pass
+
+                # 박스 위치(포인트 오른쪽)
+                bx = x0 + box_dx
+                by = y0 - box_height/2
+
+                # 박스 테두리
+                rect = Rectangle((bx, by), box_width, box_height, fill=False, linewidth=0.6, alpha=0.8)
+                plt.gca().add_patch(rect)
+
+                # 0~1 스케일 표시
+                plt.text(bx - 0.03, by, "0", fontsize=text_fs, ha='right', va='center', alpha=0.8)
+                plt.text(bx - 0.03, by + box_height, "1", fontsize=text_fs, ha='right', va='center', alpha=0.8)
+
+                # 값 -> 박스 y좌표 변환 (클램프)
+                def v_to_y(v):
+                    v = 0.0 if v < 0 else (1.0 if v > 1 else v)
+                    return by + v * box_height
+
+                y_l = v_to_y(lcb)
+                y_m = v_to_y(mean)
+                y_u = v_to_y(ucb)
+
+                # L/M/U 가로선 표시
+                plt.plot([bx, bx + box_width], [y_l, y_l], color='mediumseagreen' , linewidth=0.6, alpha=0.9)
+                plt.plot([bx, bx + box_width], [y_m, y_m], color='coral', linewidth=0.9, alpha=0.9)
+                plt.plot([bx, bx + box_width], [y_u, y_u], color='steelblue' , linewidth=0.6, alpha=0.9)
+
+                # 텍스트 표시(fontsize=5)
+                plt.text(bx + box_width + 0.02, y_u, f"U {ucb:.2f}", fontsize=text_fs, va='center')
+                plt.text(bx + box_width + 0.02, y_m, f"M {mean:.2f}", fontsize=text_fs, va='center')
+                plt.text(bx + box_width + 0.02, y_l, f"L {lcb:.2f}", fontsize=text_fs, va='center')
+
+                # (a,b) 박스 위 표시
+                if a is not None and b is not None:
+                    plt.text(
+                        bx + box_width/2, by + box_height + 0.03,
+                        f"a={float(a):.0f}, b={float(b):.0f}",
+                        fontsize=text_fs, ha='center', va='bottom', alpha=0.85
+                    )
+
+    plt.xlim(0.5, len(n_fac_in_process)+1)
+    
 
 
+plt.figure(figsize=(10,8))
+make_fac_plot(n_fac_in_process, X_random_paths[[idx]], label=y_obs[[idx]], abnormal=abnormal_xyp, beta_dist=process_beta_dist)
+plt.show()
+
+# ---------------------------------------------------------------------------------------------------
 
 
 
