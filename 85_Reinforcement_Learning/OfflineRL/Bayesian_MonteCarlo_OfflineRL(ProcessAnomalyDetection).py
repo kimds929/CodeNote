@@ -29,14 +29,16 @@ def plot_beta_distributions(alpha_, beta_, color=None):
     plt.legend()
 
 
-alpha_list = [1, 4, 5, 10]
-beta_list = [1, 2, 8, 10]
+alpha_list = [1, 5, 15, 50]
+beta_list = [1, 7, 10, 20]
 
 
 for alpha_, beta_ in zip(alpha_list, beta_list):
-    plot_beta_distributions(alpha_, beta_, color=(1-alpha_/10, 1-beta_/10, 0))
-plt.legend(loc='upper right', bbox_to_anchor=(1.4,1))
+    plot_beta_distributions(alpha_, beta_, color=(1-alpha_/70, 1-beta_/30, 0))
+plt.legend(loc='upper left')
 plt.show()
+
+
 
 ########################################################################################################
 
@@ -78,7 +80,7 @@ plt.show()
 from scipy.stats import beta
 
 class Beta:
-    def __init__(self, a, b):
+    def __init__(self, a=1e-8, b=1e-8):
         self.a = a
         self.b = b
         self.beta = beta
@@ -100,10 +102,12 @@ class Beta:
     # ----------------------------
     # sampling / density
     # ----------------------------
+    # rvs : 난수 샘플 생성
     def rvs(self, a=None, b=None, loc=0, scale=1, size=1, random_state=None):
         a, b = self.init_params(a, b)
         return self.beta.rvs(a=a, b=b, loc=loc, scale=scale, size=size, random_state=random_state)
 
+    # pdf : 특정 값의 확률밀도 [x:P(x)]
     def pdf(self, x, a=None, b=None, loc=0, scale=1):
         a, b = self.init_params(a, b)
         return self.beta.pdf(x, a=a, b=b, loc=loc, scale=scale)
@@ -115,6 +119,7 @@ class Beta:
     # ----------------------------
     # CDF / SF / inverse
     # ----------------------------
+    # cdf : 누적확률 값 [x : P(X≤x)]
     def cdf(self, x, a=None, b=None, loc=0, scale=1):
         a, b = self.init_params(a, b)
         return self.beta.cdf(x, a=a, b=b, loc=loc, scale=scale)
@@ -123,6 +128,7 @@ class Beta:
         a, b = self.init_params(a, b)
         return self.beta.logcdf(x, a=a, b=b, loc=loc, scale=scale)
 
+    # sf : 생존함수 (1-CDF) [x: P(X>x)]
     def sf(self, x, a=None, b=None, loc=0, scale=1):
         a, b = self.init_params(a, b)
         return self.beta.sf(x, a=a, b=b, loc=loc, scale=scale)
@@ -131,10 +137,12 @@ class Beta:
         a, b = self.init_params(a, b)
         return self.beta.logsf(x, a=a, b=b, loc=loc, scale=scale)
 
+    # ppf : 누적확률의 역함수(분위수) [P(X≤x)=q]
     def ppf(self, q, a=None, b=None, loc=0, scale=1):
         a, b = self.init_params(a, b)
         return self.beta.ppf(q, a=a, b=b, loc=loc, scale=scale)
 
+    # sf : 생존함수의 역함수(분위수) [x: P(X>x)=q]
     def isf(self, q, a=None, b=None, loc=0, scale=1):
         a, b = self.init_params(a, b)
         return self.beta.isf(q, a=a, b=b, loc=loc, scale=scale)
@@ -185,7 +193,9 @@ class Beta:
         return self.beta.interval(confidence, a=a, b=b, loc=loc, scale=scale)
 
     # ----------------------------
-    # fit
+    # fit : 주어진 데이터에 가장 잘 맞는 bet분포 paameter(alpha, beta를 추정)
+    #       ㄴ 대부분 loc, scale을 고정한다(이렇게 해야 진짜 alpha와 beta추정가능) 
+    #          >> alpha, beta_param, _, _ = beta.fit(data, floc=0, fscale=1)
     # ----------------------------
     def fit(self, data, update=False, **kwargs):
         """
@@ -199,6 +209,27 @@ class Beta:
             self.b = b_hat
         return a_hat, b_hat, loc_hat, scale_hat
 
+    # display plot
+    def plot(self, a=None, b=None, num=100, figsize=None, color=None, return_plot=False):
+        a = self.a if a is None else a
+        b = self.b if b is None else b
+        
+        x = np.linspace(0, 1, num)
+        
+        if figsize is not None:
+            fig = plt.figure(figsize=figsize)
+        
+        y = beta.pdf(x, a, b)
+        plt.plot(x, y, label=f'a={a:.2f}, b={b:.2f}', color=color)
+        
+        plt.title('Beta Distributions')
+        plt.xlabel('Probability')
+        plt.ylabel('Density')
+        plt.legend()
+        
+        if return_plot:
+            plt.close()
+            return fig
 
 
 
@@ -491,8 +522,9 @@ process_plot(n_fac_in_process, X_random_paths[[idx]], label=y_obs[[idx]], abnorm
 
 ###########################################################################################################
 # Learning
-process_param_alpha = [np.bincount(xg, minlength=n_fac_in_process[i]+1)+1 for i, xg in enumerate(X_random_paths[np.where(y_obs==1)[0]].T)]
-process_param_beta = [np.bincount(xg, minlength=n_fac_in_process[i]+1)+1 for i, xg in enumerate(X_random_paths[np.where(y_obs==0)[0]].T)]
+epsilon = 1e-8
+process_param_alpha = [np.bincount(xg, minlength=n_fac_in_process[i]+1)+epsilon for i, xg in enumerate(X_random_paths[np.where(y_obs==1)[0]].T)]
+process_param_beta = [np.bincount(xg, minlength=n_fac_in_process[i]+1)+epsilon for i, xg in enumerate(X_random_paths[np.where(y_obs==0)[0]].T)]
 
 # beta distributions for each process
 process_beta_dist = []
@@ -517,21 +549,20 @@ plt.show()
 
 # ---------------------------------------------------------------------------------------------------
 def node_to_edge(paths):
-    paths_shifted = np.roll(paths, shift=-1, axis=1)
-    return np.stack([paths[:,:-1], paths_shifted[:,:-1]], axis=-1)
+    path_exapnd_nodes = np.concatenate([np.arange(1, paths.shape[-1]+1)[None,...,None].repeat(paths.shape[0], axis=0), 
+                    paths[...,None]], axis=-1)
+    path_nodes =  np.stack([np.concatenate([trajectory[trajectory[:, 1] != 0], trajectory[trajectory[:, 1] == 0]], axis=0) for trajectory in path_exapnd_nodes])
+    paths_shifted = np.roll(path_nodes, shift=-1, axis=1)
+    paths_edges = np.stack([path_nodes[...,:-1,:], paths_shifted[...,:-1,:]], axis=-2)
+    return paths_edges
 
 
-X_random_edges = node_to_edge(X_random_paths)       # B, F, E 
-X_random_edges_T = X_random_edges.transpose(1, 0, 2)   # F, B, E
+X_random_edges = node_to_edge(X_random_paths)               # (B, F, Es, Et)
+X_random_edges_expand = X_random_edges.reshape(-1, 2, 2)    # (B*F, Es, Et)
+X_random_edges_expand_filter = X_random_edges_expand[X_random_edges_expand[:,-1,-1] != 0]
 
-n_count_edges = []
-for xi in range(X_random_edges_T.shape[0]):
-    edges, count = np.unique(X_random_edges.transpose(1, 0, 2)[xi], axis=0, return_counts=True)
-    edge_count = np.concatenate([edges, count.reshape(-1,1)], axis=-1)
-    n_count_edges.append(edge_count)
-
-print(n_count_edges)
-
+edges, count = np.unique(X_random_edges_expand_filter, axis=0, return_counts=True)
+n_count_edges = list(zip(edges, count))
 
 
 
@@ -595,16 +626,14 @@ def gradient_lineplot(x, y, color=['steelblue', 'steelblue'], alpha=1.0, linewid
 # Learning Plot
 plt.figure(figsize=(10,8))
 # [[b.mean() for b in bb]for bb in process_beta_dist]
-for nce, xs, xt, ys, yt, bs, bt in zip(n_count_edges, x_pos[:-1], x_pos[1:], y_pos[:-1], y_pos[1:], process_beta_dist[:-1], process_beta_dist[1:]):
-    # break
-    edges_info = [([xs[s], xt[t]], [ys[s], yt[t]], w, [bs[s].mean(), bt[t].mean()]) for s, t, w in nce if not np.isnan(sum([xs[s], xt[t], ys[s], yt[t]]))]
-    
-    for es, et, ew, eb in edges_info:
-        lc = gradient_lineplot(es, et, linewidth=np.sqrt(ew*5), color=[(eb[0],1-eb[0],0), (eb[1], 1-eb[1], 0)], alpha=0.2)
+for (es, et), w in n_count_edges:
+    x_edge = x_pos[es[0]-1][es[1]], x_pos[et[0]-1][et[1]]
+    y_edge = y_pos[es[0]-1][es[1]], y_pos[et[0]-1][et[1]]
+    bs_edge, bt_edge = process_beta_dist[es[0]-1][es[1]].mean(), process_beta_dist[et[0]-1][et[1]].mean()
+
+    gradient_lineplot(x_edge, y_edge, linewidth=min(30, w), color=[(bs_edge,1-bs_edge,0), (bt_edge, 1-bt_edge, 0)], alpha=0.15)
 process_plot(n_fac_in_process,  label=y_obs[[idx]], abnormal=abnormal_xyp, beta_dist=process_beta_dist)
 plt.show()
-        
-        
 
 
 
@@ -618,71 +647,255 @@ plt.show()
 
 
 
+###################################################################################################
+# beta분포의 두집단 확률 비교
+import numpy as np
+
+# 집단 1 데이터
+x1 = 8   # 성공 횟수
+n1 = 10  # 총 시도 횟수
+
+# 집단 2 데이터
+x2 = 3
+n2 = 10
+
+# 비정보적 prior (Beta(1,1))
+alpha0, beta0 = 1e-6, 1e-6
+
+# 사후분포 파라미터
+alpha1_post = alpha0 + x1
+beta1_post  = beta0 + (n1 - x1)
+
+alpha2_post = alpha0 + x2
+beta2_post  = beta0 + (n2 - x2)
+
+# visualize
+xp = np.linspace(0,1, num=100)
+plt.plot(xp, beta.pdf(xp, x1, n1-x1), label='p1')
+plt.plot(xp, beta.pdf(xp, x2, n2-x2), label='p2')
+plt.legend(loc='upper left')
+plt.show()
+
+# 몬테카를로 샘플링
+M = 100000
+p1_samples = np.random.beta(alpha1_post, beta1_post, M)
+p2_samples = np.random.beta(alpha2_post, beta2_post, M)
+
+# 집단1 > 집단2 확률
+prob_p1_gt_p2 = np.mean(p1_samples > p2_samples)
+
+print(f"P(p1 > p2) = {prob_p1_gt_p2:.4f}")
 
 
 
-# # ----------------------------------------------------------------------------------------------------------------
-# # beta distribution을 Deep Neural Network가 학습해서 binary classification의 uncertainty도 학습할 수 있을까? loss funciton을 beta distribution기반으로 해야할까?
-# # 방금 질문한 beta distribution을 Deep Neural Network가 학습해서 binary classification의 uncertainty도 학습하는 과정을 
-# # 간단한 예제 데이터 기반으로 torch 코드를 보여줘.
+# ----------------------------------------------------------------------------------------------------------------
 
-# import torch
-# import torch.nn as nn
-# import torch.optim as optim
-# import torch.nn.functional as F
 
-# # ===== 1. 예제 데이터 생성 =====
-# torch.manual_seed(42)
-# n_samples = 200
-# X = torch.rand(n_samples, 1) * 2 - 1  # [-1, 1] 범위
-# y = (X[:, 0] > 0).float()  # 0 또는 1 라벨
+import numpy as np
+from scipy.stats import beta
+from scipy.integrate import quad
 
-# # ===== 2. 모델 정의 =====
-# class BetaNet(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         self.fc1 = nn.Linear(1, 16)
-#         self.fc2 = nn.Linear(16, 16)
-#         self.fc_alpha = nn.Linear(16, 1)
-#         self.fc_beta = nn.Linear(16, 1)
+# 집단 1 데이터
+x1 = 9      # 성공 횟수
+n1 = 100     # 총 시도횟수
+
+# 집단 2 데이터
+x2 = 3
+n2 = 100
+
+# prior (Beta(1,1))
+alpha0, beta0 = 1e-6, 1e-6
+
+# posterior parameters
+alpha1_post = alpha0 + x1
+beta1_post  = beta0 + (n1 - x1)
+
+alpha2_post = alpha0 + x2
+beta2_post  = beta0 + (n2 - x2)
+
+# visualize
+xp = np.linspace(0,1, num=100)
+plt.plot(xp, beta.pdf(xp, x1, n1-x1), label='p1')
+plt.plot(xp, beta.pdf(xp, x2, n2-x2), label='p2')
+plt.legend(loc='upper left')
+plt.show()
+
+
+# Beta PDF 함수
+pdf1 = lambda p: beta.pdf(p, alpha1_post, beta1_post)
+pdf2 = lambda p: beta.pdf(p, alpha2_post, beta2_post)
+
+# 내부 적분: p2를 0 ~ p1까지 적분
+def inner_integral(p1):
+    # p2를 0부터 p1까지 적분한 값
+    result, _ = quad(lambda p2: pdf2(p2), 0, p1)
+    return pdf1(p1) * result
+
+# 외부 적분: p1을 0 ~ 1까지 적분
+prob, _ = quad(inner_integral, 0, 1)
+
+print(f"P(p1 > p2) = {prob:.6f}")
+
+
+
+
+###################################################################################################
+# Non-stationarity Control
+
+
+from functools import reduce
+from itertools import chain
+from scipy.stats import beta
+
+import time
+from IPython.display import clear_output
+
+
+gamma = 0.95
+ps = rng.randint(5,50, 5)
+ps.sort()
+
+ps_list = list(chain.from_iterable([[rng.rand()]*p for p in ps]))
+
+
+beta_dist = Beta()
+
+for i, p in enumerate(ps_list):
+    v = np.random.rand()
+    reward = 1 if v < p else 0
     
-#     def forward(self, x):
-#         h = F.relu(self.fc1(x))
-#         h = F.relu(self.fc2(h))
-#         alpha = F.softplus(self.fc_alpha(h)) + 1e-6  # 양수 제약
-#         beta = F.softplus(self.fc_beta(h)) + 1e-6
-#         return alpha, beta
-
-# # ===== 3. Loss 함수 (Beta-Bernoulli NLL) =====
-# def beta_bernoulli_nll(alpha, beta, target):
-#     p = alpha / (alpha + beta)
-#     nll = - (target * torch.log(p + 1e-8) + (1 - target) * torch.log(1 - p + 1e-8))
-#     return nll.mean()
-
-# # ===== 4. 학습 =====
-# model = BetaNet()
-# optimizer = optim.Adam(model.parameters(), lr=0.01)
-
-# for epoch in range(200):
-#     alpha_pred, beta_pred = model(X)
-#     loss = beta_bernoulli_nll(alpha_pred, beta_pred, y)
     
-#     optimizer.zero_grad()
-#     loss.backward()
-#     optimizer.step()
+    if reward == 1:
+        beta_dist.add_alpha(inc=1)
+        # beta_dist.add_beta(inc=0.2)
+    else:
+        # beta_dist.add_alpha(inc=0.2)
+        beta_dist.add_beta(inc=1)
     
-#     if (epoch+1) % 50 == 0:
-#         print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
+    if i % 1 == 0:
+        print(f"True p : {p:.2f}")
+        beta_dist.plot()
+        plt.axvline(p, color='red', ls='--', alpha=0.5)
+        plt.show()
 
-# # ===== 5. 예측 및 불확실성 계산 =====
-# with torch.no_grad():
-#     alpha_pred, beta_pred = model(X)
-#     mean_pred = alpha_pred / (alpha_pred + beta_pred)
-#     var_pred = (alpha_pred * beta_pred) / ((alpha_pred + beta_pred)**2 * (alpha_pred + beta_pred + 1))
+    if gamma < 1:
+        beta_dist.a = beta_dist.a*gamma
+        beta_dist.b = beta_dist.b*gamma
+
+    time.sleep(0.1)
+    clear_output()
+
+
+beta_dist.plot()
+plt.axvline(p, color='red', ls='--', alpha=0.5)
+plt.show()
+
+###################################################################################################
+
+
+# interval, entropy
+intervals = []
+entropies = []
+for i in range(100):
+    beta_dist = Beta(i, 100-i)
+    interval = beta_dist.ppf(0.9) - beta_dist.ppf(0.1)
+    entropy = beta_dist.entropy()
     
-# # 일부 샘플 출력
-# for i in range(5):
-#     print(f"X={X[i].item():.2f}, y={y[i].item()}, "
-#           f"mean={mean_pred[i].item():.3f}, var={var_pred[i].item():.4f}")
+    intervals.append(interval)
+    entropies.append(entropy)
 
+plt.figure(figsize=(7,3))
+plt.subplot(1,2,1)
+plt.plot(intervals)
+plt.subplot(1,2,2)
+plt.plot(entropies)
+plt.show()
+
+###################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# beta distribution을 Deep Neural Network가 학습해서 binary classification의 uncertainty도 학습할 수 있을까? loss funciton을 beta distribution기반으로 해야할까?
+# 방금 질문한 beta distribution을 Deep Neural Network가 학습해서 binary classification의 uncertainty도 학습하는 과정을 
+# 간단한 예제 데이터 기반으로 torch 코드를 보여줘.
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
+# ===== 1. 예제 데이터 생성 =====
+torch.manual_seed(42)
+n_samples = 200
+X = torch.rand(n_samples, 1) * 2 - 1  # [-1, 1] 범위
+y = (X[:, 0] > 0).float()  # 0 또는 1 라벨
+
+# ===== 2. 모델 정의 =====
+class BetaNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(1, 16)
+        self.fc2 = nn.Linear(16, 16)
+        self.fc_alpha = nn.Linear(16, 1)
+        self.fc_beta = nn.Linear(16, 1)
+    
+    def forward(self, x):
+        h = F.relu(self.fc1(x))
+        h = F.relu(self.fc2(h))
+        alpha = F.softplus(self.fc_alpha(h)) + 1e-6  # 양수 제약
+        beta = F.softplus(self.fc_beta(h)) + 1e-6
+        return alpha, beta
+
+# ===== 3. Loss 함수 (Beta-Bernoulli NLL) =====
+def beta_bernoulli_nll(alpha, beta, target):
+    p = alpha / (alpha + beta)
+    nll = - (target * torch.log(p + 1e-8) + (1 - target) * torch.log(1 - p + 1e-8))
+    return nll.mean()
+
+# ===== 4. 학습 =====
+model = BetaNet()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
+
+for epoch in range(200):
+    alpha_pred, beta_pred = model(X)
+    loss = beta_bernoulli_nll(alpha_pred, beta_pred, y)
+    
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    
+    if (epoch+1) % 50 == 0:
+        print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
+
+# ===== 5. 예측 및 불확실성 계산 =====
+with torch.no_grad():
+    alpha_pred, beta_pred = model(X)
+    mean_pred = alpha_pred / (alpha_pred + beta_pred)
+    var_pred = (alpha_pred * beta_pred) / ((alpha_pred + beta_pred)**2 * (alpha_pred + beta_pred + 1))
+    
+# 일부 샘플 출력
+for i in range(5):
+    print(f"X={X[i].item():.2f}, y={y[i].item()}, "
+          f"mean={mean_pred[i].item():.3f}, var={var_pred[i].item():.4f}")
+
+    
     
