@@ -14,20 +14,15 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 
 try:
-    from DS_Torch import TorchDataLoader, TorchModeling, AutoML, early
-    from DS_DeepLearning import EarlyStopping
+    from DS_DeepLearning import TorchDataLoader, TorchModeling, AutoML, early, EarlyStopping
 except:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
     try:
         import httpimport
         with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-            from DS_Torch import TorchDataLoader, TorchModeling, AutoML
-            from DS_DeepLearning import EarlyStopping
+            from DS_DeepLearning import TorchDataLoader, TorchModeling, AutoML, early, EarlyStopping
     except:
-        import requests
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_Torch.py", verify=False)
-        exec(response.text)
-        
+        import requests       
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_DeepLearning.py", verify=False)
         exec(response.text)
 
@@ -46,8 +41,8 @@ fail = False
 sample_size=300
 group_size = 3
 
-# rng = np.random.RandomState(5)
-rng = np.random.RandomState(1)
+rng = np.random.RandomState(21)
+# rng = np.random.RandomState(1)
 mu_list = rng.rand(group_size)*8 -4
 sigma_list = rng.rand(group_size)*0.7
 
@@ -225,9 +220,9 @@ plt.show()
 
 
 
-
 ###################################################################################################
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error
 
 # RandomForest
@@ -278,13 +273,34 @@ plt.show()
 
 
 
+# XGBoost
+XGB = XGBRegressor()
+XGB.fit(X_train.numpy(), y_train.numpy().ravel())
 
+xgb_pred = XGB.predict(X_test)
+xgb_pred_lin = XGB.predict(X_linspace)
+xgb_test_rmse = np.sqrt(mean_squared_error(y_test.ravel(), xgb_pred))
+print(f"RMSE_XGB : {xgb_test_rmse:.3f}")
+
+
+lower_cpu = (xgb_pred_lin - 2*xgb_test_rmse).ravel()
+upper_cpu = (xgb_pred_lin + 2*xgb_test_rmse).ravel()
+
+plt.figure(figsize=(10, 6))
+plt.scatter(X_train, y_train, color='steelblue')
+plt.plot(X_linspace, xgb_pred_lin)
+plt.plot(X_linspace, f.true_f(X_linspace))
+plt.fill_between(X_linspace.numpy().ravel(), lower_cpu, upper_cpu, alpha=0.2)
+plt.ylim(-2.5, 4.5)
+# plt.xticks([])
+# plt.yticks([])
+plt.show()
 
 
 
 
 ###################################################################################################
-def visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, steps=100, f=None, sigma=2, return_plot=True):
+def visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, steps=100, f=None, sigma=2, figsize=(10,6), return_plot=True):
     model.eval()
 
     # 모델 파라미터에서 device/dtype 추론
@@ -317,7 +333,7 @@ def visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, steps=100, f=No
     lower_cpu = (mu_cpu - sigma * sig_cpu)
     upper_cpu = (mu_cpu + sigma * sig_cpu)
 
-    fig = plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=figsize)
     plt.plot(X_train_cpu.numpy(), y_train_cpu.numpy(), 'o', label="Training Data", color='steelblue')
     plt.plot(X_test_cpu.numpy(), mu_cpu.numpy(), label="Mean Prediction", color='steelblue')
 
@@ -415,12 +431,46 @@ class EmbeddingBlock(nn.Module):
 
 class PseudoData():
     def __init__(self, window_alpha=2, window_beta=0.5, feature_gamma=0.5,  max_samples=1e+6):
+        """
+        입력 데이터의 분포 범위를 기반으로 가상(Pseudo) 데이터를 생성하는 클래스.
+        
+        이 클래스는 원본 데이터의 특성(Feature)별 최소/최대 범위를 측정하고, 
+        확장 계수(alpha)와 지수 가중치(beta, gamma)를 이용해 생성할 샘플 수와 범위를 결정합니다.
+        
+        생성량 결정 수식:
+            n_gen = min(max_samples, n_x * (alpha^beta) * (n_features^gamma))
+        
+        Attributes:
+            window_alpha (float): 데이터 생성 범위를 확장하는 계수. 
+                값이 클수록 원본 데이터의 경계를 넘어 더 넓은 영역에서 데이터를 생성합니다.
+            window_beta (float): window_alpha에 따른 샘플 생성량의 민감도를 조절하는 지수.
+            feature_gamma (float): 데이터의 피처(차원) 수에 따른 샘플 생성량의 민감도를 조절하는 지수.
+            max_samples (int): 생성 가능한 최대 샘플 수의 상한선.
+        """
         self.window_alpha = window_alpha
         self.window_beta = window_beta
         self.feature_gamma = feature_gamma
         self.max_samples = max_samples
         
     def gen_pseudo_data(self, x, window_alpha=None, window_beta=None, feature_gamma=None, max_samples=None):
+        """
+        입력 텐서 x를 바탕으로 가상 데이터를 생성합니다.
+
+        계산된 범위 [x_min - alpha*window, x_max + alpha*window] 내에서 
+        균등 분포(Uniform Distribution)를 따르는 난수를 생성합니다.
+
+        Args:
+            x (torch.Tensor): 기준이 되는 원본 데이터 텐서. (Shape: [Batch, Features, ...])
+            window_alpha (float): 데이터 생성 범위를 확장하는 계수. 
+                값이 클수록 원본 데이터의 경계를 넘어 더 넓은 영역에서 데이터를 생성합니다.
+            window_beta (float): window_alpha에 따른 샘플 생성량의 민감도를 조절하는 지수.
+            feature_gamma (float): 데이터의 피처(차원) 수에 따른 샘플 생성량의 민감도를 조절하는 지수.
+            max_samples (int): 생성 가능한 최대 샘플 수의 상한선.
+
+        Returns:
+            torch.Tensor: 생성된 가상 데이터 텐서. 
+                원본 데이터 x와 동일한 device 및 dtype을 가집니다.
+        """
         window_alpha = self.window_alpha if window_alpha is None else window_alpha
         window_beta = self.window_beta if window_beta is None else window_beta
         feature_gamma = self.feature_gamma if feature_gamma is None else feature_gamma
@@ -446,7 +496,165 @@ class PseudoData():
         return x_gen
 
 
-#############################################################################
+###################################################################################################
+# ------------------------------------------------------------------------------------------
+# ○ Gaussian Loss (Base-Line)
+# def loss_function(model, batch, optimizer=None):
+#     x, y = batch
+#     mu, std = model(x)
+    
+#     mse_loss = lambda pred,y : ((pred - y)**2).mean()
+
+#     loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
+#     return loss_truth
+# ------------------------------------------------------------------------------------------
+
+
+
+# ------------------------------------------------------------------------------------------
+# ○ Gaussian NLL + CQL-style confidence regularizer
+# import math
+# def loss_function(model, batch, optimizer=None):
+#     x, y = batch
+#     mu, std = model(x)
+
+#     pseudo_X = pseudo_data.gen_pseudo_data(x)
+#     pseudo_mu, pseudo_std = model(pseudo_X)
+
+#     len_batch = x.shape[0]
+#     len_pseudo_batch = pseudo_X.shape[0]
+
+#     # 1) In-distribution probabilistic loss (Gaussian NLL)
+#     loss_id_nll = F.gaussian_nll_loss(mu, y, std**2, full=False, reduction="mean")
+
+#     # 2) CQL-style confidence regularizer
+#     #     confidence c(x) = -log(var)  (클수록 더 confident)
+#     #     pseudo에서 높은 confidence를 logsumexp로 강하게 페널티
+
+#     conf_id = (-torch.log(std ** 2)).reshape(len_batch, -1).mean(dim=1)          # [B]
+#     conf_pseudo = (-torch.log(pseudo_std ** 2)).reshape(len_pseudo_batch, -1).mean(dim=1)  # [B]
+
+#     # log E exp(conf_pseudo)  ≈  logsumexp - log(B)
+#     logmeanexp_conf_pseudo = torch.logsumexp(conf_pseudo, dim=0) - math.log(conf_pseudo.numel())
+
+#     alpha_cql = 0.005  # 보수성 강도 (튜닝포인트)
+#     loss_cql_conf = alpha_cql * (logmeanexp_conf_pseudo - conf_id.mean())
+
+#     # 3) total
+#     loss = loss_id_nll + loss_cql_conf
+#     return loss
+# ------------------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------------------
+# ★ Gaussian NLL + OOD KL(prior) regularizer
+def loss_function(model, batch, optimizer=None):
+    x, y = batch
+    mu, std = model(x)
+
+    pseudo_X = pseudo_data.gen_pseudo_data(x)
+    pseudo_mu, pseudo_std = model(pseudo_X)
+
+    # 1) In-distribution probabilistic loss (Gaussian NLL)
+    loss_id_nll = F.gaussian_nll_loss(mu, y, std**2, full=False, reduction="mean")
+
+    # 2) OOD prior (넓은 분포) 설정
+    #   - prior mean: batch y 평균 (또는 0으로 고정 가능)
+    #   - prior std : y scale의 k배 (넓게)
+    prior_mu = pseudo_mu.detach()
+    pseudo_var = pseudo_std ** 2
+
+    # prior_std = 3.0
+    # prior_std = (y.std() * torch.sqrt(torch.tensor(pseudo_data.window_alpha)) ).detach()
+    prior_std = 0.1 *( y.std() + torch.abs(pseudo_X - x.mean())* pseudo_data.window_alpha ).detach()
+    prior_var = prior_std ** 2
+
+    # 3) KL[ N(pseudo_mu, pseudo_std^2) || N(prior_mu, prior_std^2) ]
+    #   diag Gaussian KL (elementwise 후 평균)
+    kl_element = 0.5 * (
+        torch.log(prior_var / pseudo_var)
+        + (pseudo_var + (pseudo_mu - prior_mu) ** 2) / prior_var
+        - 1.0
+    )
+    loss_ood_kl = kl_element.mean()
+
+    beta_ood = 0.1  # OOD prior regularization 강도
+    loss = loss_id_nll + beta_ood * loss_ood_kl
+    return loss
+# ------------------------------------------------------------------------------------------
+
+
+# # ------------------------------------------------------------------------------------------
+# ○ Gaussian NLL + margin/ranking regularizer
+# def loss_function_margin(model, batch, optimizer=None):
+#     x, y = batch
+#     mu, std = model(x)
+
+#     pseudo_X = pseudo_data.gen_pseudo_data(x)
+#     pseudo_mu, pseudo_std = model(pseudo_X)
+
+#     len_batch = x.shape[0]
+#     len_pseudo_batch = pseudo_X.shape[0]
+
+#     # 1) In-distribution probabilistic loss
+#     loss_id_nll = F.gaussian_nll_loss(mu, y, std**2, full=False, reduction="mean")
+
+#     # 2) Confidence ranking / margin regularizer
+#     #   pseudo는 real보다 confidence가 낮아야 함
+#     #   conf = -log(var) (클수록 더 confident)
+#     var = std ** 2
+#     pseudo_var = pseudo_std ** 2
+
+#     conf_id = (-torch.log(std ** 2)).reshape(len_batch, -1).mean(dim=1)          # [B]
+#     conf_pseudo = (-torch.log(pseudo_std ** 2)).reshape(len_pseudo_batch, -1).mean(dim=1)  # [B]
+
+#     margin = 0.5  # pseudo confidence가 real보다 최소 margin만큼 낮아지도록
+#     # 위반 시 페널티: softplus(conf_pseudo - conf_id + margin)
+#     loss_margin = F.softplus(conf_pseudo - conf_id + margin).mean()
+
+#     beta_margin = 0.1
+#     loss = loss_id_nll + beta_margin * loss_margin
+#     return loss
+# # ------------------------------------------------------------------------------------------
+
+
+# # ------------------------------------------------------------------------------------------
+# ○ Explicit CQL-style confidence regularizer
+# def loss_function(model, batch, optimizer=None):
+#     # --------------------------------------------------
+#     x, y = batch
+#     mu, std = model(x)
+    
+#     mse_loss = lambda pred,y : ((pred - y)**2).mean()
+
+#     loss_truth = mse_loss(mu, y)
+#     # loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
+#     # loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
+#     # --------------------------------------------------
+#     pseudo_X = pseudo_data.gen_pseudo_data(x)
+#     pseudo_mu, pseudo_std = model(pseudo_X)
+    
+#     gamma_ = 1     # observe uncertainty coefficient
+#     lambda_ = 1  # unobserve uncertainty coefficient
+#     p = 0.9
+#     std_target = gamma_* torch.sqrt(loss_truth.detach())      # gamma_ ≒ 1
+    
+#     pseudo_std_target = lambda_ * y.std() * torch.sqrt(torch.tensor(pseudo_data.window_alpha)) # lambda_ ≒ 1
+#     # std_target = gamma_*y.std()     # gamma_ ≒ 0.1
+#     # pseudo_std_target = lambda_*( y.std() + torch.abs(pseudo_X - x.mean())* pseudo_data.window_alpha )  # lambda_ ≒ 0.1
+#     loss_pseudo =  p*torch.sqrt(mse_loss(std, std_target))+ (1-p)*torch.sqrt(mse_loss(pseudo_std, pseudo_std_target))
+    
+#     # pseudo_std =  pseudo_std.clamp(min=0, max=lambda_*y.std())
+#     # penalty = torch.relu(pseudo_std - lambda_*y.std()).pow(2).mean()
+#     # loss_pseudo = torch.log(std).mean() - torch.log( pseudo_std ).mean() + penalty
+#     # --------------------------------------------------
+#     loss = p * loss_truth + (1-p)* loss_pseudo
+
+#     return loss
+# # ------------------------------------------------------------------------------------------
+
+
+
+###################################################################################################
 # 1D Ensemble Model
 if succeed:
     class EnsembleNN01(nn.Module):
@@ -492,39 +700,6 @@ if succeed:
     optimizer = optim.Adam(model.parameters(), lr=1e-3) 
     pseudo_data = PseudoData(window_alpha=4)
     
-    
-    def loss_function(model, batch, optimizer=None):
-        # --------------------------------------------------
-        x, y = batch
-        mu, std = model(x)
-        
-        mse_loss = lambda pred,y : ((pred - y)**2).mean()
-
-        loss_truth = mse_loss(mu, y)
-        # loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
-        # loss_truth = ( 0.5 * torch.log(2 * torch.pi * std**2) + (y - mu)**2 / (2 * std**2) ).mean()
-        # --------------------------------------------------
-        pseudo_X = pseudo_data.gen_pseudo_data(x)
-        pseudo_mu, pseudo_std = model(pseudo_X)
-        
-        gamma_ = 1     # observe uncertainty coefficient
-        lambda_ = 1  # unobserve uncertainty coefficient
-        p = 0.9
-        std_target = gamma_* torch.sqrt(loss_truth.detach())      # gamma_ ≒ 1
-        pseudo_std_target = lambda_*y.std()* torch.sqrt(torch.tensor(pseudo_data.window_alpha)) # lambda_ ≒ 1
-        # std_target = gamma_*y.std()     # gamma_ ≒ 0.1
-        # pseudo_std_target = lambda_*( y.std() + torch.abs(pseudo_X - x.mean())* pseudo_data.window_alpha )  # lambda_ ≒ 0.1
-        loss_pseudo =  p*torch.sqrt(mse_loss(std, std_target))+ (1-p)*torch.sqrt(mse_loss(pseudo_std, pseudo_std_target))
-        
-        # pseudo_std =  pseudo_std.clamp(min=0, max=lambda_*y.std())
-        # penalty = torch.relu(pseudo_std - lambda_*y.std()).pow(2).mean()
-        # loss_pseudo = torch.log(std).mean() - torch.log( pseudo_std ).mean() + penalty
-        # --------------------------------------------------
-        loss = p * loss_truth + (1-p)* loss_pseudo
-
-        return loss
-
-
     tm1 = TorchModeling(model, device=device)
     tm1.compile(optimizer=optimizer
                 ,loss_function = loss_function
@@ -595,7 +770,7 @@ if succeed:
     optimizer = optim.Adam(model.parameters(), lr=1e-3) 
 
     pseudo_data = PseudoData()
-
+    
     tm1 = TorchModeling(model, device=device)
     tm1.compile(optimizer=optimizer
                 ,loss_function = loss_function
@@ -606,6 +781,7 @@ if succeed:
     tm1.train_model(train_loader=train_loader, epochs=100)
 
     visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, sigma=2, f=f)
+    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, sigma=2, f=f, figsize=(5,3))
     ##################################################################
 
 
