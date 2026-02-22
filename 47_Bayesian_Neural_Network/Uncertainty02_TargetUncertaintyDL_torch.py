@@ -546,7 +546,7 @@ class PseudoData():
 # ------------------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------------------
-# ★ Gaussian NLL + OOD KL(prior) regularizer
+# ★ Gaussian NLL + Conservative OOD KL(prior) regularizer
 def loss_function(model, batch, optimizer=None):
     x, y = batch
     mu, std = model(x)
@@ -565,7 +565,7 @@ def loss_function(model, batch, optimizer=None):
 
     # prior_std = 3.0
     # prior_std = (y.std() * torch.sqrt(torch.tensor(pseudo_data.window_alpha)) ).detach()
-    prior_std = 0.1 *( y.std() + torch.abs(pseudo_X - x.mean())* pseudo_data.window_alpha ).detach()
+    prior_std = 0.1 *( y.std() + torch.abs(pseudo_X - x.mean(dim=0))* pseudo_data.window_alpha ).detach()
     prior_var = prior_std ** 2
 
     # 3) KL[ N(pseudo_mu, pseudo_std^2) || N(prior_mu, prior_std^2) ]
@@ -577,10 +577,59 @@ def loss_function(model, batch, optimizer=None):
     )
     loss_ood_kl = kl_element.mean()
 
-    beta_ood = 0.1  # OOD prior regularization 강도
+    beta_ood = 0.1  # OOD prior regularization 강도 (beta_ood를 처음부터 0.1로 고정하기보다, 학습 초기에는 ID Loss에 집중하다가 점진적으로 늘리는 Warm-up 방식을 고려필요)
     loss = loss_id_nll + beta_ood * loss_ood_kl
     return loss
 # ------------------------------------------------------------------------------------------
+
+# # ------------------------------------------------------------------------------------------
+# # ☆ Gaussian NLL + Conservative KL(prior) regularizer
+# def loss_function(model, batch, optimizer=None):
+#     x, y = batch
+#     mu, std = model(x)
+#     var = std**2
+
+#     # 1) In-distribution Loss
+#     # MSE for mean
+#     loss_mse = F.mse_loss(mu, y)
+
+#     # KL for uncertainty calibration (ID)
+#     # 실제 오차 (y - mu)^2를 prior variance로 사용
+#     with torch.no_grad():
+#         error_var = (y - mu).pow(2) + 1e-6 # 0 방지용 epsilon
+#         id_prior_mu = mu.detach()
+
+#     loss_id_kl = 0.5 * (
+#         torch.log(error_var / var)
+#         + (var + (mu - id_prior_mu)**2) / error_var
+#         - 1.0
+#     ).mean()
+
+#     # 2) OOD Loss (기존 설계 유지)
+#     pseudo_X = pseudo_data.gen_pseudo_data(x)
+#     pseudo_mu, pseudo_std = model(pseudo_X)
+#     pseudo_var = pseudo_std**2
+
+#     with torch.no_grad():
+#         prior_mu = pseudo_mu.detach()
+#         # 거리 비례 prior_std 설계
+#         prior_std = 0.1 * (y.std() + torch.abs(pseudo_X - x.mean()) * pseudo_data.window_alpha)
+#         prior_var = prior_std**2 + 1e-6
+
+#     loss_ood_kl = 0.5 * (
+#         torch.log(prior_var / pseudo_var)
+#         + (pseudo_var + (pseudo_mu - prior_mu)**2) / prior_var
+#         - 1.0
+#     ).mean()
+
+#     # Total Loss
+#     beta_id = 0.1   # ID 불확실성 정렬 강도
+#     beta_ood = 0.05  # OOD 불확실성 정렬 강도
+#     loss = loss_mse + beta_id * loss_id_kl + beta_ood * loss_ood_kl
+    
+#     return loss
+# # ------------------------------------------------------------------------------------------
+
 
 
 # # ------------------------------------------------------------------------------------------
@@ -781,7 +830,7 @@ if succeed:
     tm1.train_model(train_loader=train_loader, epochs=100)
 
     visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, sigma=2, f=f)
-    visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, sigma=2, f=f, figsize=(5,3))
+    # visualize_validate(model, X_train, y_train, xmin=-6, xmax=6, sigma=2, f=f, figsize=(5,3))
     ##################################################################
 
 
