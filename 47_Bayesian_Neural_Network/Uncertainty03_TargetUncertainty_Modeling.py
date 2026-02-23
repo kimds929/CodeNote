@@ -7,7 +7,8 @@ else:
 folder_path =f"{base_path}/DataScience"
 sys.path.append(f"{folder_path}/00_DataAnalysis_Basic")
 sys.path.append(f"{folder_path}/DS_Library")
-sys.path.append(r'D:\DataScience\00_DataAnalysis_Basic')
+sys.path.append(f'{folder_path}/★GitHub_kimds929/CodeNote/00_DataAnalysis_Basic')
+sys.path.append(f'{folder_path}/★GitHub_kimds929/DS_Library')
 
 import torch
 import torch.nn as nn
@@ -24,19 +25,15 @@ import missingno as msno
 from DS_Basic_Module import DF_Summary, ScalerEncoder
 
 try:
-    from DS_Torch import TorchDataLoader, TorchModeling, AutoML
-    from DS_DeepLearning import EarlyStopping
+    from DS_DeepLearning import TorchDataLoader, TorchModeling, EarlyStopping
 except:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
     try:
         import httpimport
         with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-            from DS_Torch import TorchDataLoader, TorchModeling, AutoML
-            from DS_DeepLearning import EarlyStopping
+            from DS_DeepLearning import TorchDataLoader, TorchModeling, EarlyStopping
     except:
         import requests
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_Torch.py", verify=False)
-        exec(response.text)
         
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_DeepLearning.py", verify=False)
         exec(response.text)
@@ -475,37 +472,50 @@ model = EnsembleNN(num_input_dim=11, cat_input_dim=2, hidden_dim=128,
 print(f"n_params : {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 # model(torch.rand(10,11), torch.randint(0,2, size=(10,2)) )
 
-def loss_function(model, batch, optimizer=None):
-    # --------------------------------------------------
-    X_num, X_cat, y = batch
-    mu, std = model(X_num, X_cat)
-    
-    mse_loss = lambda pred,y : ((pred - y)**2).mean()
+pseudo_data = PseudoData( max_categories=torch.LongTensor(train_X_cat) )
 
-    loss_truth = mse_loss(mu, y)
-    # loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
-    # --------------------------------------------------
-    pseudo_num_X, pseudo_cat_X = pseudo_data(X_num, X_cat)
-    
-    pseudo_mu, pseudo_std = model(pseudo_num_X, pseudo_cat_X)
-    
-    gamma_ = 0.1     # observe uncertainty coefficient
-    lambda_ = 0.3   # unobserve uncertainty coefficient
-    p = 0.95
+# ------------------------------------------------------------------------------------------
+# ★ Gaussian NLL + Conservative OOD KL(prior) regularizer
+def loss_function(model, batch, optimizer=None):
+    X_num, X_cat, y = batch
     
     X_true = torch.cat([X_num, X_cat], dim=-1)
     X_true_mean = X_true.mean(dim=torch.arange(X_true.ndim)[:-1].tolist(), keepdims=True)
+    mu, std = model(X_num, X_cat)
+
+    pseudo_num_X, pseudo_cat_X = pseudo_data(X_num, X_cat)
     X_pseudo = torch.cat([pseudo_num_X, pseudo_cat_X], dim=-1)
-    std_target = gamma_* y.std() 
+    pseudo_mu, pseudo_std = model(pseudo_num_X, pseudo_cat_X)
     
-    pseudo_std_target = lambda_*( y.std() + torch.abs((X_pseudo - X_true_mean).mean())* pseudo_data.window_alpha )
-    loss_pseudo = p* mse_loss(std, std_target)+ (1-p)*mse_loss(pseudo_std, pseudo_std_target)
-    # --------------------------------------------------
-    loss = p * loss_truth + (1-p)* loss_pseudo
 
+    # 1) In-distribution probabilistic loss (Gaussian NLL)
+    loss_id_nll = F.gaussian_nll_loss(mu, y, std**2, full=False, reduction="mean")
+
+    # 2) OOD prior (넓은 분포) 설정
+    #   - prior mean: batch y 평균 (또는 0으로 고정 가능)
+    #   - prior std : y scale의 k배 (넓게)
+    prior_mu = pseudo_mu.detach()
+    pseudo_var = pseudo_std ** 2
+
+    # prior_std = 3.0
+    # prior_std = (y.std() * torch.sqrt(torch.tensor(pseudo_data.window_alpha)) ).detach()
+    prior_std = 0.1 *( y.std() + torch.abs(X_pseudo - X_true_mean.mean(dim=0))* pseudo_data.window_alpha ).detach()
+    prior_var = prior_std ** 2
+
+    # 3) KL[ N(pseudo_mu, pseudo_std^2) || N(prior_mu, prior_std^2) ]
+    #   diag Gaussian KL (elementwise 후 평균)
+    kl_element = 0.5 * (
+        torch.log(prior_var / pseudo_var)
+        + (pseudo_var + (pseudo_mu - prior_mu) ** 2) / prior_var
+        - 1.0
+    )
+    loss_ood_kl = kl_element.mean()
+
+    beta_ood = 0.1  # OOD prior regularization 강도 (beta_ood를 처음부터 0.1로 고정하기보다, 학습 초기에는 ID Loss에 집중하다가 점진적으로 늘리는 Warm-up 방식을 고려필요)
+    loss = loss_id_nll + beta_ood * loss_ood_kl
     return loss
+# ------------------------------------------------------------------------------------------
 
-pseudo_data = PseudoData( max_categories=torch.LongTensor(train_X_cat) )
 
 tm1 = TorchModeling(model, device=device)
 tm1.compile(optimizer=optim.Adam(model.parameters(), lr=1e-3) 
@@ -641,7 +651,7 @@ def partial_dependence_uncertainty_plot(model, index, train_X_num, train_X_cat, 
         plt.show()
 
 # visualize
-partial_dependence_uncertainty_plot(model, 0, train_X_num_norm, train_X_cat, train_y_norm, 
+partial_dependence_uncertainty_plot(model, 10, train_X_num_norm, train_X_cat, train_y_norm, 
                                 sigma=2, scaler_X=ss_X, scaler_y=ss_y)
 
 
@@ -940,50 +950,50 @@ class EnsembleNN02(nn.Module):
         #             torch.nn.init.zeros_(layer.bias)  # bias는 0으로 초기화
 
     def forward(self, x_num, x_cat):
-            # x_num : (B, F_n),  X_cat : (B, F_c)
-            x_batch = x_num.shape[0]
+        # x_num : (B, F_n),  X_cat : (B, F_c)
+        x_batch = x_num.shape[0]
+        
+        # Embedding
+        num_x_embed = self.num_embedding_layer(x_num)   # (B, F_n, emb_dim)
+        cat_x_embed = self.cat_embedding_layer(x_cat)   # (B, F_c, emb_dim)
+        
+        # # PositionalEncoding
+        # num_x_embed_pe = self.pe_num(num_x_embed)     # (B, F_n, emb_dim)
+        # cat_x_embed_pe = self.pe_num(cat_x_embed)     # (B, F_c, emb_dim)
+        
+        # Embedding_FC
+        num_x_embed_fc = self.num_embedding_fc(num_x_embed)   # (B, F_n, d_model)
+        cat_x_embed_fc = self.cat_embedding_fc(cat_x_embed)   # (B, F_c, d_model)
+        
+        # concat
+        x_embed = torch.cat([num_x_embed_fc, cat_x_embed_fc], dim=-2)   # (B, F, d_model)  # F = F_n + F_c
+        return x_embed
             
-            # Embedding
-            num_x_embed = self.num_embedding_layer(x_num)   # (B, F_n, emb_dim)
-            cat_x_embed = self.cat_embedding_layer(x_cat)   # (B, F_c, emb_dim)
-            
-            # # PositionalEncoding
-            # num_x_embed_pe = self.pe_num(num_x_embed)     # (B, F_n, emb_dim)
-            # cat_x_embed_pe = self.pe_num(cat_x_embed)     # (B, F_c, emb_dim)
-            
-            # Embedding_FC
-            num_x_embed_fc = self.num_embedding_fc(num_x_embed)   # (B, F_n, d_model)
-            cat_x_embed_fc = self.cat_embedding_fc(cat_x_embed)   # (B, F_c, d_model)
-            
-            # concat
-            x_embed = torch.cat([num_x_embed_fc, cat_x_embed_fc], dim=-2)   # (B, F, d_model)  # F = F_n + F_c
-            return x_embed
-            
-            # # latent fc expansion
-            # x_latent = self.embedding_fc_layer(x_embed)
-            
-            # # transformer encoder
-            # x_enc_out = self.encoder(x_latent)
-            
-            # # attention pooling
-            # # x_pool_out, att_weight = self.attn_pool_layer(x_enc_out.transpose(-2,-1))
-            # # x_pool_out, att_weight = self.attn_pool_layer(x_enc_out)
-            
-            # # flatten 
-            # x_flatten = x_enc_out.view(x_batch, -1)
-            
-            # # shared
-            # outputs = []
-            # for block in self.ensemble_blocks:
-            #     outputs.append(block(x_flatten))
+        # # latent fc expansion
+        # x_latent = self.embedding_fc_layer(x_embed)
+        
+        # # transformer encoder
+        # x_enc_out = self.encoder(x_latent)
+        
+        # # attention pooling
+        # # x_pool_out, att_weight = self.attn_pool_layer(x_enc_out.transpose(-2,-1))
+        # # x_pool_out, att_weight = self.attn_pool_layer(x_enc_out)
+        
+        # # flatten 
+        # x_flatten = x_enc_out.view(x_batch, -1)
+        
+        # # shared
+        # outputs = []
+        # for block in self.ensemble_blocks:
+        #     outputs.append(block(x_flatten))
 
-            # outputs_cat = torch.cat(outputs, dim=-1)  # (batch, n_ensemble)
+        # outputs_cat = torch.cat(outputs, dim=-1)  # (batch, n_ensemble)
 
-            # # mu, std
-            # mu = outputs_cat.mean(dim=-1, keepdims=True)
-            # std = outputs_cat.std(dim=-1, keepdims=True)
+        # # mu, std
+        # mu = outputs_cat.mean(dim=-1, keepdims=True)
+        # std = outputs_cat.std(dim=-1, keepdims=True)
 
-            return mu, std
+        return mu, std
 
 
 
@@ -994,35 +1004,47 @@ model(torch.rand(10,11).to(device), torch.randint(0,2, size=(10,2)).to(device) )
 
 # model(torch.rand(10,11), torch.randint(0,2, size=(10,2)) )
 
+# ------------------------------------------------------------------------------------------
+# ★ Gaussian NLL + Conservative OOD KL(prior) regularizer
 def loss_function(model, batch, optimizer=None):
-    # --------------------------------------------------
     X_num, X_cat, y = batch
-    mu, std = model(X_num, X_cat)
-    
-    mse_loss = lambda pred,y : ((pred - y)**2).mean()
-
-    loss_truth = mse_loss(mu, y)
-    # loss_truth = nn.functional.gaussian_nll_loss(mu, y, std**2)
-    # --------------------------------------------------
-    pseudo_num_X, pseudo_cat_X = pseudo_data(X_num, X_cat)
-    
-    pseudo_mu, pseudo_std = model(pseudo_num_X, pseudo_cat_X)
-    
-    gamma_ = 0.1     # observe uncertainty coefficient
-    lambda_ = 0.3   # unobserve uncertainty coefficient
-    p = 0.95
     
     X_true = torch.cat([X_num, X_cat], dim=-1)
     X_true_mean = X_true.mean(dim=torch.arange(X_true.ndim)[:-1].tolist(), keepdims=True)
-    X_pseudo = torch.cat([pseudo_num_X, pseudo_cat_X], dim=-1)
-    std_target = gamma_* y.std() 
-    
-    pseudo_std_target = lambda_*( y.std() + torch.abs((X_pseudo - X_true_mean).mean())* pseudo_data.window_alpha )
-    loss_pseudo = p* mse_loss(std, std_target)+ (1-p)*mse_loss(pseudo_std, pseudo_std_target)
-    # --------------------------------------------------
-    loss = p * loss_truth + (1-p)* loss_pseudo
+    mu, std = model(X_num, X_cat)
 
+    pseudo_num_X, pseudo_cat_X = pseudo_data(X_num, X_cat)
+    X_pseudo = torch.cat([pseudo_num_X, pseudo_cat_X], dim=-1)
+    pseudo_mu, pseudo_std = model(pseudo_num_X, pseudo_cat_X)
+    
+
+    # 1) In-distribution probabilistic loss (Gaussian NLL)
+    loss_id_nll = F.gaussian_nll_loss(mu, y, std**2, full=False, reduction="mean")
+
+    # 2) OOD prior (넓은 분포) 설정
+    #   - prior mean: batch y 평균 (또는 0으로 고정 가능)
+    #   - prior std : y scale의 k배 (넓게)
+    prior_mu = pseudo_mu.detach()
+    pseudo_var = pseudo_std ** 2
+
+    # prior_std = 3.0
+    # prior_std = (y.std() * torch.sqrt(torch.tensor(pseudo_data.window_alpha)) ).detach()
+    prior_std = 0.1 *( y.std() + torch.abs(X_pseudo - X_true_mean.mean(dim=0))* pseudo_data.window_alpha ).detach()
+    prior_var = prior_std ** 2
+
+    # 3) KL[ N(pseudo_mu, pseudo_std^2) || N(prior_mu, prior_std^2) ]
+    #   diag Gaussian KL (elementwise 후 평균)
+    kl_element = 0.5 * (
+        torch.log(prior_var / pseudo_var)
+        + (pseudo_var + (pseudo_mu - prior_mu) ** 2) / prior_var
+        - 1.0
+    )
+    loss_ood_kl = kl_element.mean()
+
+    beta_ood = 0.1  # OOD prior regularization 강도 (beta_ood를 처음부터 0.1로 고정하기보다, 학습 초기에는 ID Loss에 집중하다가 점진적으로 늘리는 Warm-up 방식을 고려필요)
+    loss = loss_id_nll + beta_ood * loss_ood_kl
     return loss
+# ------------------------------------------------------------------------------------------
 
 pseudo_data = PseudoData( max_categories=torch.LongTensor(train_X_cat) )
 
