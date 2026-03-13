@@ -178,7 +178,7 @@ model = Model01(1)
 # model(torch.rand(10,1))
 # a = model.gen_pseudo_data(torch.rand(10,1)).detach()
 
-torch.zeros_like(torch.rand(10,1))
+# torch.zeros_like(torch.rand(10,1))
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
