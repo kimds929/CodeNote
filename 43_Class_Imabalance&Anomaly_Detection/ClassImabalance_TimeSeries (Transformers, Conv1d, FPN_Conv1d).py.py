@@ -21,19 +21,15 @@ import matplotlib.pyplot as plt
 
 
 try:
-    from DS_Torch import TorchDataLoader, TorchModeling, AutoML
-    from DS_DeepLearning import EarlyStopping
+    from DS_DeepLearning import TorchDataLoader, EarlyStopping, TorchModeling, AutoML
 except:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
     try:
         import httpimport
         with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-            from DS_Torch import TorchDataLoader, TorchModeling, AutoML
-            from DS_DeepLearning import EarlyStopping
+            from DS_DeepLearning import TorchDataLoader, EarlyStopping, TorchModeling, AutoML
     except:
         import requests
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_Torch.py", verify=False)
-        exec(response.text)
         
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_DeepLearning.py", verify=False)
         exec(response.text)

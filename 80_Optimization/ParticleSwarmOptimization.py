@@ -259,6 +259,172 @@ for iteration in range(num_iterations):
 
 
 
+
+
+
+
+
+################################################################################
+################################################################################
+################################################################################
+# https://laonjena227.tistory.com/8
+#   1. 초기 위치는 알고리즘을 최적화 할 때 매우 중요하다. 
+#   2. PSO는 확률적 알고리즘이다. update와 수행은 랜덤 process를 이용한다. 이로 인해 여러  최적화 프로세스 수행하기 위한 솔루션을 추적하기 어려워질 수 있다. 하지만 항상 random seed를 사용할 수 있다.
+#   3. 완전한 전역 최적 솔루션을 찾아내는 것은 아니다. 하지만 이에 근접하는 것을 잘 찾아낸다. 
+#   4. 입자의 수에따라 수렴은 더 오래 걸릴 수 있다. 일반적으로 50개 이상 넘지 않는 것이 좋다.
+#   5. 복잡한 함수에 대해서는 좋은 솔루션을 찾기 전 500회에서 1000회 정도로 좀 더 많은 반복이 필요할 것이다. 
+
+import numpy as np
+
+class PSO(object):
+    """
+    Class implementing PSO algorithm
+    """
+    def __init__(self, func, init_pos, n_particles):
+        """
+        Initialize the key variables.
+        
+        Args:
+            fun (function): the fitness function to optimize
+            init_pos(array_like):
+            n_particles(int): the number of particles of the swarm.
+        """
+        self.func = func
+        self.n_particles = n_particles
+        self.init_pos = init_pos
+        self.particle_dim = len(init_pos)
+        self.particles_pos = np.random.uniform(size=(n_particles, self.particle_dim)) \
+                            * self.init_pos
+        self.velocities = np.random.uniform(size=(n_particles, self.particle_dim))
+        #Initilize the best positions
+        self.g_best = init_pos
+        self.p_best = self.particles_pos
+        
+    
+    def update_position(self, x, v):
+        """
+        Update particle position
+        
+        Args:
+            x (array-like): particle current position
+            v (array-like): particle current velocity
+        
+        Returns:
+            The updated position(array-like)
+        """
+        x = np.array(x)
+        v = np.array(v)
+        new_x = x + v
+        return new_x
+    
+    
+    def update_velocity(self, x, v, p_best, g_best, c0=0.5, c1=1.5, w=0.75):
+        """
+            Update particle velocity
+            
+            Args:
+                x(array-like): particle current position
+                v (array-like): particle current velocity
+                p_best(array-like): the best position found so far for a particle
+                g_best(array-like): the best position regarding all the particles found so far
+                c0 (float): the congnitive scaling constant, 인지 스케일링 상수
+                c1 (float): the social scaling constant
+                w (float): the inertia weight, 관성 중량
+                
+            Returns:
+                The updated velocity (array-like).
+        """
+        x = np.array(x)
+        v = np.array(v)
+        assert x.shape == v.shape, "Position and velocity must have same shape."
+        # a random number between 0 and 1
+        r = np.random.uniform()
+        p_best = np.array(p_best)
+        g_best = np.array(g_best)
+        
+        new_v = w*v + c0*r*(p_best - x) + c1*r*(g_best-x)
+        return new_v
+    
+    
+    def optimize(self, maxiter=200):
+        """
+        Run the PSO optimization process utill the stoping critera is met.
+        Cas for minization. The aim is to minimize the cost function
+        
+        Args:
+            maxiter (int): the maximum number of iterations before stopping the optimization
+            
+        Returns:
+            The best solution found (array-like)
+        """
+        for _ in range(maxiter):
+            for i in range(self.n_particles):
+                x = self.particles_pos[i]
+                v = self.velocities[i]
+                p_best = self.p_best[i]
+                self.velocities[i] = self.update_velocity(x, v, p_best, self.g_best)
+                self.particles_pos[i] = self.update_position(x,v)
+                # Update the besst position for particle i
+                if self.func(self.particles_pos[i]) < self.func(p_best):
+                    self.p_best[i] = self.particles_pos[i]
+                # Update the best position overall
+                if self.func(self.particles_pos[i]) < self.func(self.g_best):
+                    self.g_best = self.particles_pos[i]
+                    
+        return self.g_best, self.func(self.g_best)
+    
+    
+def sphere(x):
+    """
+        In 3D : f(x,y,z) = x² + y² + z²
+    """
+    return np.sum(np.square(x))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+################################################################################
+################################################################################
 ################################################################################
 # Gaussian Process + 최적화
 
