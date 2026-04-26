@@ -1,24 +1,72 @@
 # C:\Users\Admin\AppData\Local\pypoetry\Cache\virtualenvs\langchain-kr-sSe9WGAd-py3.11\Scripts\python.exe
 
-from dotenv import load_dotenv
-import numpy as np
-import os
+import sys
+folder_path = "D:/DataScience/★GitHub_kimds929/CodeNote/56_AgenticAI"
+sys.path.append("D:/DataScience/★GitHub_kimds929/DS_Library")
 
-dotenv_path = r'D:\DataScience\DataBase\Keys\.env'
-load_dotenv(dotenv_path)
-result = load_dotenv(dotenv_path)
+import os
+import requests
+import base64
+import json
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+
+try:
+    from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
+except:
+    remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
+    try:
+        import httpimport
+        with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+            from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
+    except:
+        import requests
+        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_AgenticAI.py", verify=False)
+        exec(response.text)
+
+
+if os.path.exists(f"{folder_path}/.env"):
+    result = load_dotenv(dotenv_path=f"{folder_path}/.env")
+else:
+    result = load_dotenv('D:/DataScience/DataBase/Keys/.env')
 print("로드 결과:", result)
 
-print(f"[API KEY]\n{os.environ['OPENAI_API_KEY'][:-15]}" + "*" * 15)
+##########################################################################################
 
-# ---------------------------------------------------------------------------------------------------------
+# LLM 객체 생성
+try:
+    llm = PgptLLM(
+        api_key=os.getenv("API_KEY"),
+        emp_no=os.getenv("EMP_NO"),
+        model_name="gpt-4.1-nano",
+        # temperature=2.0,  # 정상 코드에 있던 설정값 적용
+        # top_p=0.9,
+        # stream_usage=True
+    )
+except:
+    llm = ChatOpenAI(
+        # temperature=0.1,  # 창의성 (0.0 ~ 2.0)
+        # model_name="gpt-4o-mini",  # 모델명
+        model_name="gpt-4.1-nano",  # 모델명
+        # model_name="gpt-5-nano",  # 모델명
+    )
 
-from langchain_teddynote import logging
+    logging.langsmith("Default project")      # LangSmith 추적을 시작합니다.
+    # logging.langsmith("Default project", set_enable=False)  # LangSmith 추적을 하지 않습니다.
+print(llm)
 
-# 프로젝트 이름을 입력합니다.
-logging.langsmith("Default project")
-# logging.langsmith("Default project", set_enable=False)  # LangSmith 추적을 하지 않습니다.
-##############################################################################################################
+##########################################################################################
+##########################################################################################
+##########################################################################################
+##########################################################################################
+
+
+
+
+
+
+
+
 
 # llm 객체생성
 from langchain_openai import ChatOpenAI
@@ -50,10 +98,10 @@ from langchain_core.output_parsers import StrOutputParser
 
 # prompt 와 llm 을 생성합니다.
 prompt = PromptTemplate.from_template("{num} 의 10배는?")
-model = ChatOpenAI(model_name="gpt-4.1-nano")
+llm = ChatOpenAI(model_name="gpt-4.1-nano")
 
 # chain 을 생성합니다.
-chain = prompt | model
+chain = prompt | llm
 
 # chain 을 실행합니다.
 chain.invoke({"num": 5})
@@ -92,25 +140,25 @@ runnable_chain.invoke(10)
 
 # `langchain_core.runnables` 모듈의 `RunnableParallel` 클래스를 사용하여 두 가지 작업을 병렬로 실행하는 예시를 보여줍니다.
 # `ChatPromptTemplate.from_template` 메서드를 사용하여 주어진 `country`에 대한 **수도** 와 **면적** 을 구하는 두 개의 체인(`chain1`, `chain2`)을 만듭니다.
-# 이 체인들은 각각 `model`과 파이프(`|`) 연산자를 통해 연결됩니다. 마지막으로, `RunnableParallel` 클래스를 사용하여 이 두 체인을 `capital`와 `area`이라는 키로 결합하여 동시에 실행할 수 있는 `combined` 객체를 생성합니다.
+# 이 체인들은 각각 `llm`과 파이프(`|`) 연산자를 통해 연결됩니다. 마지막으로, `RunnableParallel` 클래스를 사용하여 이 두 체인을 `capital`와 `area`이라는 키로 결합하여 동시에 실행할 수 있는 `combined` 객체를 생성합니다.
 
 
 from langchain_core.runnables import RunnableParallel
 
 
-model = ChatOpenAI(model_name="gpt-4.1-nano")
+llm = ChatOpenAI(model_name="gpt-4.1-nano")
 
 # {country} 의 수도를 물어보는 체인을 생성합니다.
 chain1 = (
     PromptTemplate.from_template("{country} 의 수도는 어디야?")
-    | model
+    | llm
     | StrOutputParser()
 )
 
 # {country} 의 면적을 물어보는 체인을 생성합니다.
 chain2 = (
     PromptTemplate.from_template("{country} 의 면적은 얼마야?")
-    | model
+    | llm
     | StrOutputParser()
 )
 
@@ -153,7 +201,7 @@ combined.batch([{"country": "대한민국"}, {"country": "미국"}])
 
 # prompt 와 llm 을 생성합니다.
 prompt = PromptTemplate.from_template("{num} 의 10배는?")
-model = ChatOpenAI(model_name="gpt-4.1-nano")
+llm = ChatOpenAI(model_name="gpt-4.1-nano")
 
 
 # RunnableParallel 인스턴스를 생성합니다. 이 인스턴스는 여러 Runnable 인스턴스를 병렬로 실행할 수 있습니다.
@@ -260,9 +308,9 @@ def multiple_length_function(_dict):
 
 
 prompt = ChatPromptTemplate.from_template("{a} + {b} 는 무엇인가요?")
-model = ChatOpenAI()
+llm = ChatOpenAI()
 
-chain1 = prompt | model
+chain1 = prompt | llm
 
 chain = (
     {
@@ -271,7 +319,7 @@ chain = (
         | RunnableLambda(multiple_length_function),
     }
     | prompt
-    | model
+    | llm
 )
 
 chain.invoke({"word1": "hello", "word2": "world"})

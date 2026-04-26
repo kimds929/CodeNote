@@ -1,36 +1,72 @@
 # C:\Users\Admin\AppData\Local\pypoetry\Cache\virtualenvs\langchain-kr-sSe9WGAd-py3.11\Scripts\python.exe
 
-from dotenv import load_dotenv
-import numpy as np
+import sys
+folder_path = "D:/DataScience/★GitHub_kimds929/CodeNote/56_AgenticAI"
+sys.path.append("D:/DataScience/★GitHub_kimds929/DS_Library")
+
 import os
-
-dotenv_path = r'D:\DataScience\DataBase\Keys\.env'
-load_dotenv(dotenv_path)
-result = load_dotenv(dotenv_path)
-print("로드 결과:", result)
-
-print(f"[API KEY]\n{os.environ['OPENAI_API_KEY'][:-15]}" + "*" * 15)
-
-# ---------------------------------------------------------------------------------------------------------
-
-from langchain_teddynote import logging
-
-# 프로젝트 이름을 입력합니다.
-logging.langsmith("Default project")
-# logging.langsmith("Default project", set_enable=False)  # LangSmith 추적을 하지 않습니다.
-##############################################################################################################
-
-
-
-# llm 객체생성
+import requests
+import base64
+import json
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
-llm = ChatOpenAI(
-    # temperature=0.1,  # 창의성 (0.0 ~ 2.0)
-    # model_name="gpt-4o-mini",  # 모델명
-    model_name="gpt-4.1-nano",  # 모델명
-    # model_name="gpt-5-nano",  # 모델명
-)
+try:
+    from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
+except:
+    remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
+    try:
+        import httpimport
+        with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+            from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
+    except:
+        import requests
+        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_AgenticAI.py", verify=False)
+        exec(response.text)
+
+
+if os.path.exists(f"{folder_path}/.env"):
+    result = load_dotenv(dotenv_path=f"{folder_path}/.env")
+else:
+    result = load_dotenv('D:/DataScience/DataBase/Keys/.env')
+print("로드 결과:", result)
+
+##########################################################################################
+
+# LLM 객체 생성
+try:
+    llm = PgptLLM(
+        api_key=os.getenv("API_KEY"),
+        emp_no=os.getenv("EMP_NO"),
+        model_name="gpt-4.1-nano",
+        # temperature=2.0,  # 정상 코드에 있던 설정값 적용
+        # top_p=0.9,
+        # stream_usage=True
+    )
+except:
+    llm = ChatOpenAI(
+        # temperature=0.1,  # 창의성 (0.0 ~ 2.0)
+        # model_name="gpt-4o-mini",  # 모델명
+        model_name="gpt-4.1-nano",  # 모델명
+        # model_name="gpt-5-nano",  # 모델명
+    )
+
+    logging.langsmith("Default project")      # LangSmith 추적을 시작합니다.
+    # logging.langsmith("Default project", set_enable=False)  # LangSmith 추적을 하지 않습니다.
+print(llm)
+
+##########################################################################################
+##########################################################################################
+##########################################################################################
+##########################################################################################
+
+
+
+
+
+
+
+
 
 ##############################################################################################################
 # 이미지 입력
