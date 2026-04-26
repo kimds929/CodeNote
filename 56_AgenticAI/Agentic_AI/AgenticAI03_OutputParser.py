@@ -1,3 +1,5 @@
+# C:\Users\Admin\AppData\Local\pypoetry\Cache\virtualenvs\langchain-kr-sSe9WGAd-py3.11\Scripts\python.exe
+
 import sys
 folder_path = "D:/DataScience/★GitHub_kimds929/CodeNote/56_AgenticAI"
 sys.path.append("D:/DataScience/★GitHub_kimds929/DS_Library")
@@ -36,7 +38,8 @@ try:
     llm = PgptLLM(
         api_key=os.getenv("API_KEY"),
         emp_no=os.getenv("EMP_NO"),
-        model_name="gpt-4.1-nano",
+        # model_name="gpt-4.1-nano",
+        model_name="gpt-5-nano",
         # temperature=2.0,  # 정상 코드에 있던 설정값 적용
         # top_p=0.9,
         # stream_usage=True
@@ -45,8 +48,8 @@ except:
     llm = ChatOpenAI(
         # temperature=0.1,  # 창의성 (0.0 ~ 2.0)
         # model_name="gpt-4o-mini",  # 모델명
-        model_name="gpt-4.1-nano",  # 모델명
-        # model_name="gpt-5-nano",  # 모델명
+        # model_name="gpt-4.1-nano",  # 모델명
+        model_name="gpt-5-nano",  # 모델명
     )
 
     logging.langsmith("Default project")      # LangSmith 추적을 시작합니다.
@@ -57,15 +60,6 @@ print(llm)
 ##########################################################################################
 ##########################################################################################
 ##########################################################################################
-
-
-
-
-
-
-
-
-
 
 
 
@@ -252,5 +246,79 @@ base_parser = PydanticOutputParser(pydantic_object=MarketingIdea)
 
 # FixingParser로 한 번 감싸줍니다.
 fixing_parser = OutputFixingParser.from_llm(parser=base_parser, llm=llm)
+
+
+
+
+
+
+# ------------------------------------------------------------------------------------------------------------
+# PandasDataFrameOutputParser : Pandas DataFrame 형태로 출력받기
+from langchain.output_parsers import PandasDataFrameOutputParser
+from langchain_core.prompts import PromptTemplate
+
+import pprint
+from typing import Any, Dict
+import pandas as pd
+
+
+# 출력 목적으로만 사용됩니다.
+def format_parser_output(parser_output: Dict[str, Any]) -> None:
+    # 파서 출력의 키들을 순회합니다.
+    for key in parser_output.keys():
+        # 각 키의 값을 딕셔너리로 변환합니다.
+        parser_output[key] = parser_output[key].to_dict()
+    # 예쁘게 출력합니다.
+    return pprint.PrettyPrinter(width=4, compact=True).pprint(parser_output)
+
+
+data_url = 'https://raw.githubusercontent.com/kimds929/CodeNote/refs/heads/main/99_DataSet/Data_Tabular/'
+
+# 원하는 Pandas DataFrame을 정의합니다.
+df = pd.read_csv(f"{data_url}/titanic_original.csv")
+print(df.shape)
+
+
+
+# 파서를 설정하고 프롬프트 템플릿에 지시사항을 주입합니다.
+parser = PandasDataFrameOutputParser(dataframe=df)
+
+# 파서의 지시사항을 출력합니다.
+print(parser.get_format_instructions())
+
+
+# 프롬프트 템플릿을 설정합니다.
+prompt = PromptTemplate(
+    template="Answer the user query.\n{format_instructions}\n{question}\n",
+    input_variables=["question"],  # 입력 변수 설정
+    partial_variables={
+        "format_instructions": parser.get_format_instructions()
+    },  # 부분 변수 설정
+)
+
+# 체인 생성
+chain = prompt | llm | parser
+
+
+# Column조회 예시
+df_query = "Age column 을 조회해 주세요."
+parser_output = chain.invoke({"question": df_query})
+format_parser_output(parser_output)
+
+
+# 행 조회 예시
+df_query = "Retrieve the first row."
+parser_output = chain.invoke({"question": df_query})
+format_parser_output(parser_output)
+
+
+
+
+# 임의의 Pandas DataFrame 작업 예시, 행의 수를 제한합니다.
+df_query = "Retrieve the average of the Ages from row 0 to 4."
+parser_output = chain.invoke({"question": df_query})
+print(parser_output)
+
+df["age"].head().mean() # answer check
 
 

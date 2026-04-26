@@ -38,7 +38,8 @@ try:
     llm = PgptLLM(
         api_key=os.getenv("API_KEY"),
         emp_no=os.getenv("EMP_NO"),
-        model_name="gpt-4.1-nano",
+        # model_name="gpt-4.1-nano",
+        model_name="gpt-5-nano",
         # temperature=2.0,  # 정상 코드에 있던 설정값 적용
         # top_p=0.9,
         # stream_usage=True
@@ -47,8 +48,8 @@ except:
     llm = ChatOpenAI(
         # temperature=0.1,  # 창의성 (0.0 ~ 2.0)
         # model_name="gpt-4o-mini",  # 모델명
-        model_name="gpt-4.1-nano",  # 모델명
-        # model_name="gpt-5-nano",  # 모델명
+        # model_name="gpt-4.1-nano",  # 모델명
+        model_name="gpt-5-nano",  # 모델명
     )
 
     logging.langsmith("Default project")      # LangSmith 추적을 시작합니다.
@@ -59,7 +60,6 @@ print(llm)
 ##########################################################################################
 ##########################################################################################
 ##########################################################################################
-
 
 
 

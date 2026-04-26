@@ -1,3 +1,5 @@
+# C:\Users\Admin\AppData\Local\pypoetry\Cache\virtualenvs\langchain-kr-sSe9WGAd-py3.11\Scripts\python.exe
+
 import sys
 folder_path = "D:/DataScience/★GitHub_kimds929/CodeNote/56_AgenticAI"
 sys.path.append("D:/DataScience/★GitHub_kimds929/DS_Library")
@@ -10,13 +12,13 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 try:
-    from DS_AgenticAI import PgptLLM, StreamResponse, read_messages, PgptEmbeddings
+    from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
 except:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
     try:
         import httpimport
         with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-            from DS_AgenticAI import PgptLLM, StreamResponse, read_messages, PgptEmbeddings
+            from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
     except:
         import requests
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_AgenticAI.py", verify=False)
@@ -36,7 +38,8 @@ try:
     llm = PgptLLM(
         api_key=os.getenv("API_KEY"),
         emp_no=os.getenv("EMP_NO"),
-        model_name="gpt-4.1-nano",
+        # model_name="gpt-4.1-nano",
+        model_name="gpt-5-nano",
         # temperature=2.0,  # 정상 코드에 있던 설정값 적용
         # top_p=0.9,
         # stream_usage=True
@@ -45,16 +48,18 @@ except:
     llm = ChatOpenAI(
         # temperature=0.1,  # 창의성 (0.0 ~ 2.0)
         # model_name="gpt-4o-mini",  # 모델명
-        model_name="gpt-4.1-nano",  # 모델명
-        # model_name="gpt-5-nano",  # 모델명
+        # model_name="gpt-4.1-nano",  # 모델명
+        model_name="gpt-5-nano",  # 모델명
     )
+
+    logging.langsmith("Default project")      # LangSmith 추적을 시작합니다.
+    # logging.langsmith("Default project", set_enable=False)  # LangSmith 추적을 하지 않습니다.
 print(llm)
 
 ##########################################################################################
 ##########################################################################################
 ##########################################################################################
 ##########################################################################################
-
 
 
 
