@@ -1,18 +1,32 @@
 # C:\Users\Admin\AppData\Local\pypoetry\Cache\virtualenvs\langchain-kr-sSe9WGAd-py3.11\Scripts\python.exe
-
 import sys
-folder_path = "D:/DataScience/★GitHub_kimds929/CodeNote/56_AgenticAI"
-sys.path.append("D:/DataScience/★GitHub_kimds929/DS_Library")
-
 import os
+if os.path.isdir("D:/DataScience/★GitHub_kimds929"):
+    library_path = "D:/DataScience/★GitHub_kimds929/DS_Library"
+    folder_path = "D:/DataScience/★GitHub_kimds929/CodeNote/56_AgenticAI"
+    env_path = 'D:/DataScience/DataBase/Keys/.env'
+    llm_case = "ChatOpenAI"
+else:
+    if os.path.isdir("D:/DataScience/PythonforWork"):
+        base_path = "D:/DataScience/PythonforWork"
+    elif os.path.isdir("C:/Users/kimds929/DataScience"):
+        base_path = "C:/Users/kimds929/DataScience"
+    
+    library_path = f"{base_path}/DS_Library"
+    folder_path = f"{base_path}/AgenticAI"
+    env_path = f"{base_path}/AgenticAI/.env"
+    llm_case = "PgptLLM"
+sys.path.append(library_path)
+
+
 import requests
 import base64
 import json
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 try:
-    from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
+    from DS_AgenticAI import langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
 except:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
     try:
@@ -24,17 +38,13 @@ except:
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_AgenticAI.py", verify=False)
         exec(response.text)
 
-
-if os.path.exists(f"{folder_path}/.env"):
-    result = load_dotenv(dotenv_path=f"{folder_path}/.env")
-else:
-    result = load_dotenv('D:/DataScience/DataBase/Keys/.env')
+result = load_dotenv(env_path)
 print("로드 결과:", result)
 
 ##########################################################################################
 
 # LLM 객체 생성
-try:
+if llm_case == "PgptLLM":
     llm = PgptLLM(
         api_key=os.getenv("API_KEY"),
         emp_no=os.getenv("EMP_NO"),
@@ -44,17 +54,24 @@ try:
         # top_p=0.9,
         # stream_usage=True
     )
-except:
+    embeddings = PgptEmbeddings(
+        api_key=os.getenv("API_KEY"),
+        emp_no=os.getenv("EMP_NO"),
+        model_name='text-embedding-ada-002'
+    )
+elif llm_case == "ChatOpenAI":
     llm = ChatOpenAI(
         # temperature=0.1,  # 창의성 (0.0 ~ 2.0)
         # model_name="gpt-4o-mini",  # 모델명
         # model_name="gpt-4.1-nano",  # 모델명
         model_name="gpt-5-nano",  # 모델명
     )
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-    logging.langsmith("Default project")      # LangSmith 추적을 시작합니다.
-    # logging.langsmith("Default project", set_enable=False)  # LangSmith 추적을 하지 않습니다.
+    langsmith("Default project")      # LangSmith 추적을 시작합니다.
+    # langsmith("Default project", set_enable=False)  # LangSmith 추적을 하지 않습니다.
 print(llm)
+print(embeddings)
 
 ##########################################################################################
 ##########################################################################################
@@ -107,8 +124,88 @@ prompt_template = ChatPromptTemplate.from_template(
 
 chain = prompt_template | llm | StrOutputParser()
 
+
 response = chain.invoke({'subject': '인공지능'})
 print(response)
+
+
+# ------------------------------------------------------------------------------------------------------------
+# PydanticOutputParser (고정된 형식의 Dictionary) : 엄격한 데이터 구조 및 API 연동
+from langchain_core.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
+
+# 1. 원하는 데이터 구조를 Pydantic 클래스로 정의
+class MarketingIdea(BaseModel):
+    title: str = Field(description="마케팅 캠페인의 매력적인 제목")
+    target_audience: list[str] = Field(description="타겟 고객층 목록")
+    budget_estimate: int = Field(description="예상 예산 (원 단위 숫자만)")
+
+# 방법 1 : PydanticOutputParser 활용
+parser = PydanticOutputParser(pydantic_object=MarketingIdea)
+
+prompt = ChatPromptTemplate.from_template(
+    "다음 제품을 위한 마케팅 아이디어를 제안해줘: {product}\n\n{format_instructions}"
+)
+
+prompt_partial = prompt.partial(format_instructions=parser.get_format_instructions())
+
+chain = prompt_partial | llm | parser
+
+response = chain.invoke({
+    "product": "무선 노이즈 캔슬링 이어폰"})
+print(response)
+print(response.title)           # 객체 속성으로 바로 접근 가능
+print(response.model_dump())    # Dictionary 형태로 변환
+
+
+# 방법 2 : PydanticOutputParser를 쓰는 대신, 모델 자체에 스키마를 바인딩합니다.
+structured_llm = llm.with_structured_output(MarketingIdea)
+
+prompt = ChatPromptTemplate.from_template("다음 제품을 위한 마케팅 아이디어를 제안해줘: {product}")
+chain = prompt | structured_llm
+
+response = chain.invoke({"product": "무선 노이즈 캔슬링 이어폰"})
+print(response)
+print(response.title)            # 객체 속성으로 바로 접근 가능
+print(response.model_dump())     # Dictionary 형태로 변환
+
+
+
+# Pydantic 클래스 정의 (Dict 타입 Return)
+from typing import Dict, List
+# 방법 1)
+# class TravelRecommendations(BaseModel):
+#     # Dict[str, str]을 통해 {문자열: 문자열} 형태임을 명시
+#     destinations: Dict[str, str] = Field(
+#         description="추천하는 '여행지 이름'을 키(Key)로, '추천 이유'를 값(Value)으로 가지는 딕셔너리"
+#     )
+
+# 방법 2) 고정된 키를 가진 객체들의 리스트를 생성할 때 오류(Hallucination)가 적다.
+class Destination(BaseModel):
+    name: str = Field(description="여행지 이름")
+    reason: str = Field(description="추천 이유")
+
+# 전체 응답 구조 (리스트 형태)
+class TravelRecommendations(BaseModel):
+    destinations: List[Destination] = Field(description="추천 여행지 목록")
+
+parser = PydanticOutputParser(pydantic_object=TravelRecommendations)
+
+prompt = ChatPromptTemplate.from_template(
+    "넌 여행지를 추천하는 가이드야"
+    "반드시 마크다운이나 다른 설명 없이 JSON 데이터만 출력해."  # LLM의 불필요한 말대꾸 방지
+    "{question}\n\n{format_instructions}\n"
+)
+
+prompt_partial = prompt.partial(format_instructions=parser.get_format_instructions())
+
+chain = prompt_partial | llm | parser
+
+# 6. 실행
+question = "한국 여행에서 꼭 가봐야할 여행지들을 3곳 추천해주고 그 이유를 알려줘."
+response = chain.invoke({"question": question})
+print(response)
+print(response.destinations)
 
 
 
@@ -128,53 +225,6 @@ chain = prompt_template | llm | comma_sep_output_parser
 response = chain.invoke({'subject': '인공지능',
                          'format_instructions':format_instructions})
 print(response)
-
-
-
-# ------------------------------------------------------------------------------------------------------------
-# PydanticOutputParser (고정된 형식의 Dictionary) : 엄격한 데이터 구조 및 API 연동
-from langchain_core.output_parsers import PydanticOutputParser
-from pydantic import BaseModel, Field
-
-# 1. 원하는 데이터 구조를 Pydantic 클래스로 정의
-class MarketingIdea(BaseModel):
-    title: str = Field(description="마케팅 캠페인의 매력적인 제목")
-    target_audience: list[str] = Field(description="타겟 고객층 목록")
-    budget_estimate: int = Field(description="예상 예산 (원 단위 숫자만)")
-
-
-
-
-# 방법 1 : PydanticOutputParser 활용
-parser = PydanticOutputParser(pydantic_object=MarketingIdea)
-
-prompt = ChatPromptTemplate.from_template(
-    "다음 제품을 위한 마케팅 아이디어를 제안해줘: {product}\n\n{format_instructions}"
-)
-
-chain = prompt | llm | parser
-
-response = chain.invoke({
-    "product": "무선 노이즈 캔슬링 이어폰",
-    "format_instructions": parser.get_format_instructions()
-})
-print(response)
-print(response.title)           # 객체 속성으로 바로 접근 가능
-print(response.model_dump())    # Dictionary 형태로 변환
-
-
-# 방법 2 : PydanticOutputParser를 쓰는 대신, 모델 자체에 스키마를 바인딩합니다.
-structured_llm = llm.with_structured_output(MarketingIdea)
-
-prompt = ChatPromptTemplate.from_template("다음 제품을 위한 마케팅 아이디어를 제안해줘: {product}")
-chain = prompt | structured_llm
-
-response = chain.invoke({"product": "무선 노이즈 캔슬링 이어폰"})
-print(response)
-print(response.title)            # 객체 속성으로 바로 접근 가능
-print(response.model_dump())     # Dictionary 형태로 변환
-
-
 
 
 # ------------------------------------------------------------------------------------------------------------
