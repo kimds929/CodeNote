@@ -1,82 +1,30 @@
-# C:\Users\Admin\AppData\Local\pypoetry\Cache\virtualenvs\langchain-kr-sSe9WGAd-py3.11\Scripts\python.exe
-import sys
 import os
+current_file_path = os.path.abspath(__file__).replace('\\','/')
+
 if os.path.isdir("D:/DataScience/★GitHub_kimds929"):
-    library_path = "D:/DataScience/★GitHub_kimds929/DS_Library"
-    folder_path = "D:/DataScience/★GitHub_kimds929/CodeNote/56_AgenticAI"
-    env_path = 'D:/DataScience/DataBase/Keys/.env'
-    llm_case = "ChatOpenAI"
-else:
-    if os.path.isdir("D:/DataScience/PythonforWork"):
-        base_path = "D:/DataScience/PythonforWork"
-    elif os.path.isdir("C:/Users/kimds929/DataScience"):
-        base_path = "C:/Users/kimds929/DataScience"
-    
-    library_path = f"{base_path}/DS_Library"
-    folder_path = f"{base_path}/AgenticAI"
-    env_path = f"{base_path}/AgenticAI/.env"
-    llm_case = "PgptLLM"
-sys.path.append(library_path)
+    start_script_folder ="D:/DataScience/★GitHub_kimds929/CodeNote/56_AgenticAI"
+elif os.path.isdir("D:/DataScience/PythonforWork"):
+    start_script_folder ="D:/DataScience/PythonForwork/AgenticAI"
+elif os.path.isdir("C:/Users/kimds929/DataScience"):
+    start_script_folder = "C:/Users/kimds929/DataScience/AgenticAI"
+        
+start_script_path = f'{start_script_folder}/StartingScript_AgenticAI.txt'
+
+with open(start_script_path, 'r', encoding='utf-8') as f:
+    script = f.read()
+script_formatted = script.replace('{base_folder_name}', 'DataScience') \
+                         .replace('{current_path}', current_file_path)
+# print(script_formatted)
+exec(script_formatted)
+
+################################################################################################
 
 
-import requests
-import base64
-import json
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-try:
-    from DS_AgenticAI import langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
-except:
-    remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
-    try:
-        import httpimport
-        with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-            from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings
-    except:
-        import requests
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_AgenticAI.py", verify=False)
-        exec(response.text)
 
-result = load_dotenv(env_path)
-print("로드 결과:", result)
 
-##########################################################################################
 
-# LLM 객체 생성
-if llm_case == "PgptLLM":
-    llm = PgptLLM(
-        api_key=os.getenv("API_KEY"),
-        emp_no=os.getenv("EMP_NO"),
-        # model_name="gpt-4.1-nano",
-        model_name="gpt-5-nano",
-        # temperature=2.0,  # 정상 코드에 있던 설정값 적용
-        # top_p=0.9,
-        # stream_usage=True
-    )
-    embeddings = PgptEmbeddings(
-        api_key=os.getenv("API_KEY"),
-        emp_no=os.getenv("EMP_NO"),
-        model_name='text-embedding-ada-002'
-    )
-elif llm_case == "ChatOpenAI":
-    llm = ChatOpenAI(
-        # temperature=0.1,  # 창의성 (0.0 ~ 2.0)
-        # model_name="gpt-4o-mini",  # 모델명
-        # model_name="gpt-4.1-nano",  # 모델명
-        model_name="gpt-5-nano",  # 모델명
-    )
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-    langsmith("Default project")      # LangSmith 추적을 시작합니다.
-    # langsmith("Default project", set_enable=False)  # LangSmith 추적을 하지 않습니다.
-print(llm)
-print(embeddings)
-
-##########################################################################################
-##########################################################################################
-##########################################################################################
-##########################################################################################
 
 
 
@@ -113,6 +61,7 @@ print(embeddings)
 
 
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 # ------------------------------------------------------------------------------------------------------------
 # StrOutputParser
@@ -127,6 +76,48 @@ chain = prompt_template | llm | StrOutputParser()
 
 response = chain.invoke({'subject': '인공지능'})
 print(response)
+
+
+# ------------------------------------------------------------------------------------------------------------
+# MarkdownListOutputParser(Markdown)
+from rich.console import Console
+from rich.markdown import Markdown
+from langchain_core.output_parsers import MarkdownListOutputParser
+
+
+output_parser = MarkdownListOutputParser()
+
+# prompt = PromptTemplate(
+#     template="다음 주제에 대한 기획 아이디어 3가지를 제시해줘.\n주제: {topic}\n\n{format_instructions}",
+#     input_variables=["topic"],
+#     partial_variables={"format_instructions": output_parser.get_format_instructions()}
+# )
+prompt = ChatPromptTemplate.from_template(
+    "다음 주제에 대한 기획 아이디어 3가지를 제시해줘.\n주제: {topic}\n\n{format_instructions}"
+)
+prompt_partial = prompt.partial(format_instructions=output_parser.get_format_instructions())
+print(prompt_partial.messages[0].prompt.template)
+
+chain = prompt_partial | llm | output_parser
+
+result = chain.invoke({"topic": "신규 AI 비서 서비스"})
+
+# for content in result:
+#     Console().print(Markdown(content))
+
+result_concat = "\n\n".join(result)
+Console().print(Markdown(result_concat))
+
+
+with open(f"{folder_path}/database/docs/markdown_output_example.md", "w", encoding="utf-8-sig") as f:
+    f.write(result_concat)
+print('save .md files.')
+
+
+with open(f"{folder_path}/database/docs/markdown_output_example.md", "r", encoding="utf-8-sig") as f:
+    text = f.read()
+
+print('load .md files.')
 
 
 # ------------------------------------------------------------------------------------------------------------
@@ -209,6 +200,8 @@ print(response.destinations)
 
 
 
+
+
 # ------------------------------------------------------------------------------------------------------------
 # CommaSeparatedListOutputParser (List)
 from langchain_core.output_parsers import CommaSeparatedListOutputParser
@@ -247,7 +240,7 @@ print(response)
 
 # ------------------------------------------------------------------------------------------------------------
 # DatetimeOutputParser : 날짜 및 시간 형태 (Datetime) 
-from langchain.output_parsers import DatetimeOutputParser
+from langchain_core.output_parsers import DatetimeOutputParser
 parser = DatetimeOutputParser()
 prompt = ChatPromptTemplate.from_template(
     "사용자의 요청에서 날짜와 시간을 추출해.\n{format_instructions}\n요청: {request}"
@@ -267,7 +260,7 @@ print(response)     # 출력(datetime 객체): 2024-12-25 18:00:00
 # ------------------------------------------------------------------------------------------------------------
 #  EnumOutputParser : 객관식 선택 형태 (Enum) - 
 from enum import Enum
-from langchain.output_parsers import EnumOutputParser
+from langchain_core.output_parsers import EnumOutputParser
 
 class Sentiment(Enum):
     POSITIVE = "긍정"
@@ -289,7 +282,7 @@ print(response)
 # ------------------------------------------------------------------------------------------------------------
 
 # OutputFixingParser : 형태를 변환하는 것이 아니라 "고쳐주는" 특수 파서
-from langchain.output_parsers import OutputFixingParser
+from langchain_core.output_parsers import OutputFixingParser
 
 # 기존에 쓰던 Pydantic 파서가 있다고 가정
 base_parser = PydanticOutputParser(pydantic_object=MarketingIdea)
@@ -304,7 +297,7 @@ fixing_parser = OutputFixingParser.from_llm(parser=base_parser, llm=llm)
 
 # ------------------------------------------------------------------------------------------------------------
 # PandasDataFrameOutputParser : Pandas DataFrame 형태로 출력받기
-from langchain.output_parsers import PandasDataFrameOutputParser
+from langchain_core.output_parsers import PandasDataFrameOutputParser
 from langchain_core.prompts import PromptTemplate
 
 import pprint

@@ -1,0 +1,290 @@
+import sys
+import os
+
+import math
+from pathlib import Path
+from collections import deque
+
+# (Folders) 상위경로에 있는 특정 이름을 포함한 모든 폴더들을 검색
+def find_folders_in_parents(folder_name, root_dir=None, partial=False, ignore_case=False, max_depth=None, get_parent_path=False):
+    """
+    현재 경로(root_dir)부터 상위 부모 폴더로 올라가며 조건에 맞는 폴더를 찾습니다. (BFS 방식)
+    max_depth: 0이면 현재 폴더만, 1이면 부모 폴더까지, None이나 math.inf면 최상위 루트까지 탐색합니다.
+    get_parent_path: True일 경우 찾은 폴더의 상위(부모) 경로를 반환합니다.
+    """
+    if root_dir is None:
+        raise ValueError('undefined root_dir.')
+    
+    current = Path(root_dir).resolve()
+    if current.is_file():
+        current = current.parent
+        
+    results = []
+    search_target = folder_name.lower() if ignore_case else folder_name
+    limit_depth = math.inf if max_depth is None else max_depth
+    
+    current_depth = 0
+    # 현재 폴더부터 루트까지 올라가며 확인
+    for parent in [current] + list(current.parents):
+        if current_depth > limit_depth:
+            break
+            
+        try:
+            for child in parent.iterdir():
+                if child.is_dir():
+                    compare_name = child.name.lower() if ignore_case else child.name
+                    is_match = (search_target in compare_name) if partial else (search_target == compare_name)
+                    
+                    if is_match:
+                        # get_parent_path 옵션에 따른 경로 설정
+                        path_to_add = str(child.parent.absolute()) if get_parent_path else str(child.absolute())
+                        # 중복 방지 로직
+                        if path_to_add not in results:
+                            results.append(path_to_add)
+        except PermissionError:
+            pass
+            
+        current_depth += 1
+                    
+    return results
+
+# (Folders) 하위경로에 있는 특정 이름을 포함한 모든 폴더들을 검색
+def find_folders_in_childs(folder_name, root_dir=None, partial=False, ignore_case=False, max_depth=None, get_parent_path=False):
+    """
+    root_dir 하위의 경로를 BFS(너비 우선 탐색)로 탐색하여 조건에 맞는 폴더를 찾습니다.
+    max_depth: 1이면 직계 하위 폴더만, None이나 math.inf면 모든 하위 폴더를 탐색합니다.
+    get_parent_path: True일 경우 찾은 폴더의 상위(부모) 경로를 반환합니다.
+    """
+    if root_dir is None:
+        raise ValueError('undefined root_dir.')
+        
+    root = Path(root_dir).resolve()
+    results = []
+    search_target = folder_name.lower() if ignore_case else folder_name
+    limit_depth = math.inf if max_depth is None else max_depth
+    
+    # BFS를 위한 큐 초기화: (현재_경로, 현재_깊이)
+    queue = deque([(root, 0)])
+    
+    while queue:
+        current_dir, depth = queue.popleft()
+        
+        # 설정한 최대 깊이에 도달하면 더 이상 하위로 내려가지 않음
+        if depth >= limit_depth:
+            continue
+            
+        try:
+            for child in current_dir.iterdir():
+                if child.is_dir():
+                    compare_name = child.name.lower() if ignore_case else child.name
+                    is_match = (search_target in compare_name) if partial else (search_target == compare_name)
+                    
+                    if is_match:
+                        path_to_add = str(child.parent.absolute()) if get_parent_path else str(child.absolute())
+                        if path_to_add not in results:
+                            results.append(path_to_add)
+                    
+                    # 다음 깊이 탐색을 위해 큐에 추가
+                    queue.append((child, depth + 1))
+        except PermissionError:
+            continue
+                
+    return results
+
+# (Files) 상위경로에 있는 특정 이름을 포함한 모든 파일들을 검색
+def find_files_in_parents(file_name, root_dir=None, partial=False, ignore_case=False, max_depth=None, get_parent_path=False):
+    """
+    현재 경로(root_dir)부터 상위 부모 폴더로 차례대로 올라가며 조건에 맞는 파일을 찾습니다. (BFS 방식)
+    max_depth: 0이면 현재 폴더만, 1이면 부모 폴더까지, None이나 math.inf면 최상위 루트까지 탐색합니다.
+    get_parent_path: True일 경우 찾은 파일이 위치한 상위(부모) 경로를 반환합니다.
+    """
+    if root_dir is None:
+        raise ValueError('undefined root_dir.')
+    
+    current = Path(root_dir).resolve()
+    if current.is_file():
+        current = current.parent
+        
+    results = []
+    search_target = file_name.lower() if ignore_case else file_name
+    limit_depth = math.inf if max_depth is None else max_depth
+    
+    current_depth = 0
+    for parent in [current] + list(current.parents):
+        if current_depth > limit_depth:
+            break
+            
+        try:
+            for child in parent.iterdir():
+                if child.is_file():
+                    compare_name = child.name.lower() if ignore_case else child.name
+                    is_match = (search_target in compare_name) if partial else (search_target == compare_name)
+                    
+                    if is_match:
+                        path_to_add = str(child.parent.absolute()) if get_parent_path else str(child.absolute())
+                        if path_to_add not in results:
+                            results.append(path_to_add)
+        except PermissionError:
+            continue
+            
+        current_depth += 1
+                    
+    return results
+
+# (Files) 하위경로에 있는 특정 이름을 포함한 모든 파일들을 검색
+def find_files_in_childs(file_name, root_dir=None, partial=False, ignore_case=False, max_depth=None, get_parent_path=False):
+    """
+    root_dir 하위의 경로를 BFS(너비 우선 탐색)로 탐색하여 조건에 맞는 파일을 찾습니다.
+    max_depth: 1이면 직계 하위 폴더의 파일만, None이나 math.inf면 모든 하위 경로를 탐색합니다.
+    get_parent_path: True일 경우 찾은 파일이 위치한 상위(부모) 경로를 반환합니다.
+    """
+    if root_dir is None:
+        raise ValueError('undefined root_dir.')
+    
+    root = Path(root_dir).resolve()
+    results = []
+    search_target = file_name.lower() if ignore_case else file_name
+    limit_depth = math.inf if max_depth is None else max_depth
+    
+    # BFS를 위한 큐 초기화: (현재_경로, 현재_깊이)
+    queue = deque([(root, 0)])
+    
+    while queue:
+        current_dir, depth = queue.popleft()
+        
+        # 설정한 최대 깊이에 도달하면 해당 폴더 내부는 탐색하지 않음
+        if depth >= limit_depth:
+            continue
+            
+        try:
+            for child in current_dir.iterdir():
+                if child.is_file():
+                    compare_name = child.name.lower() if ignore_case else child.name
+                    is_match = (search_target in compare_name) if partial else (search_target == compare_name)
+                    
+                    if is_match:
+                        path_to_add = str(child.parent.absolute()) if get_parent_path else str(child.absolute())
+                        if path_to_add not in results:
+                            results.append(path_to_add)
+                elif child.is_dir():
+                    # 폴더인 경우 다음 깊이 탐색을 위해 큐에 추가
+                    queue.append((child, depth + 1))
+        except PermissionError:
+            continue
+                
+    return results
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Set Base_path
+base_paths = find_folders_in_parents(folder_name='{base_folder_name}', root_dir='{current_path}')
+if base_paths:
+    base_path = base_paths[0]
+    print(f" . base_path : {base_path}")
+else:
+    raise print('base_folder is not existed.')
+
+library_folder_paths = find_files_in_childs(file_name='DS_AgenticAI.py', root_dir=base_path, max_depth=5, get_parent_path=True)
+folder_paths = find_folders_in_childs(folder_name='AgenticAI', root_dir=base_path, partial=True, ignore_case=True, max_depth=5)
+env_paths = find_files_in_childs(file_name='.env', root_dir=base_path, max_depth=5)
+# ----------------------------------------------------------------------------------------------------------------
+
+
+# Load Library
+if library_folder_paths:
+    print(f" . library_path : {library_folder_paths[0]}", end=' | ')
+    sys.path.append(library_folder_paths[0])
+    from DS_AgenticAI import langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, print_md
+else:
+    remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
+    try:
+        import httpimport
+        with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
+            from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, print_md
+    except:
+        import requests
+        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_AgenticAI.py", verify=False)
+        exec(response.text)
+print(f"langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, print_md")
+
+# Define Folder_path
+if folder_paths:
+    folder_path = folder_paths[0]
+    print(f" . folder_path : {folder_path}")
+else:
+    raise print('AgenticAI folder is not existed.')
+
+# Define Env_path
+from dotenv import load_dotenv
+if env_paths:
+    env_path = env_paths[0]
+    result = load_dotenv(env_path)
+    print(f" . env_path : {env_path}", end=' | ')
+    print("로드 결과:", result)
+else:
+    raise print('LLM .env files is not existed.')
+print()
+# ----------------------------------------------------------------------------------------------------------------
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+# matplotlib 한글폰트사용
+from matplotlib import font_manager, rc
+font_name = font_manager.FontProperties(fname="c:/Windows/Fonts/malgun.ttf").get_name()
+from tqdm import tqdm
+# from tqdm.auto import tqdm
+# from IPython import display
+# from IPython.core.display import HTML
+
+import requests
+import base64
+import json
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+
+##########################################################################################
+
+# LLM 객체 생성
+try:
+    llm = PgptLLM(
+        api_key=os.getenv("API_KEY"),
+        emp_no=os.getenv("EMP_NO"),
+        # model_name="gpt-4.1-nano",
+        # model_name="gpt-5-nano",
+        model_name="gpt-5.2",
+        # temperature=2.0,  # 정상 코드에 있던 설정값 적용
+        # top_p=0.9,
+        # stream_usage=True
+    )
+    print(f' . llm (Pgpt_LLM) : {llm}')
+
+    embeddings = PgptEmbeddings(
+        api_key=os.getenv("API_KEY"),
+        emp_no=os.getenv("EMP_NO"),
+        model_name='text-embedding-ada-002'
+    )
+    print(f' . embeddings (Pgpt_Embeddings) : {embeddings}')
+    
+except:
+    llm = ChatOpenAI(
+        # temperature=0.1,  # 창의성 (0.0 ~ 2.0)
+        # model_name="gpt-4o-mini",  # 모델명
+        # model_name="gpt-4.1-nano",  # 모델명
+        model_name="gpt-5-nano",  # 모델명
+    )
+    print(f' . llm (OpenAI_LLM) : {llm}')
+
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    print(f' . embeddings (OpenAI_Embeddings) : {embeddings}')
+
+    langsmith("Default project")      # LangSmith 추적을 시작합니다.
+    # langsmith("Default project", set_enable=False)  # LangSmith 추적을 하지 않습니다.
+
+
+print()
+
+##########################################################################################
+##########################################################################################
+##########################################################################################
+##########################################################################################
