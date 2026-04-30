@@ -75,13 +75,13 @@ chain = prompt_template | llm | StrOutputParser()
 
 
 response = chain.invoke({'subject': '인공지능'})
+# response = StreamResponse(chain.stream({'subject': '인공지능'}))
 print(response)
+
 
 
 # ------------------------------------------------------------------------------------------------------------
 # MarkdownListOutputParser(Markdown)
-from rich.console import Console
-from rich.markdown import Markdown
 from langchain_core.output_parsers import MarkdownListOutputParser
 
 
@@ -100,17 +100,17 @@ print(prompt_partial.messages[0].prompt.template)
 
 chain = prompt_partial | llm | output_parser
 
-result = chain.invoke({"topic": "신규 AI 비서 서비스"})
+response = chain.invoke({"topic": "신규 AI 비서 서비스"})
 
-# for content in result:
-#     Console().print(Markdown(content))
+response_concat = ''
+for content in response:
+    response_concat += content
+    response_concat += "\n\n"
 
-result_concat = "\n\n".join(result)
-Console().print(Markdown(result_concat))
 
 
 with open(f"{folder_path}/database/docs/markdown_output_example.md", "w", encoding="utf-8-sig") as f:
-    f.write(result_concat)
+    f.write(response.content)
 print('save .md files.')
 
 

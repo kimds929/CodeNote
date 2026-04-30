@@ -194,18 +194,18 @@ env_paths = find_files_in_childs(file_name='.env', root_dir=base_path, max_depth
 if library_folder_paths:
     print(f" . library_path : {library_folder_paths[0]}", end=' | ')
     sys.path.append(library_folder_paths[0])
-    from DS_AgenticAI import langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, print_md
+    from DS_AgenticAI import langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, MarkdownPrint
 else:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
     try:
         import httpimport
         with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-            from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, print_md
+            from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, MarkdownPrint
     except:
         import requests
         response = requests.get(f"{remote_library_url}/DS_Library/main/DS_AgenticAI.py", verify=False)
         exec(response.text)
-print(f"langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, print_md")
+print(f"langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, MarkdownPrint")
 
 # Define Folder_path
 if folder_paths:
