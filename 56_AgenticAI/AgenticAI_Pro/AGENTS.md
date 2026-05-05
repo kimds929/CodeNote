@@ -118,15 +118,15 @@ Streamlit을 이용한 단일 페이지 구성 (`app/` 폴더내 작성)
 	- Output : Phase별 상세 수행계획 수립결과를 `_manual/`폴더에 markdown file로 각각 문서화 (`_manual/Phase{i}_task_plan.md`)
 
 ## Phase 1. `MVP 1.` VectorDB 구성
-**step 6.** `_reports/` 폴더에 Phase 0에서의 수행결과 markdown파일 확인, `_manual/` 폴더에 `Phase1`에 해당하는 `task_plan.md` 파일 확인 후 `_manual/_plan.md`에 의거하여 `Phase 1` 수행을 위한 매우 상세한 수행계획 수립 (이후 `Phase 1`의 모든 Step은 해당 계획에 기반하여 task  수행)
-**step 7.** `Phase 1` 수행을 위한 폴 더 및 파일 목록 제안 및 생성 
+**step 6** `_manual/project_requirements.md`의 `# MVP Planning`파트에 의거하여 `Phase 1`에 대한 매우 상세한 수행계획 수립 후 markdown 문서화 (이후 `Phase 1`의 모든 Step은 해당 계획에 기반하여 task  수행)
+**step 7.** `Phase 1` 수행을 위한 폴더 및 파일 목록 제안 및 생성 
 **step 8.** `data/`내 파일들을 이용하여 `Phase 2`, `Phase 3`에서 LLM 요약 및 ChatBot 서비스 구현을 위한 VectorStoreDB 생성, RAG index 생성
 
 ## Phase 2. `MVP 2.` Streamlit DashBoard구성
-**step 7.** `_reports/` 폴더에 Phase 0에서의 수행결과 markdown파일 확인, `_manual/` 폴더에 `Phase1`에 해당하는 `task_plan.md` 파일 확인 후 `_manual/_plan.md`에 의거하여 `Phase 1` 수행을 위한 매우 상세한 수행계획 수립 (이후 `Phase 1`의 모든 Step은 해당 계획에 기반하여 task  수행)
-**step 7.** `Phase 1` 수행을 위한 폴 더 및 파일 목록 제안 및 생성 
-	step 9. app/main.py를 생성하고, Streamlit을 이용하여 전체 Layout 구성
-	step 10. 년도별 주요 통계 시각화, 데이터 분석결과 시각화
+**step 9** `_manual/project_requirements.md`의 `# MVP Planning`파트에 의거하여 `Phase 2`에 대한 매우 상세한 수행계획 수립 후 markdown 문서화 (이후 `Phase 2`의 모든 Step은 해당 계획에 기반하여 task  수행)
+**step 10.** `Phase 2` 수행을 위한 폴더 및 파일 목록 제안 및 생성 
+**step 11** App service를 위한 `app/main.py`를 생성하고, Streamlit을 이용하여 전체 Layout 구성
+**step 12**
 	step 11. 년도별 데이터 분석결과 및 insight에 대해 Text로 요약 및 display
 
 ## Phase 4. `MVP 3.` ChatBot 구현
