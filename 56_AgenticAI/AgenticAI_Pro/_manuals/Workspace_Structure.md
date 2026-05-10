@@ -1,11 +1,13 @@
 # Workspace Structure : 작업화면의 구조
 	WorkSpace/
+	├─ __master__			# 여러종류의 Project를 General한 Template으로 대응하기 위해 Template들을 모은 폴더 (Project수행시 해당 폴더를 절대 사용하지 말것)
 	├─ _archive/            # 백업용 폴더
     ├─ _manual/             # 세부 지시사항이 들어갈 폴더 (task별 markdown)
 	├─ _reports/            # Agent의 task 이행결과 report를 보관하는 폴더
     ├─ _temp/               # 임시코드나 임시문서가 저장되는 폴더
 	├─ app/                 # App서비스를 위한 Application
 	├─ data/                # (필수) 이용가능한 documents, files, database(RDBMS, VectorDB 등)를 저장하는 폴더
+	├─ sources/             # (필수) Project 수행을 위해 제공되는 원본 data나 요구사항들을 저장하는 폴더
 	├─ tools/               # (필수) task이행을 위한 코드 및 tool들이 저장되는 폴더
 	├─ AGENTS.md            # (필수) 프로젝트 전체의 Top Manual
 
@@ -20,6 +22,7 @@
 - `_manual/_validation.md` : task실행 후 검증에 관한 manual
 - `_manual/_feedback.md` : Agent실행 후 User에게 Feedback방식과 관련된 manual
 - `_manual/tabular.md` : tabular data를 handling하는데 사용되는 manual
-- `_manual/data.md` : 사용 가능 data에 대한 정보를 담고 있는 파일
-- `_manual/environments/envs.md` : 코드 환경, 사용가능한 Library 버전정보
-- `_manual/environments/LLM_API_Guide.md` : 
+
+## `sources/` : project수행시 `User` 요구사항 및 
+- `sources/data.md` : 사용 가능 data에 대한 정보를 담고 있는 파일
+- `sources/envs.md` : 코드 환경, 사용가능한 Library 버전정보, library 사용 방법 정보 (LLM API, embeddings API 사용 방법)

@@ -52,15 +52,15 @@ Planning 단계에서는 구현을 시작하지 않는다.
 Planning 전에 가능한 범위에서 아래 자료를 확인한다.
 
 ### Project Manuals
+
 - `AGENTS.md`
+- `_manuals/project_requirements.md`
 - `_manuals/Workspace_Structure.md`
+- `_manuals/envs.md`
+- `_manuals/data.md`
 - `_manuals/_execute.md`
 - `_manuals/_validate.md`
 - `_manuals/_feedback.md`
-- `sources/project_requirements.md`
-- `sources/envs.md`
-- `sources/data.md`
-
 
 ### Previous Outputs
 
@@ -71,7 +71,7 @@ Planning 전에 가능한 범위에서 아래 자료를 확인한다.
 ### Actual Workspace
 
 - 현재 폴더 구조
-- `sources/`, `data/` 내 실제 파일 목록
+- `data/` 내 실제 파일 목록
 - 현재 사용 가능한 코드와 문서
 - 실행 환경과 설치된 라이브러리
 
@@ -83,7 +83,7 @@ Planning 전에 가능한 범위에서 아래 자료를 확인한다.
 
 ### 5.1. Goal First
 
-현재 작업의 목표를 결과 중심으로 구체적으로 1~3줄로 작성한다.
+현재 작업의 목표를 결과 중심으로 1~3줄로 작성한다.
 
 나쁜 예:
 
@@ -210,6 +210,37 @@ Agent는 아래 순서로 계획을 작성한다.
 ---
 
 ## 7. Plan Document Template
+작업 규모에 따라 아래 둘 중 하나를 사용한다.
+
+### A. Quick Plan
+작은 작업에 사용한다.
+```markdown
+# Execution Handoff Summary
+
+## Current Work
+- 작업 단위:
+- 관련 Phase:
+
+## Confirmed Scope
+- 이번에 수행할 범위:
+
+## Files to Create / Modify
+- 생성:
+- 수정:
+
+## Validation Plan
+- 핵심 검증 기준:
+
+## User Confirmation Needed
+- [ ] 확인 필요사항
+
+## Next Action
+- `_manuals/_execute.md` 기준으로 실행한다.
+```
+
+### B. Full Plan
+Phase, 주요 기능, 구조 변경 작업에 사용한다.
+
 ```markdown
 # [Work Unit Name] Plan
 
@@ -302,7 +333,7 @@ RAG 만들기
 ### 8.3. 의존성 무시
 
 ```text
-`source/`, `data/` 폴더 확인 없이 데이터 구조를 가정한다.
+data/ 폴더 확인 없이 데이터 구조를 가정한다.
 ```
 
 ### 8.4. 검증 없는 계획
