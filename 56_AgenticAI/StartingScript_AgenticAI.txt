@@ -175,6 +175,7 @@ def find_files_in_childs(file_name, root_dir=None, partial=False, ignore_case=Fa
     return results
 
 
+
 # ----------------------------------------------------------------------------------------------------------------
 # Set Base_path
 base_paths = find_folders_in_parents(folder_name='{base_folder_name}', root_dir='{current_path}')
@@ -184,26 +185,26 @@ if base_paths:
 else:
     raise print('base_folder is not existed.')
 
-library_folder_paths = find_files_in_childs(file_name='DS_AgenticAI.py', root_dir=base_path, max_depth=5, get_parent_path=True)
+library_folder_path = find_folders_in_childs(folder_name='DS_Library', root_dir=base_path, max_depth=5)
 folder_paths = find_folders_in_childs(folder_name='AgenticAI', root_dir=base_path, partial=True, ignore_case=True, max_depth=5)
 env_paths = find_files_in_childs(file_name='.env', root_dir=base_path, max_depth=5)
 # ----------------------------------------------------------------------------------------------------------------
 
 
 # Load Library
-if library_folder_paths:
-    print(f" . library_path : {library_folder_paths[0]}", end=' | ')
-    sys.path.append(library_folder_paths[0])
-    from DS_AgenticAI import langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, MarkdownPrint
+if library_folder_path:
+    print(f" . library_path : {library_folder_path[0]}", end=' | ')
+    sys.path.append(library_folder_path[0])
+    from DS_AgenticAI.DS_Langchain import langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, MarkdownPrint
 else:
     remote_library_url = 'https://raw.githubusercontent.com/kimds929/'
     try:
         import httpimport
-        with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/"):
-            from DS_AgenticAI import logging, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, MarkdownPrint
+        with httpimport.remote_repo(f"{remote_library_url}/DS_Library/main/DS_AgenticAI"):
+            from DS_Langchain import langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, MarkdownPrint
     except:
         import requests
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_AgenticAI.py", verify=False)
+        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_AgenticAI/DS_Langchain.py", verify=False)
         exec(response.text)
 print(f"langsmith, PgptLLM, StreamResponse, read_messages, PgptEmbeddings, MarkdownPrint")
 
