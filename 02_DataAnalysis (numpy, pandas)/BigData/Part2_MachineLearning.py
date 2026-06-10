@@ -284,6 +284,7 @@ from sklearn.metrics import accuracy_score
 
 
 # KFold ----------------------------------------------------------------------
+# 데이터를 순서대로 비슷한 개수로만 나누는 방식
 from sklearn.model_selection import KFold
 
 
@@ -316,6 +317,7 @@ print("평균 점수:", np.mean(scores))
 
 
 # StratifiedKFold ----------------------------------------------------------------------
+# 각 fold마다 타깃 클래스 비율이 비슷하게 유지되도록 나누는 방식
 from sklearn.model_selection import StratifiedKFold
 
 skf = StratifiedKFold(
