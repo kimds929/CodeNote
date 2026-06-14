@@ -20,8 +20,11 @@ df_coffee = pd.DataFrame({
 df_coffee['날짜'] = pd.date_range(start='2024-01-01', end='2024-01-07')
 
 # Correlation(상관계수) : -1 ~ 1 사이의 값으로 표현되는 수치로, 두 변수 간의 선형 관계의 강도와 방향을 나타냅니다.
-df_coffee[['가격','칼로리']].corr()
+
+df_coffee[['가격','칼로리']].corr()     # correlation
+df_coffee[['가격','칼로리']].cov()      # covariance
 df_coffee.corr(numeric_only=True)
+
 
 # -----------------------------------------------------------------------------------------
 # 중복 값이 있는 데이터 생성
