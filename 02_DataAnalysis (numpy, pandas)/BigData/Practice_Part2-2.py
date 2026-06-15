@@ -12,8 +12,9 @@ df_test = pd.read_csv(f"{data_path}/part2/ch8/laptop_test.csv", encoding='utf-8-
 
 
 df_train.shape, df_test.shape
+df_train.convert_dtypes().dtypes
 
-for df_name, df in zip(['train', 'test'], [df_train, df_test]):
+for df_name, df in zip(['train', 'test'], [df_train.convert_dtypes(), df_test.convert_dtypes()]):
     print(f"< {df_name} : {df.shape}>")
     df_summary = pd.concat([df.dtypes,
         df.nunique(),
@@ -22,6 +23,7 @@ for df_name, df in zip(['train', 'test'], [df_train, df_test]):
     
     print(df_summary)
     print()
+
 
 cols_drop = []
 col_y = 'Price'
