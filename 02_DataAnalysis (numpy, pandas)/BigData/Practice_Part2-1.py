@@ -10,7 +10,7 @@ data_path = "D:/DataScience/★GitHub_kimds929/CodeNote/02_DataAnalysis (numpy, 
 # Regression
 ########################################################################################################
 
-# # dataset - flight 
+# # # dataset - flight 
 # df_train = pd.read_csv(f"{data_path}/part2/ch8/flight_train.csv", encoding='utf-8-sig')
 # df_test = pd.read_csv(f"{data_path}/part2/ch8/flight_test.csv", encoding='utf-8-sig')
 
