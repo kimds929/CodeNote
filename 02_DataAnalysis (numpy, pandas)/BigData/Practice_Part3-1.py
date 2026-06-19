@@ -3,6 +3,140 @@ import pandas as pd
 
 data_path = "D:/DataScience/★GitHub_kimds929/CodeNote/02_DataAnalysis (numpy, pandas)/BigData"
 
+########################################################################################################
+# 1. 평균을 검정하는가?
+#    → 두 집단의 평균 차이 / 전후 평균 차이
+
+# 2. 분산을 검정하는가?
+#    → 한 집단의 분산이 특정 값과 같은지
+#    → 두 집단의 분산이 같은지
+
+# ------------------------------------------------------
+# 1.평균검정 (두 집단)
+# 1.1 독립표본 평균검정
+#    두 집단 각각 정규성 검정
+#    → shapiro(group1)
+#    → shapiro(group2)
+#
+#    1) 두 집단 모두 정규성 만족
+#       → 등분산 검정
+#          → levene(group1, group2)
+#
+#          1-1) 등분산 만족
+#               → 독립표본 t-test
+#               → ttest_ind(group1, group2, equal_var=True)
+#
+#          1-2) 등분산 불만족
+#               → Welch t-test
+#               → ttest_ind(group1, group2, equal_var=False)
+#
+#    2) 둘 중 하나라도 정규성 불만족
+#       → Mann-Whitney U test
+#       → mannwhitneyu(group1, group2)
+#
+# 1.2. 대응표본 평균검정
+#    차이값 계산
+#    → diff = after - before
+#   
+#    차이값의 정규성 검정
+#    → shapiro(diff)
+#   
+#    * 대응표본에서는 분산검정(levene)를 잘 안함
+#
+#    1) 차이값이 정규성 만족
+#       → 대응표본 t-test
+#       → ttest_rel(before, after)
+#   
+#    2) 차이값이 정규성 불만족
+#       → Wilcoxon signed-rank test
+#       → wilcoxon(before, after)
+#
+# ------------------------------------------------------
+# 2. 평균검정 (3집단 이상)
+# 2.1 독립표본
+# └─ 3개 이상 집단
+#     │
+#     ├─ 정규성 만족 + 등분산 만족
+#     │   └─ One-way ANOVA
+#     │       ├─ scipy.stats.f_oneway
+#     │       └─ statsmodels anova_lm
+#     │
+#     └─ 정규성 불만족 또는 등분산 불만족
+#         ├─ Kruskal-Wallis test
+#         └─ 또는 Welch ANOVA
+#
+# 2.2 대응표본
+# 측정 시점 또는 조건 수 확인
+# │
+# ├─ 2개 시점
+# │   │
+# │   ├─ 차이값 정규성 만족
+# │   │   └─ paired t-test
+# │   │       → ttest_rel
+# │   │
+# │   └─ 차이값 정규성 불만족
+# │       └─ Wilcoxon signed-rank test
+# │
+# └─ 3개 이상 시점
+#     │
+#     ├─ 정규성 등 조건 만족
+#     │   └─ 반복측정 ANOVA
+#     │       → AnovaRM
+#     │
+#     └─ 정규성 불만족
+#         └─ Friedman test
+# 
+# # ------------------------------------------------------
+# 3. 분산검정
+# 3.1 독립표본 분산 검정
+#    두 집단의 분산이 같은지 검정
+#    1) 정규성 만족
+#       → F-test 또는 Bartlett test
+#   
+#    2) 정규성 불만족 또는 애매함
+#       → Levene test 또는 Fligner test
+#
+# 3.2 대응표본 분산 검정
+# 일반적인 평균 검정 절차에서는 등분산 검정 안 함
+#
+# 문제에서 전후 분산 차이를 직접 묻는 경우
+# → 특수한 paired variance test 필요
+# → 시험에서는 거의 안 나옴
+# 
+# 4. 상관계수
+# Pearson   → 원래 값 그대로, 선형관계 확인
+"""from scipy.stats import pearsonr
+
+x = [1, 2, 3, 4, 5]
+y = [2, 4, 5, 8, 10]
+
+result = pearsonr(x, y)
+
+print(result.statistic)  # 상관계수
+print(result.pvalue)     # p-value"""
+
+# Spearman  → 값을 순위로 바꿔서, 단조관계 확인
+"""from scipy.stats import spearmanr
+
+x = [1, 2, 3, 4, 5]
+y = [1, 4, 9, 16, 25]
+
+result = spearmanr(x, y)
+
+print(result.statistic)  # 스피어만 상관계수
+print(result.pvalue)"""
+
+# Kendall   → 순위 쌍의 일치/불일치로 관계 확인
+"""from scipy.stats import kendalltau
+
+x = [1, 2, 3, 4, 5]
+y = [1, 3, 2, 5, 4]
+
+result = kendalltau(x, y)
+
+print(result.statistic)  # Kendall's tau
+print(result.pvalue)"""
+
 
 ########################################################################################################
 # 단일표본 검정

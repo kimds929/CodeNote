@@ -207,12 +207,10 @@ base_weight = {k.item(): 1 for k,v in zip(y_classes, class_weight_list)}
 # sample_weight = compute_sample_weight(class_weight='balanced', y=y_train[col_y])
 
 
-class WeightedBoosting(ClassifierMixin, BaseEstimator):
-    def __init__(self, estimator=None, weight_mode=None, **kwargs):
+class WrapperClassifier(ClassifierMixin, BaseEstimator):
+    def __init__(self, estimator=None, weight_mode=None):
         self.estimator = estimator
         self.weight_mode=weight_mode
-        for k, v in kwargs.items():
-            setattr(self, k, v)
         
     def fit(self, X, y, **fit_params):
         self.estimator_ = clone(self.estimator)
@@ -236,40 +234,47 @@ class WeightedBoosting(ClassifierMixin, BaseEstimator):
     def score(self, X,y):
         return self.estimator_.score(X, y)
     
-    
+
 
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 
-models = {'RF' : RandomForestClassifier(),
-          'GB' : WeightedBoosting(estimator=GradientBoostingClassifier()),
-          'XGB' : WeightedBoosting(estimator=XGBClassifier()),
-          'LGBM' : WeightedBoosting(estimator=LGBMClassifier(verbosity=-1))
+models = {'RF' : WrapperClassifier(RandomForestClassifier()),
+          'GB' : WrapperClassifier(estimator=GradientBoostingClassifier()),
+          'XGB' : WrapperClassifier(estimator=XGBClassifier()),
+          'LGBM' : WrapperClassifier(estimator=LGBMClassifier(verbosity=-1))
           }
 
 
-# print(help(RandomForestClassifier))
+print(help(RandomForestClassifier))
 
 
 params = {}
-params['RF'] = {'model__random_state': [0],
-                # 'model__n_estimators': [100, 300],
-                # 'model__max_depth': [3, 10],
-                # 'model__max_features': [None, 'sqrt'],
-                # 'model__min_samples_leaf': [1, 3],
-                # 'model__class_weight':[base_weight, class_weight]
+params['RF'] = {'model__estimator__random_state': [0],
+                'model__estimator__max_depth': [3, 10],
+                'model__estimator__min_samples_leaf' : [1, 3],
+                'model__estimator__max_features': [None, 'sqrt'],
+                'model__estimator__class_weight':[base_weight, class_weight]
             }
 params['GB'] = {'model__estimator__random_state': [0],
-                # 'model__n_estimators':[100,300],
-                # 'model__learning_rate':[0.03, 0.1],
-                # 'model__max_depth': [3, 10],
-                # 'model__subsample': [0.5, 1.0],
+                'model__estimator__learning_rate':[0.03, 0.1],
+                'model__estimator__n_estimators':[100,300],
+                'model__estimator__max_depth': [3, 10],
+                # 'model__estimator__subsample': [0.5, 1.0],
                 'model__weight_mode': ['base', 'weight']
                 }
 params['XGB'] = {'model__estimator__random_state': [0],
+                'model__estimator__learning_rate':[0.03, 0.1],
+                'model__estimator__n_estimators':[100,300],
+                'model__estimator__max_depth': [3, 10],
+                # 'model__estimator__subsample': [0.5, 1.0],
                 'model__weight_mode': ['base', 'weight']}
 params['LGBM'] = {'model__estimator__random_state': [0],
+                'model__estimator__learning_rate':[0.03, 0.1],
+                'model__estimator__n_estimators':[100,300],
+                # 'model__estimator__max_depth': [3, 10],
+                'model__estimator__num_leaves' : [31, 63],
                 'model__weight_mode': ['base', 'weight']}
 
 
@@ -304,28 +309,28 @@ result_best_estimator = {}
 result_best_score = {}
 result_cv_results = {}
 
-# for model_name in models.keys():
-model_name = 'LGBM'
-print(model_name)
-pipe_model = Pipeline([
-    ('preprocess', preprocessing),
-    ('model', models[model_name])
-])
+for model_name in models.keys():
+# model_name = 'LGBM'
+    print(model_name, end= " : ")
+    pipe_model = Pipeline([
+        ('preprocess', preprocessing),
+        ('model', models[model_name])
+    ])
 
-grid_cv = GridSearchCV(estimator=pipe_model, param_grid=params[model_name],
-                    cv=cv, scoring='roc_auc', return_train_score=True,
-                    verbose=0)
-# print(help(GridSearchCV))
+    grid_cv = GridSearchCV(estimator=pipe_model, param_grid=params[model_name],
+                        cv=cv, scoring='roc_auc', return_train_score=True,
+                        verbose=1)
+    # print(help(GridSearchCV))
 
-grid_cv.fit(X, y)
+    grid_cv.fit(X, y)
 
-best_estimator = grid_cv.best_estimator_
-best_score = grid_cv.best_score_
-result_cv = grid_cv.cv_results_
+    best_estimator = grid_cv.best_estimator_
+    best_score = grid_cv.best_score_
+    result_cv = grid_cv.cv_results_
 
-result_best_estimator[model_name] = best_estimator
-result_best_score[model_name] = best_score
-result_cv_results[model_name] = result_cv
+    result_best_estimator[model_name] = best_estimator
+    result_best_score[model_name] = best_score
+    result_cv_results[model_name] = result_cv
 # break
 
 
