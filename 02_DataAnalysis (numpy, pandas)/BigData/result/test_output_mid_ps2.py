@@ -44,10 +44,6 @@ df_summary = pd.concat([df.dtypes, df.nunique(), df.isna().sum(axis=0),
 
 
 
-
-
-
-
 print('-'*100, end='\n')
 
 # 1.
@@ -77,17 +73,19 @@ print('-'*100, end='\n')
 
 # 3. 같은 관측치 : 대응표본
 from scipy.stats import ttest_rel
-result = ttest_rel(x_new, x_old, alternative='less')
+x_pre = df['pre']
+x_post = df['post']
+result = ttest_rel(x_pre - x_post, 0, alternative='less')
 
 print(3)
 print(f"statistic : {result.statistic}")
-print(f"p-value : {result.pvalue}")     # pval < 0.05 귀무가설 기각, New가 Old보다 작다.
+print(f"p-value : {result.pvalue}")     # pval > 0.05 귀무가설 기각, New가 Old보다 작다.
 print('-'*100, end='\n')
 
 
 # 4. 같은관측치 순위기반 : wilcoxon
 from scipy.stats import wilcoxon
-result = wilcoxon(x_new, x_old, alternative='less')
+result = wilcoxon(x_pre - x_post, 0)
 
 print(4)
 print(f"statistic : {result.statistic}")
@@ -133,15 +131,25 @@ print('-'*100, end='\n')
 
 
 
-# 7. grp4별 socre 비교에서 집단내 제곱합 (SSE)를 구해리.
+## 7. grp4별 socre 비교에서 집단내 제곱합 (SSE)를 구해리.
 print(7)
 print(f"SSE : {result.loc['Residual']['sum_sq']:.4f}")
 print('-'*100, end='\n')
 
 
 ## 8. p-value
+# print(8)
+# print(f"p-value : {result.loc['C(grp4)']['PR(>F)']:.4f}")
+# print('-'*100, end='\n')
+
+## 순위기반 다집단비교 ★
+from scipy.stats import kruskal
+df_groups = [gv['score'] for gi, gv in df.groupby(['grp4']) ]
+
+result = kruskal(*df_groups)
+
 print(8)
-print(f"p-value : {result.loc['C(grp4)']['PR(>F)']:.4f}")
+print(f"p-value : {result.pvalue:.4f}")
 print('-'*100, end='\n')
 
 
@@ -298,19 +306,25 @@ print('-'*100, end='\n')
 ## 21. 
 # from sklearn.metric import
 # print(np.array(dir(sklearn.metrics)))
-df_test = df.query("split == 'train'")
+df_test = df.query("split == 'test'")
 
 pred_proba = model.predict(df_test)
 pred = (pred_proba > 0.5).astype(int)
 df_test['pred'] = pred
 
-cof_mat = df_test.groupby(['pred','target']).size().unstack(['target'])
+cof_mat = df_test.groupby(['pred','target']).size().unstack(['pred'])
+cof_mat
 # print(cof_mat)
 print(21)
-print(f' . TP : {cof_mat.iloc[0,0]}')
-print(f' . TN : {cof_mat.iloc[1,1]}')
-print(f' . FP : {cof_mat.iloc[0,1]}')
-print(f' . FN : {cof_mat.iloc[1,0]}')
+# print(f' . TP : {cof_mat.iloc[0,0]}')
+# print(f' . TN : {cof_mat.iloc[1,1]}')
+# print(f' . FP : {cof_mat.iloc[0,1]}')
+# print(f' . FN : {cof_mat.iloc[1,0]}')
+
+print(f' . TP : {cof_mat.iloc[1,1]}')
+print(f' . TN : {cof_mat.iloc[0,0]}')
+print(f' . FP : {cof_mat.iloc[1,0]}')
+print(f' . FN : {cof_mat.iloc[0,1]}')
 print('-'*100, end='\n')
 
 
@@ -355,6 +369,13 @@ print('-'*100, end='\n')
 
 
 ## 24.
+from sklearn.metrics import roc_auc_score
+print(24)
+print(f"ROC_AUC : {roc_auc_score(df_test['target'], pred_proba)}")  # 0.8703703703703703
+print("ROC_AUC : 0.8704 수준으로 준수한 성능을 보인다.")
+print('-'*100, end='\n')
+
+# roc_auc_score
 
 # ['ConfusionMatrixDisplay' 'DetCurveDisplay' 'DistanceMetric'
 #  'PrecisionRecallDisplay' 'PredictionErrorDisplay' 'RocCurveDisplay'

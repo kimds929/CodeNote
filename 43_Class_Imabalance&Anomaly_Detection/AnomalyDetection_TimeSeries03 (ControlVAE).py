@@ -4,6 +4,9 @@ if 'd:' in os.getcwd().lower():
     os.chdir("D:/DataScience/")
 sys.path.append(f"{os.getcwd()}/DataScience/00_DataAnalysis_Basic")
 sys.path.append(f"{os.getcwd()}/DataScience/DS_Library")
+sys.path.append(f"{os.getcwd()}/DataScience/★GitHub_kimds929/DS_Library/DS_DeepLearning")
+sys.path.append(f"{os.getcwd()}/DataScience/★GitHub_kimds929/DS_Library/DS_MachineLearning")
+sys.path.append(f"{os.getcwd()}/DataScience/★GitHub_kimds929/DS_Library/DS_DataAnalysis")
 sys.path.append(r'D:\DataScience\00_DataAnalysis_Basic')
 
 
@@ -47,16 +50,16 @@ except:
             from DS_TimeSeries import pad_series_list_1d, pad_series_list_2d, series_smoothing
     except:
         import requests
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_TimeSeries.py", verify=False)
+        response = requests.get(f"{remote_library_url}/DS_Library/refs/heads/main/DS_DataAnalysis/DS_TimeSeries.py", verify=False)
         exec(response.text)
         
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_MachineLearning.py", verify=False)
+        response = requests.get(f"{remote_library_url}/DS_Library/refs/heads/main/DS_MachineLearning/DS_MachineLearning.py", verify=False)
         exec(response.text)
         
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_DeepLearning.py", verify=False)
+        response = requests.get(f"{remote_library_url}/DS_Library/refs/heads/main/DS_DeepLearning/DS_DeepLearning.py", verify=False)
         exec(response.text)
         
-        response = requests.get(f"{remote_library_url}/DS_Library/main/DS_TorchModule.py", verify=False)
+        response = requests.get(f"{remote_library_url}/DS_Library/refs/heads/main/DS_DeepLearning/DS_TorchModule.py", verify=False)
         exec(response.text)
 
 
@@ -487,7 +490,7 @@ class TimeSeriesConv1dVAE(nn.Module):
         # latent_z: (B, z_dim) → (B, hidden) → (B, hidden, T)
         broadcast_out = self.decode_broadcast(latent_z)    # (B, z_dim) → (B, hidden) 
         
-        broadcast_out_T = broadcast_out.unsqueeze(-1).expand(-1, -1, T) # broadcast :  (B, hidden) → (B, hidden, T)
+        broadcast_out_T = broadcast_out.unsqueeze(-1).expand(-1, -1, T).contiguous() # broadcast :  (B, hidden) → (B, hidden, T)
         
         X_recon = self.decoder(broadcast_out_T, mask=mask)
         return X_recon.squeeze(1)
@@ -723,7 +726,7 @@ class TimeSeriesBatchConv1dVAE(nn.Module):
         # latent_z: (B, z_dim) → (B, hidden) → (B, hidden, T)
         broadcast_out = self.decode_broadcast(latent_z)    # (B, z_dim) → (B, hidden) 
         
-        broadcast_out_T = broadcast_out.unsqueeze(-1).expand(-1, -1, T) # broadcast :  (B, hidden) → (B, hidden, T)
+        broadcast_out_T = broadcast_out.unsqueeze(-1).expand(-1, -1, T).contiguous() # broadcast :  (B, hidden) → (B, hidden, T)
         
         X_recon = self.decoder(broadcast_out_T, mask=mask)
         return X_recon.squeeze(1)
@@ -816,9 +819,14 @@ plt.show()
 
 
 # mean timeseries plot with latent sampling
+# with torch.no_grad():
+#     mu = model.mu.detach().to('cpu')
+#     cov = model.cov.detach().to('cpu')
+# dist = torch.distributions.MultivariateNormal(mu, covariance_matrix=cov)
 dist = torch.distributions.MultivariateNormal(model.mu, covariance_matrix=model.cov)
+
 with torch.no_grad():
-    pred_plot = model.decode_masking(dist.sample((1000,)).to(device), torch.BoolTensor(~np.isnan(pred)).expand(1000,-1).to(device)).detach().to('cpu').numpy()
+    pred_plot = model.decode_masking(dist.sample((10,)).to(device), torch.BoolTensor(~np.isnan(pred)).expand(10,-1).to(device)).detach().to('cpu').numpy()
 
 plt.plot(pred_plot.T, alpha=0.01, color='steelblue')
 plt.plot(pred, alpha=1, color='red')
@@ -1133,7 +1141,7 @@ class TimeSeriesBatchConv1dVAE_SeqLen(nn.Module):
         # latent_z_pattern: (B, z_dim-1) → (B, hidden) → (B, hidden, T)
         broadcast_out = self.decode_broadcast(latent_z_pattern)    # (B, z_dim-1) → (B, hidden) 
         
-        broadcast_out_T = broadcast_out.unsqueeze(-1).expand(-1, -1, T) # broadcast :  (B, hidden) → (B, hidden, T)
+        broadcast_out_T = broadcast_out.unsqueeze(-1).expand(-1, -1, T).contiguous() # broadcast :  (B, hidden) → (B, hidden, T)
         
         X_recon = self.decoder(broadcast_out_T, mask=mask)
         return X_recon.squeeze(1)
