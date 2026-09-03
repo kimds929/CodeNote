@@ -164,12 +164,253 @@ Interview 과정에서 복잡도나 중요도를 재평가하고 그에 따른 G
     * Preview Artifact는 최종 산출물 자체를 구현하는 것이 아니라,Human이 Project Definition과 예상 결과 형태를 검토하기 위한 최소 수준의 표현물이어야 한다.
 
 
+#### 2.3. Project Classification & Control Profile
+
+Discovery와 Interview 결과를 기반으로 프로젝트 특성과 필요한 감독 수준을 결정한다.
+
+평가 요소:
+- Project Type
+- Complexity
+- Importance / Impact
+- Uncertainty
+- Reversibility
+- Verification Feasibility
+- Human Intervention Preference
+- Available Capability
+
+이를 바탕으로 `Control Profile`을 결정한다.
+
+Control Profile은 이후 다음 사항의 선택 기준으로 사용한다.
+- Workflow의 깊이
+- Gate 및 Evidence 강도
+- Human 승인 범위
+- Research 필요 수준
+- Subagent 검증 필요 여부
+- Recovery / Handoff 수준
+- Supervisor Package 구성
+
+
+#### 2.4. Information Sufficiency Gate
+
+Supervisor Package를 설계하기에 정보가 충분한지 판단한다.
+
+핵심 정보가 부족한 경우:
+- Human만 결정 가능 → Interview로 돌아간다.
+- Repository / Tool로 확인 가능 → 추가 Discovery를 수행한다.
+- 외부 지식이 필요 → Conditional Research를 수행한다.
+- 낮은 위험이며 합리적으로 결정 가능 → Agent가 결정하고 기록한다.
+
+Supervisor 설계에 영향을 주는 핵심 `hold`가 없을 때 다음 단계로 진행한다.
+
+
+#### 2.5. Conditional Research
+
+현재 정보만으로 적절한 Supervisor Workflow 또는 검증 방법을 신뢰성 있게 결정하기 어려운 경우에만 Research를 수행한다.
+
+대표 Trigger:
+- 새로운 기술 / Framework / Tool
+- Architecture 선택
+- 보안 / DB / Deployment 등 고위험 결정
+- 최신 정보 확인 필요
+- 반복 실패 또는 낮은 Confidence
+
+Research 결과는 Project에 적합한지 평가한 뒤 채택하며,
+채택된 내용과 주요 근거를 Supervisor Package에 반영한다.
+
+
+#### 2.6. Supervisor Package Design
+
+Project Definition과 Control Profile을 기반으로
+해당 프로젝트에 필요한 Supervisor Package의 구성과 내용을 설계한다.
+
+모든 프로젝트에 동일한 폴더구조 및 Package를 생성하지 않고, 프로젝트 특성에 따라 결정한다.
+프로젝트 특성·위험·복잡도·불확실성·Human 개입 수준 및 사용 가능한 Tool에 따라
+필요한 Directory와 Supervisor 기능, Artifact를 선택·구성한다.
+
+
+##### 2.6.1. Adaptive Project Workspace Design
+
+Supervisor 운영을 위한 전용 `<PROJECT_ROOT>`를
+기본적으로 `<REPO_ROOT>/project/`에 구성한다.
+
+`<PROJECT_ROOT>`는 프로젝트의 계획, 상태, Workflow, Evidence,
+Research, Decision, Handoff 등 Supervisor가 생성·관리하는
+운영 Artifact의 기본 저장 영역이다.
+
+Project Definition과 Control Profile을 기반으로
+먼저 `<PROJECT_ROOT>` 내부의 Project-specific Directory Structure를 설계한다.
+
+Directory Structure는 다음 요소를 고려하여 Adaptively 결정한다.
+
+- Project Type 및 Domain
+- Project 규모와 예상 기간
+- Complexity / Risk / Uncertainty / Reversibility
+- 필요한 Workflow와 Gate의 수
+- Research 필요 여부
+- Evidence 및 Evaluation 방식
+- Human 승인 및 Decision 기록 필요성
+- Session / Handoff 필요성
+- 사용 가능한 Agent / Tool / Validation Capability
+
+불필요한 Directory나 Artifact는 생성하지 않는다.
+
+##### 2.6.2. Package Component Selection
+
+기본적으로 최소한의 Core Artifact만 생성하고,
+Project Control Profile에 따라 필요한 Artifact를 추가한다.
+
+예:
+
+- 단순·저위험 Project
+  → AGENTS.md + PROJECT.md + ROADMAP.md + CURRENT_STATE.md
+
+- 검증이 중요한 Project
+  → Core + GATES.md + EVALUATION.md
+
+- Human 승인 경계가 중요한 Project
+  → Core + AUTHORITY.md
+
+- 높은 불확실성 / 최신 기술 사용
+  → Core + RESEARCH.md
+
+- 장기·다단계 Project
+  → Core + GATES.md + DECISIONS.md + HANDOFF.md
+
+- 복잡·고위험 Project
+  → 필요한 모든 감독 Artifact를 조합한다.
+
+필요하지 않은 Artifact는 생성하지 않는다.
+
+
+##### 2.6.3. Package Content Composition
+
+선택된 Artifact의 내용은 Project Definition과 Control Profile을 기반으로 생성한다.
+
+- `AGENTS.md`
+  → Coding Agent가 반드시 따라야 할 핵심 감독 규칙과 읽어야 할 Project Artifact의 Entry Point
+
+- `PROJECT.md`
+  → Goal, Scope, Non-goal, Constraint, Success Definition
+
+- `ROADMAP.md`
+  → 현재 시점의 best-known Phase / Gate / Milestone
+
+- `CURRENT_STATE.md`
+  → 현재 Phase, Active Task, 상태, Evidence, Issue, Next Action
+
+- `GATES.md`
+  → Gate별 목표, 통과 기준, Evidence, Recovery
+
+- `EVALUATION.md`
+  → Project 성공 및 작업 결과 평가 방법
+
+- `AUTHORITY.md`
+  → Agent 자동 판단 범위와 Human 승인 범위
+
+- `RESEARCH.md`
+  → 채택한 외부 근거와 Project 적용 결정
+
+- `DECISIONS.md`
+  → 중요한 Human / Agent 결정과 변경 이유
+
+- `HANDOFF.md`
+  → 다음 Session에서 상태를 복구하기 위한 최소 정보
+
+
+##### 2.6.4. Supervisor Runtime Contract
+
+생성된 Supervisor는 기본적으로 다음 Loop를 따른다.
+
+1. Goal과 Current State를 확인한다.
+2. 실제 Repository / Evidence와 기록된 상태를 비교한다.
+3. 현재 Gate와 다음 작업을 결정한다.
+4. Coding Agent에게 작업 범위와 요구 Evidence를 지시한다.
+5. 결과를 Evidence로 검증하여 PASS / FAIL / HOLD를 판단한다.
+6. State / Roadmap / Handoff를 갱신하고 다음 행동을 결정한다.
+
+Project Control Profile에 따라 각 단계의 통제 강도를 조절한다.
+
+
+#### 2.7. Supervisor Package Generation
+
+설계된 Package Profile에 따라 `<PROJECT_ROOT>`에 필요한 Artifact를 생성한다.
+
+생성 원칙:
+- 필요한 파일만 생성한다.
+- 중복 정보를 최소화한다.
+- Stable 정보와 Current State를 분리한다.
+- AGENTS.md는 Entry Point로 유지한다.
+- 각 Artifact의 책임을 겹치지 않게 한다.
+- Human / Agent 결정사항의 출처를 보존한다.
+
+생성 후 Initial Roadmap과 Current State를 초기화한다.
 
 
 
+#### 2.8. Package Validation / Dry Run
 
-## RULE
+생성된 Supervisor Package가 실제 프로젝트를 감독할 수 있는지
+소스 코드를 수정하지 않고 검증한다.
+
+검증 항목:
+- Human의 Goal이 정확히 반영되었는가
+- Workflow가 Project 특성과 Risk에 적합한가
+- 각 중요한 Gate에 판단 가능한 Evidence가 있는가
+- Human 승인 범위가 명확한가
+- 실패 시 Recovery 경로가 있는가
+- Package Artifact 간 상태가 모순되지 않는가
+- 다음 Session에서 Current State만으로 작업을 복구할 수 있는가
+
+검증 실패 시 관련 설계 단계로 돌아가 수정 후 다시 검증한다.
+
+
+#### 2.9. Human Finalization
+
+검증 결과와 생성된 Supervisor Package의 핵심 내용을 Human에게 보여준다.
+
+Human에게 최소 다음을 확인한다.
+- Project Definition
+- 주요 Workflow / Gate
+- Human 승인 범위
+- Supervisor 통제 수준
+- 생성된 Artifact
+- Agent가 자체 결정한 중요 사항
+
+승인:
+→ Supervisor Package 활성화
+
+수정:
+→ 관련 단계로 돌아가 수정 후 다시 검증
+
+핵심 불확실성 발견:
+→ Interview 또는 Information Sufficiency Gate로 돌아간다.
+
+
+
+### 3. 기존 Supervisor 프로젝트 재개
+
+기존 Supervisor Package가 존재하면 새로 초기화하지 않는다.
+
+1. AGENTS.md와 CURRENT_STATE.md를 우선 확인한다.
+2. 실제 Repository / Git 상태와 기록된 상태를 비교한다.
+3. 기존 Roadmap, Gate, 미해결 Issue를 복구한다.
+4. 불일치가 없으면 현재 작업부터 재개한다.
+5. 중요한 충돌이 있으면 관련 Gate를 hold로 변경하고 원인을 확인한다.
+
+기존 Human 결정과 Project History를 보존하며 필요한 정보만 갱신한다.
+
+
+
+### 4. 공통 운영 원칙
  - 원칙적으로 `<REPO_ROOT>/project` 폴더내의 파일만 수정한다.
- - 
-
+ - `AGENTS.md`는 Supervisor Package 전체 내용을 중복해서 담지 않는다.
+ - Coding Agent가 현재 작업을 수행하기 위해어떤 Artifact를 어떤 순서로 확인해야 하는지 안내하는 Entry Point 역할을 한다.
+ - 필요한 정보만 단계적으로 읽도록 하여 불필요한 Context 증가를 방지한다.
+- Human의 명시적 Goal과 결정은 Agent의 추정보다 우선한다.
+- Agent의 주장보다 Repository, Test, Runtime 등 실제 Evidence를 우선한다.
+- 중요한 Gate는 Evidence 없이 PASS 처리하지 않는다.
+- Risk가 높고 가역성이 낮을수록 Human 승인과 검증을 강화한다.
+- 새로운 Evidence가 기존 판단과 충돌하면 이미 통과한 Gate도 재검토한다.
+- 불필요한 질문·Artifact·절차를 만들지 않는다.
+- Supervisor는 직접 Coding하는 Agent가 아니라 방향·상태·검증을 관리하는 감독자다.
 
